@@ -4,12 +4,11 @@ import {
   getDynamicBindings,
   isDynamicValue,
 } from "utils/DynamicBindingUtils";
-import BaseControl, { ControlData, ControlProps } from "./BaseControl";
+import type { ControlData, ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 import ColorPickerComponent from "components/propertyControls/ColorPickerComponentV2";
 
-class PrimaryColumnsColorPickerControl extends BaseControl<
-  PrimaryColumnColorPickerControlProps
-> {
+class PrimaryColumnsColorPickerControl extends BaseControl<PrimaryColumnColorPickerControlProps> {
   handleChangeColor = (color: string) => {
     let computedColor = color;
 
@@ -17,6 +16,7 @@ class PrimaryColumnsColorPickerControl extends BaseControl<
       const { jsSnippets, stringSegments } = getDynamicBindings(color);
 
       const js = combineDynamicBindings(jsSnippets, stringSegments);
+
       computedColor = `{{${this.props.widgetProperties.widgetName}.sanitizedTableData.map((currentRow) => ( ${js}))}}`;
     }
 
@@ -46,6 +46,8 @@ class PrimaryColumnsColorPickerControl extends BaseControl<
     return "PRIMARY_COLUMNS_COLOR_PICKER";
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     return !isDynamicValue(value);
   }

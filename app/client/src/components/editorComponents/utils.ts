@@ -1,17 +1,13 @@
-import { JSAction } from "entities/JSCollection";
-import { JSResponseState } from "./JSResponseView";
+import type { JSAction } from "entities/JSCollection";
 
-export const isHtml = (str: string) => {
-  const fragment = document.createRange().createContextualFragment(str);
-
-  // remove all non text nodes from fragment
-  fragment
-    .querySelectorAll("*")
-    .forEach((el: any) => el.parentNode.removeChild(el));
-
-  // if there is textContent, then its not a pure HTML
-  return !(fragment.textContent || "").trim();
-};
+export enum JSResponseState {
+  IsExecuting = "IsExecuting",
+  IsDirty = "IsDirty",
+  IsUpdating = "IsUpdating",
+  NoResponse = "NoResponse",
+  ShowResponse = "ShowResponse",
+  NoReturnValue = "NoReturnValue",
+}
 
 /**
  * Returns state of the JSResponseview editor component
@@ -27,17 +23,23 @@ export function getJSResponseViewState(
   isDirty: Record<string, boolean>,
   isExecuting: Record<string, boolean>,
   isSaving: boolean,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   responses: Record<string, any>,
 ): JSResponseState {
   if (!currentFunction) return JSResponseState.NoResponse;
+
   if (isExecuting[currentFunction.id] && isSaving)
     return JSResponseState.IsUpdating;
+
   if (isExecuting[currentFunction.id]) return JSResponseState.IsExecuting;
+
   if (
     !responses.hasOwnProperty(currentFunction.id) &&
     !isExecuting.hasOwnProperty(currentFunction.id)
   )
     return JSResponseState.NoResponse;
+
   if (
     responses.hasOwnProperty(currentFunction.id) &&
     isDirty[currentFunction.id]

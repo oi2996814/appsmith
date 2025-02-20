@@ -1,9 +1,33 @@
+import "tinymce/tinymce";
+import "tinymce/icons/default";
+import "tinymce/plugins/link";
+import "tinymce/plugins/image";
+import "tinymce/plugins/table";
+import "tinymce/plugins/code";
+import "tinymce/plugins/help";
+import "tinymce/plugins/insertdatetime";
+import "tinymce/plugins/media";
+import "tinymce/plugins/advlist";
+import "tinymce/plugins/autolink";
+import "tinymce/plugins/lists";
+import "tinymce/plugins/charmap";
+import "tinymce/plugins/preview";
+import "tinymce/plugins/anchor";
+import "tinymce/plugins/searchreplace";
+import "tinymce/plugins/visualblocks";
+import "tinymce/plugins/fullscreen";
+import "tinymce/plugins/emoticons";
+import "tinymce/plugins/emoticons/js/emojis";
+import "tinymce/themes/silver";
+import "tinymce/skins/ui/oxide/skin.min.css";
+import "tinymce/models/dom";
+import "tinymce/plugins/help/js/i18n/keynav/en.js";
 import React, { useRef, useCallback, useEffect, useState } from "react";
-import styled from "styled-components";
+import styled, { createGlobalStyle } from "styled-components";
 import { Editor } from "@tinymce/tinymce-react";
-import { LabelPosition } from "components/constants";
-import { Alignment } from "@blueprintjs/core";
-import { TextSize } from "constants/WidgetConstants";
+import type { LabelPosition } from "components/constants";
+import type { Alignment } from "@blueprintjs/core";
+import type { TextSize } from "constants/WidgetConstants";
 
 // @ts-expect-error: loader types not available
 import cssVariables from "!!raw-loader!theme/wds.css";
@@ -25,6 +49,7 @@ const StyledRTEditor = styled.div<{
   && {
     width: 100%;
     height: 100%;
+
     .tox .tox-editor-header {
       z-index: 0;
     }
@@ -34,12 +59,15 @@ const StyledRTEditor = styled.div<{
       box-shadow: ${({ boxShadow }) => `${boxShadow}`} !important;
     }
   }
+
   .tox {
     font-family: inherit;
 
     width: 100%;
+
     .tox-tbtn {
       cursor: pointer;
+
       .tox-tbtn__select-label {
         cursor: inherit;
       }
@@ -123,6 +151,7 @@ const StyledRTEditor = styled.div<{
   .tox .tox-tbtn {
     margin: 3px 0 2px 0;
     border-radius: ${({ borderRadius }) => borderRadius};
+    height: 34px;
 
     &:hover {
       background: var(--wds-color-bg-hover);
@@ -143,7 +172,7 @@ const StyledRTEditor = styled.div<{
     background-size: auto 39px;
   }
 
-  .tox-editor-header {
+  .tox:not(.tox-tinymce-inline) .tox-editor-header {
     border-bottom: 1px solid var(--wds-color-border);
   }
 
@@ -161,9 +190,11 @@ const StyledRTEditor = styled.div<{
     &:hover {
       box-shadow: 0 0 0 1px var(--wds-color-border) inset;
     }
+
     &:focus {
       background: var(--wds-color-bg-focus);
     }
+
     &:active {
       background: var(--wds-color-bg-focus);
     }
@@ -199,6 +230,7 @@ const StyledRTEditor = styled.div<{
 
   .tox .tox-toolbar__group {
     height: 39px;
+    padding: 0 4px;
   }
 
   .tox .tox-tbtn--disabled svg,
@@ -209,10 +241,55 @@ const StyledRTEditor = styled.div<{
   }
 
   ${labelLayoutStyles}
-
   & .${LABEL_CONTAINER_CLASS} {
     align-self: center;
   }
+
+  .tox:not(.tox-tinymce-inline) .tox-editor-header {
+    padding: 0;
+  }
+
+  .tox .tox-edit-area::before,
+  .tox .tox-tbtn:focus::after,
+  .tox .tox-split-button:focus::after,
+  .tox-statusbar__help-text {
+    display: none;
+  }
+
+  .tox .tox-tbtn--bespoke {
+    background: #fff;
+  }
+
+  .tox .tox-tbtn--disabled,
+  .tox .tox-tbtn--disabled:hover,
+  .tox .tox-tbtn:disabled,
+  .tox .tox-tbtn:disabled:hover {
+    background: #fff0;
+  }
+`;
+
+const GlobalStyles = createGlobalStyle`
+  .tox {
+    &&& .tox-collection--list .tox-collection__item--active {
+      background-color: #dee0e2;
+      color: #222f3e;
+    }
+
+    &&& .tox-menu.tox-collection.tox-collection--list {
+      padding: 0;
+    }
+
+    .tox-collection--toolbar .tox-collection__item--active:focus::after {
+      display: none;
+    }
+
+    && {
+      .tox-button, .tox-dialog {
+      {
+        border-radius: 0px;
+      }
+      }
+    }
 `;
 
 export const RichTextEditorInputWrapper = styled.div<{
@@ -273,13 +350,16 @@ function RichtextEditorComponent(props: RichtextEditorComponentProps) {
   const initialRender = useRef(true);
 
   const toolbarConfig =
-    "insertfile undo redo | formatselect | bold italic underline backcolor forecolor | lineheight | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image | removeformat | table | print preview media | emoticons |help";
+    "insertfile undo redo | blocks | bold italic underline backcolor forecolor | lineheight | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link image | removeformat | table | print preview media | emoticons | code | help";
 
   const handleEditorChange = useCallback(
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (newValue: string, editor: any) => {
       // avoid updating value, when there is no actual change.
       if (newValue !== editorValue) {
         const isFocused = editor.hasFocus();
+
         /**
          * only change call the props.onValueChange when the editor is in focus.
          * This prevents props.onValueChange from getting called whenever the defaultText is changed.
@@ -350,7 +430,8 @@ function RichtextEditorComponent(props: RichtextEditorComponentProps) {
             branding: false,
             resize: false,
             browser_spellcheck: true,
-            content_style: `${cssVariables}
+            content_style: `
+              ${cssVariables}
               ${
                 props.isDisabled
                   ? `* {
@@ -359,30 +440,44 @@ function RichtextEditorComponent(props: RichtextEditorComponentProps) {
                   : ""
               }`,
             plugins: [
-              "advlist autolink lists link image charmap print preview anchor",
-              "searchreplace visualblocks code fullscreen",
-              "insertdatetime media table paste code help",
+              "advlist",
+              "autolink",
+              "lists",
+              "link",
+              "image",
+              "charmap",
+              "preview",
+              "anchor",
+              "searchreplace",
+              "visualblocks",
+              "code",
+              "fullscreen",
+              "insertdatetime ",
+              "media ",
+              "table",
+              "code ",
+              "help",
               "emoticons",
+              "code",
             ],
             contextmenu: "link useBrowserSpellcheck image table",
-            setup: function(editor) {
+            setup: function (editor) {
               editor.ui.registry.addMenuItem("useBrowserSpellcheck", {
                 text: `Use "${
                   isMacOs() ? "Control" : "Ctrl"
                 } + Right click" to access spellchecker`,
-                onAction: function() {
+                onAction: function () {
                   editor.notificationManager.open({
                     text: `To access the spellchecker, hold the ${
                       isMacOs() ? "Control" : "Ctrl"
                     } key and right-click on the misspelt word.`,
                     type: "info",
                     timeout: 5000,
-                    closeButton: true,
                   });
                 },
               });
               editor.ui.registry.addContextMenu("useBrowserSpellcheck", {
-                update: function() {
+                update: function () {
                   return editor.selection.isCollapsed()
                     ? ["useBrowserSpellcheck"]
                     : [];
@@ -392,11 +487,11 @@ function RichtextEditorComponent(props: RichtextEditorComponentProps) {
           }}
           key={`editor_${props.isToolbarHidden}_${props.isDisabled}`}
           onEditorChange={handleEditorChange}
-          tinymceScriptSrc="https://cdnjs.cloudflare.com/ajax/libs/tinymce/5.10.1/tinymce.min.js"
           toolbar={props.isToolbarHidden ? false : toolbarConfig}
           value={editorValue}
         />
       </RichTextEditorInputWrapper>
+      <GlobalStyles />
     </StyledRTEditor>
   );
 }

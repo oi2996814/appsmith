@@ -1,36 +1,51 @@
 import { get } from "lodash";
+import { type ReduxAction } from "actions/ReduxActionTypes";
 import {
-  ReduxActionTypes,
   ReduxActionErrorTypes,
-  ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
+  ReduxActionTypes,
+  toastMessageErrorTypes,
+} from "ee/constants/ReduxActionConstants";
 import log from "loglevel";
 import history from "utils/history";
-import { ApiResponse } from "api/ApiResponses";
-import { Toaster, Variant } from "design-system";
-import { flushErrors } from "actions/errorActions";
-import { AUTH_LOGIN_URL } from "constants/routes";
-import { User } from "constants/userConstants";
+import type { ApiResponse } from "api/ApiResponses";
 import {
+  type ErrorPayloadType,
+  flushErrors,
+  safeCrashApp,
+} from "actions/errorActions";
+import { AUTH_LOGIN_URL } from "constants/routes";
+import type { User } from "constants/userConstants";
+import { ANONYMOUS_USERNAME } from "constants/userConstants";
+import {
+  AXIOS_CONNECTION_ABORTED_CODE,
   ERROR_CODES,
   SERVER_ERROR_CODES,
-} from "@appsmith/constants/ApiConstants";
+} from "ee/constants/ApiConstants";
 import { getSafeCrash } from "selectors/errorSelectors";
 import { getCurrentUser } from "selectors/usersSelectors";
-import { ANONYMOUS_USERNAME } from "constants/userConstants";
-import { put, takeLatest, call, select } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "redux-saga/effects";
 import {
+  createMessage,
+  DEFAULT_ERROR_MESSAGE,
+  ERROR_0,
   ERROR_401,
   ERROR_403,
   ERROR_500,
-  ERROR_0,
-  DEFAULT_ERROR_MESSAGE,
-  createMessage,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import store from "store";
 
 import * as Sentry from "@sentry/react";
-import { axiosConnectionAbortedCode } from "api/ApiUtils";
+import { getLoginUrl } from "ee/utils/adminSettingsHelpers";
+import type { PluginErrorDetails } from "api/ActionAPI";
+import showToast from "sagas/ToastSagas";
+import AppsmithConsole from "../utils/AppsmithConsole";
+import type { SourceEntity } from "../entities/AppsmithConsole";
+import { getAppMode } from "ee/selectors/applicationSelectors";
+import { APP_MODE } from "../entities/App";
+
+const shouldShowToast = (action: string) => {
+  return action in toastMessageErrorTypes;
+};
 
 /**
  * making with error message with action name
@@ -40,9 +55,12 @@ import { axiosConnectionAbortedCode } from "api/ApiUtils";
 export const getDefaultActionError = (action: string) =>
   `Incurred an error when ${action}`;
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function* callAPI(apiCall: any, requestPayload: any) {
   try {
     const response: ApiResponse = yield call(apiCall, requestPayload);
+
     return response;
   } catch (error) {
     return error;
@@ -50,9 +68,10 @@ export function* callAPI(apiCall: any, requestPayload: any) {
 }
 
 /**
- * transforn server errors to client error codes
+ * transform server errors to client error codes
  *
  * @param code
+ * @param resourceType
  */
 const getErrorMessage = (code: number, resourceType = "") => {
   switch (code) {
@@ -76,8 +95,11 @@ export class IncorrectBindingError extends Error {}
  * @throws {Error}
  * @param response
  * @param show
+ * @param logToSentry
  */
 export function* validateResponse(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   response: ApiResponse | any,
   show = true,
   logToSentry = false,
@@ -87,35 +109,49 @@ export function* validateResponse(
   }
 
   // letting `apiFailureResponseInterceptor` handle it this case
-  if (response?.code === axiosConnectionAbortedCode) {
+  if (response?.code === AXIOS_CONNECTION_ABORTED_CODE) {
     return false;
   }
 
   if (!response.responseMeta && !response.status) {
     throw Error(getErrorMessage(0));
   }
+
   if (!response.responseMeta && response.status) {
-    throw Error(getErrorMessage(response.status, response.resourceType));
+    yield put({
+      type: ReduxActionErrorTypes.API_ERROR,
+      payload: {
+        error: new Error(
+          getErrorMessage(response.status, response.resourceType),
+        ),
+        logToSentry,
+        show,
+      },
+    });
   }
+
   if (response.responseMeta.success) {
     return true;
   }
+
   if (
-    response.responseMeta.error.code ===
-    SERVER_ERROR_CODES.INCORRECT_BINDING_LIST_OF_WIDGET
+    SERVER_ERROR_CODES.INCORRECT_BINDING_LIST_OF_WIDGET.includes(
+      response.responseMeta?.error?.code,
+    )
   ) {
-    throw new IncorrectBindingError(response.responseMeta.error.message);
+    throw new IncorrectBindingError(response.responseMeta?.error?.message);
   }
 
   yield put({
     type: ReduxActionErrorTypes.API_ERROR,
     payload: {
-      error: response.responseMeta.error,
+      error: new Error(response.responseMeta?.error?.message),
       logToSentry,
       show,
     },
   });
-  throw Error(response.responseMeta.error.message);
+
+  throw Error(response.responseMeta?.error?.message);
 }
 
 export function getResponseErrorMessage(response: ApiResponse) {
@@ -124,11 +160,30 @@ export function getResponseErrorMessage(response: ApiResponse) {
     : undefined;
 }
 
-type ErrorPayloadType = {
-  code?: number | string;
-  message?: string;
-  crash?: boolean;
-};
+interface ClientDefinedErrorMetadata {
+  clientDefinedError: boolean;
+  statusCode: string;
+  message: string;
+  pluginErrorDetails: PluginErrorDetails;
+}
+
+export function extractClientDefinedErrorMetadata(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  err: any,
+): ClientDefinedErrorMetadata | undefined {
+  if (err?.clientDefinedError && err?.response) {
+    return {
+      clientDefinedError: err?.clientDefinedError,
+      statusCode: err?.statusCode,
+      message: err?.message,
+      pluginErrorDetails: err?.pluginErrorDetails,
+    };
+  } else {
+    return undefined;
+  }
+}
+
 const ActionErrorDisplayMap: {
   [key: string]: (error: ErrorPayloadType) => string;
 } = {
@@ -145,20 +200,24 @@ const getErrorMessageFromActionType = (
   error: ErrorPayloadType,
 ): string => {
   const actionErrorMessage = get(error, "message");
+
   if (actionErrorMessage === undefined) {
     if (type in ActionErrorDisplayMap) {
       return ActionErrorDisplayMap[type](error);
     }
+
     return createMessage(DEFAULT_ERROR_MESSAGE);
   }
+
   return actionErrorMessage;
 };
 
 enum ErrorEffectTypes {
   SHOW_ALERT = "SHOW_ALERT",
   SAFE_CRASH = "SAFE_CRASH",
-  LOG_ERROR = "LOG_ERROR",
+  LOG_TO_CONSOLE = "LOG_TO_CONSOLE",
   LOG_TO_SENTRY = "LOG_TO_SENTRY",
+  LOG_TO_DEBUGGER = "LOG_TO_DEBUGGER",
 }
 
 export interface ErrorActionPayload {
@@ -166,19 +225,35 @@ export interface ErrorActionPayload {
   show?: boolean;
   crash?: boolean;
   logToSentry?: boolean;
+  logToDebugger?: boolean;
+  sourceEntity?: SourceEntity;
 }
 
 export function* errorSaga(errorAction: ReduxAction<ErrorActionPayload>) {
-  const effects = [ErrorEffectTypes.LOG_ERROR];
+  const effects = [ErrorEffectTypes.LOG_TO_CONSOLE];
   const { payload, type } = errorAction;
-  const { error, logToSentry, show = true } = payload || {};
-  const message = getErrorMessageFromActionType(type, error);
+  const { error, logToDebugger, logToSentry, show, sourceEntity } =
+    payload || {};
+  const appMode: APP_MODE = yield select(getAppMode);
 
-  if (show) {
+  // "show" means show a toast. We check if the error has been asked to not been shown
+  // By checking undefined, undecided actions still pass through this check
+  if (show === undefined) {
+    // We want to show toasts for certain actions only so we avoid issues or if it is outside edit mode
+    if (shouldShowToast(type) || appMode !== APP_MODE.EDIT) {
+      effects.push(ErrorEffectTypes.SHOW_ALERT);
+    }
+    // If true is passed, show the error no matter what
+  } else if (show) {
     effects.push(ErrorEffectTypes.SHOW_ALERT);
   }
 
+  if (logToDebugger) {
+    effects.push(ErrorEffectTypes.LOG_TO_DEBUGGER);
+  }
+
   if (error && error.crash) {
+    effects.push(ErrorEffectTypes.LOG_TO_SENTRY);
     effects.push(ErrorEffectTypes.SAFE_CRASH);
   }
 
@@ -186,18 +261,40 @@ export function* errorSaga(errorAction: ReduxAction<ErrorActionPayload>) {
     effects.push(ErrorEffectTypes.LOG_TO_SENTRY);
   }
 
+  const message = getErrorMessageFromActionType(type, error);
+
   for (const effect of effects) {
     switch (effect) {
-      case ErrorEffectTypes.LOG_ERROR: {
+      case ErrorEffectTypes.LOG_TO_CONSOLE: {
         logErrorSaga(errorAction);
         break;
       }
+      case ErrorEffectTypes.LOG_TO_DEBUGGER: {
+        AppsmithConsole.error({
+          text: message,
+          source: sourceEntity,
+        });
+        break;
+      }
       case ErrorEffectTypes.SHOW_ALERT: {
-        showAlertAboutError(message);
+        // This is the toast that is rendered when any page load API fails.
+        yield call(showToast, message, { kind: "error" });
+
+        if ("Cypress" in window) {
+          if (message === "" || message === null) {
+            yield put(
+              safeCrashApp({
+                ...error,
+                code: ERROR_CODES.CYPRESS_DEBUG,
+              }),
+            );
+          }
+        }
+
         break;
       }
       case ErrorEffectTypes.SAFE_CRASH: {
-        yield call(crashAppSaga, error);
+        yield put(safeCrashApp(error));
         break;
       }
       case ErrorEffectTypes.LOG_TO_SENTRY: {
@@ -212,30 +309,41 @@ export function* errorSaga(errorAction: ReduxAction<ErrorActionPayload>) {
     payload: {
       source: errorAction.type,
       message,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stackTrace: (error as any)?.stack,
     },
   });
 }
 
 function logErrorSaga(action: ReduxAction<{ error: ErrorPayloadType }>) {
   log.debug(`Error in action ${action.type}`);
-  if (action.payload) log.error(action.payload.error);
+
+  if (action.payload) log.error(action.payload.error, action);
 }
 
-function showAlertAboutError(message: string) {
-  Toaster.show({ text: message, variant: Variant.danger });
-}
+export function embedRedirectURL() {
+  const queryParams = new URLSearchParams(window.location.search);
+  const ssoTriggerQueryParam = queryParams.get("ssoTrigger");
+  const ssoLoginUrl = ssoTriggerQueryParam
+    ? getLoginUrl(ssoTriggerQueryParam || "")
+    : null;
 
-function* crashAppSaga(error: ErrorPayloadType) {
-  yield put({
-    type: ReduxActionTypes.SAFE_CRASH_APPSMITH,
-    payload: error,
-  });
+  if (ssoLoginUrl) {
+    window.location.href = `${ssoLoginUrl}?redirectUrl=${encodeURIComponent(
+      window.location.href,
+    )}`;
+  } else {
+    window.location.href = `${AUTH_LOGIN_URL}?redirectUrl=${encodeURIComponent(
+      window.location.href,
+    )}`;
+  }
 }
 
 /**
  * this saga do some logic before actually setting safeCrash to true
  */
-function* safeCrashSagaRequest(action: ReduxAction<{ code?: string }>) {
+function* safeCrashSagaRequest(action: ReduxAction<{ code?: ERROR_CODES }>) {
   const user: User | undefined = yield select(getCurrentUser);
   const code = get(action, "payload.code");
 
@@ -245,20 +353,13 @@ function* safeCrashSagaRequest(action: ReduxAction<{ code?: string }>) {
     get(user, "email") === ANONYMOUS_USERNAME &&
     code === ERROR_CODES.PAGE_NOT_FOUND
   ) {
-    window.location.href = `${AUTH_LOGIN_URL}?redirectUrl=${encodeURIComponent(
-      window.location.href,
-    )}`;
+    embedRedirectURL();
 
     return false;
   }
 
   // if there is no action to be done, just calling the safe crash action
-  yield put({
-    type: ReduxActionTypes.SAFE_CRASH_APPSMITH,
-    payload: {
-      code,
-    },
-  });
+  yield put(safeCrashApp({ code }));
 }
 
 /**
@@ -274,6 +375,7 @@ export function* flushErrorsAndRedirectSaga(
   if (safeCrash) {
     yield put(flushErrors());
   }
+
   if (!action.payload.url) return;
 
   history.push(action.payload.url);

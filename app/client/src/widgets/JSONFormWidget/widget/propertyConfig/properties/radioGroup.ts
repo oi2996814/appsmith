@@ -1,16 +1,11 @@
-import {
-  ValidationResponse,
-  ValidationTypes,
-} from "constants/WidgetValidation";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
+import type { ValidationResponse } from "constants/WidgetValidation";
+import { ValidationTypes } from "constants/WidgetValidation";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
 import { FieldType } from "widgets/JSONFormWidget/constants";
 import { optionsCustomValidation } from "widgets/RadioGroupWidget/widget";
-import {
-  HiddenFnParams,
-  getSchemaItem,
-  getAutocompleteProperties,
-} from "../helper";
+import type { HiddenFnParams } from "../helper";
+import { getSchemaItem, getAutocompleteProperties } from "../helper";
 
 /**
  * Alias function is used to test the optionsCustomValidation separately
@@ -21,7 +16,11 @@ export const optionsValidation = optionsCustomValidation;
 
 function defaultOptionValidation(
   value: unknown,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   props: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ): ValidationResponse {
   //Checks if the value is not of object type in {{}}
@@ -29,7 +28,12 @@ function defaultOptionValidation(
     return {
       isValid: false,
       parsed: JSON.stringify(value, null, 2),
-      messages: ["This value does not evaluate to type: string or number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value does not evaluate to type: string or number",
+        },
+      ],
     };
   }
 
@@ -38,7 +42,12 @@ function defaultOptionValidation(
     return {
       isValid: false,
       parsed: value,
-      messages: ["This value does not evaluate to type: string or number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value does not evaluate to type: string or number",
+        },
+      ],
     };
   }
 
@@ -79,7 +88,7 @@ const PROPERTIES = {
       {
         propertyName: "defaultValue",
         helpText: "Sets a default selected option",
-        label: "Default Selected Value",
+        label: "Default selected value",
         placeholderText: "Y",
         controlType: "JSON_FORM_COMPUTE_VALUE",
         isBindProperty: true,
@@ -103,7 +112,7 @@ const PROPERTIES = {
     events: [
       {
         propertyName: "onSelectionChange",
-        helpText: "Triggers an action when a user changes the selected option",
+        helpText: "when a user changes the selected option",
         label: "onSelectionChange",
         controlType: "ACTION_SELECTOR",
         isJSConvertible: true,

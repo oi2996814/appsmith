@@ -1,26 +1,37 @@
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { SIGNPOSTING_STEP } from "pages/Editor/FirstTimeUserOnboarding/Utils";
 import { createReducer } from "utils/ReducerUtils";
 
 const initialState: OnboardingState = {
   // Signposting
   inOnboardingWidgetSelection: false,
-  enableFirstTimeUserOnboarding: false,
   forceOpenWidgetPanel: false,
-  firstTimeUserOnboardingApplicationId: "",
+  firstTimeUserOnboardingApplicationIds: [],
   firstTimeUserOnboardingComplete: false,
   showFirstTimeUserOnboardingModal: false,
+  setOverlay: false,
+  stepState: [],
+  showSignpostingTooltip: false,
+  showAnonymousDataPopup: false,
 };
+
+export interface StepState {
+  step: SIGNPOSTING_STEP;
+  completed: boolean;
+  read?: boolean;
+}
 
 export interface OnboardingState {
   inOnboardingWidgetSelection: boolean;
-  enableFirstTimeUserOnboarding: boolean;
   forceOpenWidgetPanel: boolean;
-  firstTimeUserOnboardingApplicationId: string;
+  firstTimeUserOnboardingApplicationIds: string[];
   firstTimeUserOnboardingComplete: boolean;
   showFirstTimeUserOnboardingModal: boolean;
+  stepState: StepState[];
+  setOverlay: boolean;
+  showSignpostingTooltip: boolean;
+  showAnonymousDataPopup: boolean;
 }
 
 const onboardingReducer = createReducer(initialState, {
@@ -33,22 +44,13 @@ const onboardingReducer = createReducer(initialState, {
       inOnboardingWidgetSelection: action.payload,
     };
   },
-  [ReduxActionTypes.SET_ENABLE_FIRST_TIME_USER_ONBOARDING]: (
+  [ReduxActionTypes.SET_FIRST_TIME_USER_ONBOARDING_APPLICATION_IDS]: (
     state: OnboardingState,
-    action: ReduxAction<boolean>,
+    action: ReduxAction<string[]>,
   ) => {
     return {
       ...state,
-      enableFirstTimeUserOnboarding: action.payload,
-    };
-  },
-  [ReduxActionTypes.SET_FIRST_TIME_USER_ONBOARDING_APPLICATION_ID]: (
-    state: OnboardingState,
-    action: ReduxAction<string>,
-  ) => {
-    return {
-      ...state,
-      firstTimeUserOnboardingApplicationId: action.payload,
+      firstTimeUserOnboardingApplicationIds: action.payload,
     };
   },
   [ReduxActionTypes.SET_FIRST_TIME_USER_ONBOARDING_COMPLETE]: (
@@ -74,6 +76,48 @@ const onboardingReducer = createReducer(initialState, {
     action: ReduxAction<boolean>,
   ) => {
     return { ...state, forceOpenWidgetPanel: action.payload };
+  },
+  [ReduxActionTypes.SIGNPOSTING_MARK_ALL_READ]: (state: OnboardingState) => {
+    return {
+      ...state,
+      stepState: state.stepState.map((step) => {
+        if (step.completed) {
+          return {
+            ...step,
+            read: true,
+          };
+        }
+
+        return step;
+      }),
+    };
+  },
+  [ReduxActionTypes.SET_SIGNPOSTING_OVERLAY]: (
+    state: OnboardingState,
+    action: ReduxAction<boolean>,
+  ) => {
+    return {
+      ...state,
+      setOverlay: action.payload,
+    };
+  },
+  [ReduxActionTypes.SIGNPOSTING_SHOW_TOOLTIP]: (
+    state: OnboardingState,
+    action: ReduxAction<boolean>,
+  ) => {
+    return {
+      ...state,
+      showSignpostingTooltip: action.payload,
+    };
+  },
+  [ReduxActionTypes.SHOW_ANONYMOUS_DATA_POPUP]: (
+    state: OnboardingState,
+    action: ReduxAction<boolean>,
+  ) => {
+    return {
+      ...state,
+      showAnonymousDataPopup: action.payload,
+    };
   },
 });
 

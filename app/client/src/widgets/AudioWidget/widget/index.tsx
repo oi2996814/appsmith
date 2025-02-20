@@ -1,14 +1,28 @@
-import React, { Suspense, lazy } from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "../../BaseWidget";
-import { WidgetType } from "constants/WidgetConstants";
+import Skeleton from "components/utils/Skeleton";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import { ValidationTypes } from "constants/WidgetValidation";
-import Skeleton from "components/utils/Skeleton";
+import React, { lazy, Suspense } from "react";
+import type ReactPlayer from "react-player";
 import { retryPromise } from "utils/AppsmithUtils";
-import ReactPlayer from "react-player";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import type { WidgetProps, WidgetState } from "../../BaseWidget";
+import BaseWidget from "../../BaseWidget";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { ASSETS_CDN_URL } from "constants/ThirdPartyConstants";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
+import type { SetterConfig } from "entities/AppTheming";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
-const AudioComponent = lazy(() => retryPromise(() => import("../component")));
+const AudioComponent = lazy(async () =>
+  retryPromise(async () => import("../component")),
+);
 
 export enum PlayState {
   NOT_STARTED = "NOT_STARTED",
@@ -18,6 +32,94 @@ export enum PlayState {
 }
 
 class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
+  static type = "AUDIO_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Audio",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.MEDIA],
+      needsMeta: true,
+      searchTags: ["mp3", "sound", "wave", "player"],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      rows: 4,
+      columns: 28,
+      widgetName: "Audio",
+      url: getAssetUrl(`${ASSETS_CDN_URL}/widgets/birds_chirping.mp3`),
+      autoPlay: false,
+      version: 1,
+      animateLoading: true,
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "180px",
+              minHeight: "40px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        vertical: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "40px" },
+        minWidth: { base: "180px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Audio widget can be used for playing a variety of audio formats like MP3, AAC etc.",
+      "!url": "https://docs.appsmith.com/widget-reference/audio",
+      playState: "number",
+      autoPlay: "bool",
+    };
+  }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setURL: {
+          path: "url",
+          type: "string",
+        },
+        setPlaying: {
+          path: "autoPlay",
+          type: "boolean",
+          accessor: "playState",
+        },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return [
       {
@@ -35,11 +137,13 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
             validation: {
               type: ValidationTypes.TEXT,
               params: {
-                regex: /(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/,
+                regex:
+                  /(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/,
                 expected: {
                   type: "Audio URL",
-                  example:
-                    "https://assets.appsmith.com/widgets/birds_chirping.mp3",
+                  example: getAssetUrl(
+                    `${ASSETS_CDN_URL}/widgets/birds_chirping.mp3`,
+                  ),
                   autocompleteDataType: AutocompleteDataType.STRING,
                 },
               },
@@ -52,7 +156,7 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
         children: [
           {
             propertyName: "autoPlay",
-            label: "Auto Play",
+            label: "Autoplay",
             helpText: "Audio will be automatically played",
             controlType: "SWITCH",
             isJSConvertible: true,
@@ -72,7 +176,7 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -87,7 +191,7 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
         sectionName: "Events",
         children: [
           {
-            helpText: "Triggers an action when the audio is played",
+            helpText: "when the audio is played",
             propertyName: "onPlay",
             label: "onPlay",
             controlType: "ACTION_SELECTOR",
@@ -96,7 +200,7 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
             isTriggerProperty: true,
           },
           {
-            helpText: "Triggers an action when the audio is paused",
+            helpText: "when the audio is paused",
             propertyName: "onPause",
             label: "onPause",
             controlType: "ACTION_SELECTOR",
@@ -105,7 +209,7 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
             isTriggerProperty: true,
           },
           {
-            helpText: "Triggers an action when the audio ends",
+            helpText: "when the audio ends",
             propertyName: "onEnd",
             label: "onEnd",
             controlType: "ACTION_SELECTOR",
@@ -120,6 +224,8 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
 
   private _player = React.createRef<ReactPlayer>();
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       // Property reflecting the state of the widget
@@ -160,8 +266,9 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
     }
   }
 
-  getPageView() {
+  getWidgetView() {
     const { onEnd, onPause, onPlay, playing, url } = this.props;
+
     return (
       <Suspense fallback={<Skeleton />}>
         <AudioComponent
@@ -187,6 +294,7 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
             ) {
               return;
             }
+
             // Stopping the media when it is playing and pause is hit
             if (this.props.playing) {
               this.props.updateWidgetMetaProperty("playing", false);
@@ -226,10 +334,6 @@ class AudioWidget extends BaseWidget<AudioWidgetProps, WidgetState> {
         />
       </Suspense>
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "AUDIO_WIDGET";
   }
 }
 

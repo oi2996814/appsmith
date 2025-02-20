@@ -1,6 +1,5 @@
 package com.appsmith.server.domains;
 
-import com.appsmith.external.models.BaseDomain;
 import com.appsmith.server.dtos.WorkspacePluginStatus;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -15,10 +14,9 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
-public class WorkspacePlugin extends BaseDomain {
+public class WorkspacePlugin {
 
     String pluginId;
 
     WorkspacePluginStatus status;
-
 }

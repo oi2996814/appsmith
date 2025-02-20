@@ -2,7 +2,7 @@ import React from "react";
 import Pagination from "rc-pagination";
 import styled, { css } from "styled-components";
 
-import { Icon, IconSize } from "design-system";
+import { Icon, IconSize } from "@design-system/widgets-old";
 
 const locale = {
   // Options.jsx
@@ -422,6 +422,8 @@ const PaginationWrapper = styled.ul`
   opacity: "1";
 `;
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ServerSideListPagination(props: any) {
   return (
     <PaginationWrapper
@@ -431,8 +433,9 @@ export function ServerSideListPagination(props: any) {
       disabled={props.disabled}
     >
       <li
-        className={`t--list-widget-prev-page rc-pagination-prev ${props.pageNo ===
-          1 && "rc-pagination-disabled"}`}
+        className={`t--list-widget-prev-page rc-pagination-prev ${
+          props.pageNo === 1 && "rc-pagination-disabled"
+        }`}
         title="Previous Page"
       >
         <button

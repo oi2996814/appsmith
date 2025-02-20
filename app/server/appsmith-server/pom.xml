@@ -16,32 +16,30 @@
     <description>This is the API server for the Appsmith project</description>
 
     <properties>
-        <ff4j.version>1.9</ff4j.version>
-        <org.modelmapper.version>2.4.4</org.modelmapper.version>
         <jmh.version>1.35</jmh.version>
+        <org.modelmapper.version>2.4.4</org.modelmapper.version>
     </properties>
 
-    <repositories>
-        <repository>
-            <id>spring-milestones</id>
-            <name>Spring Milestones</name>
-            <url>https://repo.spring.io/milestone</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-        <repository>
-            <id>jboss-maven2-release-repository</id>
-            <name>JBoss Spring Repository</name>
-            <url>https://repository.jboss.org/nexus/content/repositories/public/</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.mongock</groupId>
+                <artifactId>mongock-bom</artifactId>
+                <version>5.1.7</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>1.43.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
-
         <!--
             Ideally this dependency should have been added in the pom.xml file of GraphQLPlugin module, but it is
             causing 'java.lang.NoClassDefFoundError' error. Hence, adding it here after many attempts of fixing it the right
@@ -51,27 +49,27 @@
         <dependency>
             <groupId>com.graphql-java</groupId>
             <artifactId>graphql-java</artifactId>
-            <version>19.0</version>
+            <version>21.5</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.slf4j</groupId>
                     <artifactId>slf4j-api</artifactId>
                 </exclusion>
                 <exclusion>
-                    <artifactId>reactor-core</artifactId>
                     <groupId>io.projectreactor</groupId>
+                    <artifactId>reactor-core</artifactId>
                 </exclusion>
                 <exclusion>
+                    <groupId>org.springframework</groupId>
                     <artifactId>spring-core</artifactId>
-                    <groupId>org.springframework</groupId>
                 </exclusion>
                 <exclusion>
+                    <groupId>org.springframework</groupId>
                     <artifactId>spring-web</artifactId>
-                    <groupId>org.springframework</groupId>
                 </exclusion>
                 <exclusion>
-                    <artifactId>reactive-streams</artifactId>
                     <groupId>org.reactivestreams</groupId>
+                    <artifactId>reactive-streams</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>com.fasterxml.jackson.core</groupId>
@@ -102,7 +100,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
-            <version>${spring-boot.version}</version>
         </dependency>
         <dependency>
             <groupId>io.projectreactor</groupId>
@@ -125,10 +122,16 @@
             <groupId>io.mongock</groupId>
             <artifactId>mongock-springboot-v3</artifactId>
         </dependency>
+        <dependency>
+            <!-- remove after mongock-springboot-v3 brings v32.0.1-jre at least -->
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>32.0.1-jre</version>
+        </dependency>
 
         <dependency>
             <groupId>io.mongock</groupId>
-            <artifactId>mongodb-springdata-v4-driver</artifactId>
+            <artifactId>mongodb-reactive-driver</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -141,6 +144,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-redis</artifactId>
+            <version>8.3.0</version>
         </dependency>
         <dependency>
             <groupId>org.hibernate.validator</groupId>
@@ -161,27 +169,18 @@
             <artifactId>compiler</artifactId>
             <version>0.9.6</version>
         </dependency>
+
         <dependency>
             <groupId>de.flapdoodle.embed</groupId>
             <artifactId>de.flapdoodle.embed.mongo</artifactId>
-            <version>4.3.1</version>
+            <version>4.12.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>de.flapdoodle.embed</groupId>
             <artifactId>de.flapdoodle.embed.mongo.spring30x</artifactId>
-            <version>4.3.2</version>
+            <version>4.11.0</version>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <version>30.0-jre</version>
-        </dependency>
-        <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
-            <version>2.7</version>
         </dependency>
         <dependency>
             <groupId>commons-validator</groupId>
@@ -196,22 +195,34 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/io.micrometer/micrometer-tracing-bridge-brave -->
+        <!-- https://mvnrepository.com/artifact/io.micrometer/micrometer-tracing-bridge-otel -->
         <dependency>
             <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-tracing-bridge-brave</artifactId>
-            <version>1.0.0</version>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+            <version>1.3.5</version>
         </dependency>
         <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>context-propagation</artifactId>
-            <version>1.0.0</version>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+            <version>1.43.0</version>
         </dependency>
-        <!-- Actual Junit5 implementation. Will transitively include junit-jupiter-api -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Needed for establishing pooled connections to ElastiCache Redis with cluster mode enabled. -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+            <version>2.11.1</version>
+            <scope>runtime</scope>
         </dependency>
 
         <dependency>
@@ -227,6 +238,11 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.78</version>
+        </dependency>
         <!-- Only required to run junit5 test from IDE -->
         <dependency>
             <groupId>org.junit.platform</groupId>
@@ -243,6 +259,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.pf4j</groupId>
+            <artifactId>pf4j</artifactId>
+            <version>${org.pf4j.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>com.appsmith</groupId>
             <artifactId>appsmith-git</artifactId>
             <version>1.0-SNAPSHOT</version>
@@ -256,21 +278,16 @@
         </dependency>
 
         <dependency>
-            <groupId>com.querydsl</groupId>
-            <artifactId>querydsl-mongodb</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.querydsl</groupId>
-            <artifactId>querydsl-apt</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.querydsl</groupId>
-            <artifactId>querydsl-jpa</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.modelmapper</groupId>
             <artifactId>modelmapper</artifactId>
             <version>${org.modelmapper.version}</version>
+        </dependency>
+
+        <!-- API documentation dependency -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+            <version>2.6.0</version>
         </dependency>
 
         <dependency>
@@ -316,18 +333,14 @@
 
         <dependency>
             <groupId>io.sentry</groupId>
-            <artifactId>sentry-spring-boot-starter</artifactId>
-            <version>3.1.2</version>
+            <artifactId>sentry-spring-boot-starter-jakarta</artifactId>
+            <version>6.23.0</version>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-inline</artifactId>
             <version>${mockito.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>${mockito.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.jgrapht</groupId>
@@ -335,8 +348,8 @@
             <version>1.5.0</version>
         </dependency>
         <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>httpclient</artifactId>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
         </dependency>
 
         <dependency>
@@ -345,23 +358,17 @@
             <version>1.10.0</version>
         </dependency>
 
-        <!-- Dependencies for feature flagging -->
         <dependency>
-            <groupId>org.ff4j</groupId>
-            <artifactId>ff4j-core</artifactId>
-            <version>${ff4j.version}</version>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.17.1</version>
         </dependency>
-        <dependency>
-            <groupId>org.ff4j</groupId>
-            <artifactId>ff4j-config-yaml</artifactId>
-            <version>${ff4j.version}</version>
-        </dependency>
+
         <dependency>
             <groupId>com.appsmith</groupId>
             <artifactId>reactiveCaching</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
-
         <dependency>
             <groupId>org.openjdk.jmh</groupId>
             <artifactId>jmh-core</artifactId>
@@ -386,7 +393,50 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>junit</groupId>
+                    <artifactId>junit</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- We need this dependency only to ensure TestContainers work with JUnit5 -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit4-mock</artifactId>
+            <version>2.14.2.Final</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>2.17.0</version>
+        </dependency>
     </dependencies>
+
+    <repositories>
+        <repository>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+        </repository>
+        <repository>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+            <id>jboss-maven2-release-repository</id>
+            <name>JBoss Spring Repository</name>
+            <url>https://repository.jboss.org/nexus/content/repositories/public/</url>
+        </repository>
+    </repositories>
 
     <build>
         <plugins>
@@ -394,41 +444,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
-
-            <plugin>
-                <groupId>com.mysema.maven</groupId>
-                <artifactId>apt-maven-plugin</artifactId>
-                <version>1.1.3</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>process</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>target/generated-sources/java</outputDirectory>
-                            <processor>
-                                org.springframework.data.mongodb.repository.support.MongoAnnotationProcessor
-                            </processor>
-                            <options>
-                                <querydsl.listAccessors>true</querydsl.listAccessors>
-                            </options>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.mongock</groupId>
-                <artifactId>mongock-bom</artifactId>
-                <version>5.1.7</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
 </project>

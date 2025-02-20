@@ -1,24 +1,42 @@
-import { get } from "lodash";
-import equal from "fast-deep-equal/es6";
 import React from "react";
 import styled from "styled-components";
-
+import * as echarts from "echarts";
 import { invisible } from "constants/DefaultTheme";
-import { getAppsmithConfigs } from "@appsmith/configs";
-import {
-  ChartDataPoint,
+import { getAppsmithConfigs } from "ee/configs";
+import type {
   ChartType,
   CustomFusionChartConfig,
   AllChartData,
   ChartSelectedDataPoint,
   LabelOrientation,
-  LABEL_ORIENTATION_COMPATIBLE_CHARTS,
 } from "../constants";
+
 import log from "loglevel";
-import { Colors } from "constants/Colors";
+import equal from "fast-deep-equal/es6";
+import type { WidgetPositionProps } from "widgets/BaseWidget";
+import { ChartErrorComponent } from "./ChartErrorComponent";
+import { EChartsConfigurationBuilder } from "./EChartsConfigurationBuilder";
+import { dataClickCallbackHelper, isBasicEChart } from "./helpers";
+import {
+  parseOnDataPointClickParams,
+  isCustomEChart,
+  isCustomFusionChart,
+  chartOptions,
+} from "./helpers";
+
+import { CustomEChartIFrameComponent } from "./CustomEChartIFrameComponent";
+import type { AppState } from "ee/reducers";
+import { connect } from "react-redux";
+import { getWidgetPropsForPropertyPane } from "selectors/propertyPaneSelectors";
+import { selectCombinedPreviewMode } from "selectors/gitModSelectors";
+import { getAppMode } from "ee/selectors/applicationSelectors";
+import { APP_MODE } from "entities/App";
 // Leaving this require here. Ref: https://stackoverflow.com/questions/41292559/could-not-find-a-declaration-file-for-module-module-name-path-to-module-nam/42505940#42505940
 // FusionCharts comes with its own typings so there is no need to separately import them. But an import from fusioncharts/core still requires a declaration file.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const FusionCharts = require("fusioncharts");
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const plugins: Record<string, any> = {
   Charts: require("fusioncharts/fusioncharts.charts"),
   FusionTheme: require("fusioncharts/themes/fusioncharts.theme.fusion"),
@@ -38,21 +56,31 @@ const plugins: Record<string, any> = {
 // Enable all plugins.
 // This is needed to support custom chart configs
 Object.keys(plugins).forEach((key: string) =>
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (plugins[key] as any)(FusionCharts),
 );
 
 const { fusioncharts } = getAppsmithConfigs();
+
 FusionCharts.options.license({
   key: fusioncharts.licenseKey,
   creditLabel: false,
 });
 
-export interface ChartComponentProps {
+export interface ChartComponentState {
+  eChartsError: Error | undefined;
+  chartType: ChartType;
+}
+
+export interface ChartComponentProps extends WidgetPositionProps {
   allowScroll: boolean;
   chartData: AllChartData;
   chartName: string;
   chartType: ChartType;
+  customEChartConfig: Record<string, unknown>;
   customFusionChartConfig: CustomFusionChartConfig;
+  hasOnDataPointClick: boolean;
   isVisible?: boolean;
   isLoading: boolean;
   setAdaptiveYMin: boolean;
@@ -64,326 +92,260 @@ export interface ChartComponentProps {
   borderRadius: string;
   boxShadow?: string;
   primaryColor?: string;
-  fontFamily?: string;
+  showDataPointLabel: boolean;
+  fontFamily: string;
+  dimensions: {
+    componentWidth: number;
+    componentHeight: number;
+  };
 }
 
+const ChartsContainer = styled.div`
+  position: relative;
+  height: 100%;
+  width: 100%;
+`;
+
 const CanvasContainer = styled.div<
-  Omit<ChartComponentProps, "onDataPointClick">
+  Omit<ChartComponentProps, "onDataPointClick" | "hasOnDataPointClick">
 >`
   border-radius: ${({ borderRadius }) => borderRadius};
   box-shadow: ${({ boxShadow }) => `${boxShadow}`} !important;
 
   height: 100%;
   width: 100%;
-  background: ${Colors.WHITE};
+  background: var(--ads-v2-color-bg);
   overflow: hidden;
   position: relative;
   ${(props) => (!props.isVisible ? invisible : "")};
-  padding: 10px 0 0 0;
 }`;
 
-export const isLabelOrientationApplicableFor = (chartType: string) =>
-  LABEL_ORIENTATION_COMPATIBLE_CHARTS.includes(chartType);
+export type ChartComponentConnectedProps = ReturnType<typeof mapStateToProps> &
+  ChartComponentProps;
+class ChartComponent extends React.Component<
+  ChartComponentConnectedProps,
+  ChartComponentState
+> {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fusionChartsInstance: any = null;
+  echartsInstance: echarts.ECharts | undefined;
 
-class ChartComponent extends React.Component<ChartComponentProps> {
-  chartInstance = new FusionCharts();
+  customFusionChartContainerId =
+    this.props.widgetId + "custom-fusion-chart-container";
 
-  chartContainerId = this.props.widgetId + "chart-container";
+  eChartsContainerId = this.props.widgetId + "echart-container";
+  eChartsHTMLContainer: HTMLElement | null = null;
 
-  getChartType = () => {
-    const { allowScroll, chartData, chartType } = this.props;
-    const dataLength = Object.keys(chartData).length;
-    const isMSChart = dataLength > 1;
-    switch (chartType) {
-      case "PIE_CHART":
-        return "pie2d";
-      case "LINE_CHART":
-        return allowScroll ? "scrollline2d" : isMSChart ? "msline" : "line";
-      case "BAR_CHART":
-        return allowScroll ? "scrollBar2D" : isMSChart ? "msbar2d" : "bar2d";
-      case "AREA_CHART":
-        return allowScroll ? "scrollarea2d" : isMSChart ? "msarea" : "area2d";
-      case "COLUMN_CHART":
-        return allowScroll
-          ? "scrollColumn2D"
-          : isMSChart
-          ? "mscolumn2d"
-          : "column2d";
-      default:
-        return allowScroll ? "scrollColumn2D" : "mscolumn2d";
+  echartsConfigurationBuilder: EChartsConfigurationBuilder;
+
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  echartConfiguration: Record<string, any> = {};
+  prevProps: ChartComponentProps;
+
+  constructor(props: ChartComponentConnectedProps) {
+    super(props);
+    this.echartsConfigurationBuilder = new EChartsConfigurationBuilder();
+    this.prevProps = {} as ChartComponentProps;
+
+    this.state = {
+      eChartsError: undefined,
+      chartType: this.props.chartType,
+    };
+  }
+
+  dataClickCallback = (params: echarts.ECElementEvent) => {
+    dataClickCallbackHelper(params, this.props, this.state.chartType);
+  };
+
+  initializeEchartsInstance = () => {
+    this.eChartsHTMLContainer = document.getElementById(
+      this.eChartsContainerId,
+    );
+
+    if (!this.eChartsHTMLContainer) {
+      return;
+    }
+
+    if (!this.echartsInstance || this.echartsInstance.isDisposed()) {
+      this.echartsInstance = echarts.init(
+        this.eChartsHTMLContainer,
+        undefined,
+        {
+          renderer: "svg",
+          width: this.props.dimensions.componentWidth,
+          height: this.props.dimensions.componentHeight,
+        },
+      );
     }
   };
 
-  getChartData = () => {
-    const chartData: AllChartData = this.props.chartData;
-    const dataLength = Object.keys(chartData).length;
-    const chartType = this.props.chartType;
-
-    // if datalength is zero, just pass a empty datum
-    if (dataLength === 0) {
-      return [
-        {
-          label: "",
-          value: "",
-        },
-      ];
-    }
-
-    const firstKey = Object.keys(chartData)[0] as string;
-    let data = get(chartData, `${firstKey}.data`, []) as ChartDataPoint[];
-    const color = chartData[firstKey] && chartData[firstKey].color;
-
-    if (!Array.isArray(data)) {
-      data = [];
-    }
-
-    if (data.length === 0) {
-      return [
-        {
-          label: "",
-          value: "",
-        },
-      ];
-    }
-
-    return data.map((item) => {
-      return {
-        label: item.x,
-        value: item.y,
-        color:
-          chartType === "PIE_CHART"
-            ? ""
-            : color
-            ? color
-            : this.props.primaryColor,
-      };
-    });
+  shouldResizeECharts = () => {
+    return (
+      this.echartsInstance?.getHeight() !=
+        this.props.dimensions.componentHeight ||
+      this.echartsInstance?.getWidth() != this.props.dimensions.componentWidth
+    );
   };
 
-  getChartCategoriesMultiSeries = (chartData: AllChartData) => {
-    const categories: string[] = [];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  shouldSetOptions(eChartOptions: any) {
+    return !equal(this.echartConfiguration, eChartOptions);
+  }
 
-    Object.keys(chartData).forEach((key: string) => {
-      let data = get(chartData, `${key}.data`, []) as ChartDataPoint[];
+  renderECharts = () => {
+    this.initializeEchartsInstance();
 
-      if (!Array.isArray(data)) {
-        data = [];
-      }
+    if (!this.echartsInstance) {
+      return;
+    }
 
-      for (let dataIndex = 0; dataIndex < data.length; dataIndex++) {
-        const category = data[dataIndex].x;
-        if (!categories.includes(category)) {
-          categories.push(category);
+    const eChartOptions: Record<string, unknown> = chartOptions(
+      this.state.chartType,
+      this.props,
+    );
+
+    try {
+      if (this.shouldSetOptions(eChartOptions)) {
+        this.echartConfiguration = eChartOptions;
+        this.echartsInstance.setOption(this.echartConfiguration, true);
+
+        if (this.state.eChartsError) {
+          this.setState({ eChartsError: undefined });
         }
       }
-    });
 
-    return categories;
-  };
-
-  getChartCategories = (chartData: AllChartData) => {
-    const categories: string[] = this.getChartCategoriesMultiSeries(chartData);
-
-    if (categories.length === 0) {
-      return [
-        {
-          label: "",
-        },
-      ];
-    }
-    return categories.map((item) => {
-      return {
-        label: item,
-      };
-    });
-  };
-
-  getSeriesChartData = (data: ChartDataPoint[], categories: string[]) => {
-    const dataMap: { [key: string]: string } = {};
-
-    // if not array or (is array and array length is zero)
-    if (!Array.isArray(data) || (Array.isArray(data) && data.length === 0)) {
-      return [
-        {
-          value: "",
-        },
-      ];
-    }
-    for (let index = 0; index < data.length; index++) {
-      const item: ChartDataPoint = data[index];
-      dataMap[item.x] = item.y;
-    }
-    return categories.map((category: string) => {
-      return {
-        value: dataMap[category] ? dataMap[category] : null,
-      };
-    });
-  };
-
-  /**
-   * creates dataset need by fusion chart  from widget object-data
-   *
-   * @param chartData
-   * @returns
-   */
-  getChartDataset = (chartData: AllChartData) => {
-    const categories: string[] = this.getChartCategoriesMultiSeries(chartData);
-
-    const dataset = Object.keys(chartData).map((key: string, index) => {
-      const item = get(chartData, `${key}`);
-
-      const seriesChartData: Array<Record<
-        string,
-        unknown
-      >> = this.getSeriesChartData(get(item, "data", []), categories);
-      return {
-        seriesName: item.seriesName,
-        color: item.color
-          ? item.color
-          : index === 0
-          ? this.props.primaryColor
-          : "",
-        data: seriesChartData,
-      };
-    });
-
-    return dataset;
-  };
-
-  getLabelOrientationConfig = () => {
-    switch (this.props.labelOrientation) {
-      case LabelOrientation.AUTO:
-        return {};
-      case LabelOrientation.ROTATE:
-        return {
-          labelDisplay: "rotate",
-          slantLabel: "0",
-        };
-      case LabelOrientation.SLANT:
-        return {
-          labelDisplay: "rotate",
-          slantLabel: "1",
-        };
-      case LabelOrientation.STAGGER:
-        return {
-          labelDisplay: "stagger",
-        };
-      default: {
-        return {};
+      if (this.shouldResizeECharts()) {
+        this.echartsInstance.resize({
+          width: this.props.dimensions.componentWidth,
+          height: this.props.dimensions.componentHeight,
+        });
       }
+
+      this.echartsInstance.off("click");
+      this.echartsInstance.on("click", this.dataClickCallback);
+    } catch (error) {
+      this.disposeECharts();
+      this.setState({ eChartsError: error as Error });
     }
   };
 
-  getChartConfig = () => {
-    const isSingleSeriesData = this.getDatalength() === 1 ? true : false;
-    const paletteColorConfig = isSingleSeriesData &&
-      this.props.chartType !== "PIE_CHART" && {
-        palettecolors: [this.props.primaryColor],
-      };
+  disposeECharts = () => {
+    if (!this.echartsInstance?.isDisposed()) {
+      this.echartsInstance?.dispose();
+    }
+  };
 
-    const fontFamily =
-      this.props.fontFamily === "System Default"
-        ? "inherit"
-        : this.props.fontFamily;
+  componentDidMount() {
+    this.renderChartingLibrary();
+  }
 
-    const canvasPadding =
-      this.props.chartType === "LINE_CHART"
-        ? {
-            canvasLeftPadding: "5",
-            canvasTopPadding: "0",
-            canvasRightPadding: "5",
-            canvasBottomPadding: "0",
+  componentWillUnmount() {
+    this.disposeECharts();
+    this.disposeFusionCharts();
+  }
+
+  renderChartingLibrary() {
+    if (this.state.chartType === "CUSTOM_FUSION_CHART") {
+      this.disposeECharts();
+      this.renderFusionCharts();
+    } else if (this.state.chartType == "CUSTOM_ECHART") {
+      this.disposeECharts();
+      this.disposeFusionCharts();
+    } else {
+      this.disposeFusionCharts();
+      this.renderECharts();
+    }
+  }
+
+  componentDidUpdate() {
+    if (
+      isCustomFusionChart(this.props.chartType) &&
+      !isCustomFusionChart(this.state.chartType)
+    ) {
+      this.setState({
+        eChartsError: undefined,
+        chartType: "CUSTOM_FUSION_CHART",
+      });
+    } else if (
+      isCustomEChart(this.props.chartType) &&
+      !isCustomEChart(this.state.chartType)
+    ) {
+      this.echartConfiguration = {};
+      this.setState({ eChartsError: undefined, chartType: "CUSTOM_ECHART" });
+    } else if (
+      isBasicEChart(this.props.chartType) &&
+      !isBasicEChart(this.state.chartType)
+    ) {
+      // User has selected one of the ECharts option
+      this.echartConfiguration = {};
+      this.setState({
+        eChartsError: undefined,
+        chartType: this.props.chartType,
+      });
+    } else {
+      this.renderChartingLibrary();
+    }
+  }
+
+  disposeFusionCharts = () => {
+    this.fusionChartsInstance = null;
+  };
+
+  renderFusionCharts = () => {
+    if (this.fusionChartsInstance) {
+      const { dataSource, type } = this.getCustomFusionChartDataSource();
+
+      this.fusionChartsInstance.chartType(type);
+      this.fusionChartsInstance.setChartData(dataSource);
+    } else {
+      const config = this.customFusionChartConfig();
+
+      this.fusionChartsInstance = new FusionCharts(config);
+
+      FusionCharts.ready(() => {
+        /* Component could be unmounted before FusionCharts is ready,
+          this check ensure we don't render on unmounted component */
+        if (this.fusionChartsInstance) {
+          try {
+            this.fusionChartsInstance.render();
+          } catch (e) {
+            log.error(e);
           }
-        : {
-            canvasPadding: "0",
-          };
+        }
+      });
+    }
+  };
 
-    let config = {
-      caption: this.props.chartName,
-      xAxisName: this.props.xAxisName,
-      yAxisName: this.props.yAxisName,
-      theme: "fusion",
-      alignCaptionWithCanvas: 1,
+  customFusionChartConfig() {
+    const chartConfig = {
+      renderAt: this.customFusionChartContainerId,
+      width: "100%",
+      height: "100%",
+      events: {
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        dataPlotClick: (evt: any) => {
+          const dataPointClickParams = parseOnDataPointClickParams(
+            evt,
+            this.state.chartType,
+          );
 
-      // Caption styling =======================
-      captionFontSize: "24",
-      captionAlignment: "center",
-      captionPadding: "20",
-      captionFontColor: Colors.THUNDER,
-
-      // legend position styling ==========
-      legendIconSides: "4",
-      legendIconBgAlpha: "100",
-      legendIconAlpha: "100",
-      legendItemFont: fontFamily,
-      legendPosition: "top",
-      valueFont: fontFamily,
-
-      // Canvas styles ========
-      ...canvasPadding,
-
-      // Chart styling =======
-      chartLeftMargin: "20",
-      chartTopMargin: "10",
-      chartRightMargin: "40",
-      chartBottomMargin: "10",
-
-      // Axis name styling ======
-      xAxisNameFontSize: "14",
-      labelFontSize: "12",
-      labelFontColor: Colors.DOVE_GRAY2,
-      xAxisNameFontColor: Colors.DOVE_GRAY2,
-
-      yAxisNameFontSize: "14",
-      yAxisValueFontSize: "12",
-      yAxisValueFontColor: Colors.DOVE_GRAY2,
-      yAxisNameFontColor: Colors.DOVE_GRAY2,
-
-      // Base configurations ======
-      baseFont: fontFamily,
-      ...paletteColorConfig,
-      bgColor: Colors.WHITE,
-      setAdaptiveYMin: this.props.setAdaptiveYMin ? "1" : "0",
+          this.props.onDataPointClick(dataPointClickParams);
+        },
+      },
+      ...this.getCustomFusionChartDataSource(),
     };
 
-    if (isLabelOrientationApplicableFor(this.props.chartType)) {
-      config = {
-        ...config,
-        ...this.getLabelOrientationConfig(),
-      };
-    }
-
-    return config;
-  };
-
-  getDatalength = () => {
-    return Object.keys(this.props.chartData).length;
-  };
-
-  getChartDataSource = () => {
-    const dataLength = this.getDatalength();
-
-    if (dataLength <= 1 || this.props.chartType === "PIE_CHART") {
-      return {
-        chart: this.getChartConfig(),
-        data: this.getChartData(),
-      };
-    } else {
-      return {
-        chart: this.getChartConfig(),
-        categories: [
-          {
-            category: this.getChartCategories(this.props.chartData),
-          },
-        ],
-        dataset: this.getChartDataset(this.props.chartData),
-      };
-    }
-  };
+    return chartConfig;
+  }
 
   getCustomFusionChartDataSource = () => {
     // in case of evaluation error, customFusionChartConfig can be undefined
     let config = this.props.customFusionChartConfig as CustomFusionChartConfig;
+
     if (config && config.dataSource) {
       config = {
         ...config,
@@ -397,148 +359,62 @@ class ChartComponent extends React.Component<ChartComponentProps> {
         },
       };
     }
+
     return config || {};
   };
 
-  getScrollChartDataSource = () => {
-    const chartConfig = this.getChartConfig();
-
-    return {
-      chart: {
-        ...chartConfig,
-        scrollheight: "10",
-        showvalues: "1",
-        numVisiblePlot: "5",
-        flatScrollBars: "1",
-      },
-      categories: [
-        {
-          category: this.getChartCategories(this.props.chartData),
-        },
-      ],
-      data: this.getChartData(),
-      dataset: this.getChartDataset(this.props.chartData),
-    };
-  };
-
-  // return series title name for in clicked data point
-  getSeriesTitle = (data: any) => {
-    const dataLength = this.getDatalength();
-    // if pie chart or other chart have single dataset,
-    // get seriesName from chartData
-    if (
-      (dataLength <= 1 || this.props.chartType === "PIE_CHART") &&
-      this.props.chartType !== "CUSTOM_FUSION_CHART"
-    ) {
-      const chartData: AllChartData = this.props.chartData;
-      const firstKey = Object.keys(chartData)[0] as string;
-      return get(chartData, `${firstKey}.seriesName`, "");
-    }
-    // other charts return datasetName from clicked data point
-    return get(data, "datasetName", "");
-  };
-
-  createGraph = () => {
-    if (this.props.chartType === "CUSTOM_FUSION_CHART") {
-      const chartConfig = {
-        renderAt: this.chartContainerId,
-        width: "100%",
-        height: "100%",
-        events: {
-          dataPlotClick: (evt: any) => {
-            const data = evt.data;
-            const seriesTitle = this.getSeriesTitle(data);
-            this.props.onDataPointClick({
-              x: data.categoryLabel,
-              y: data.dataValue,
-              seriesTitle,
-            });
-          },
-        },
-        ...this.getCustomFusionChartDataSource(),
-      };
-      this.chartInstance = new FusionCharts(chartConfig);
-      return;
-    }
-    const dataSource =
-      this.props.allowScroll && this.props.chartType !== "PIE_CHART"
-        ? this.getScrollChartDataSource()
-        : this.getChartDataSource();
-
-    const chartConfig = {
-      type: this.getChartType(),
-      renderAt: this.chartContainerId,
-      width: "100%",
-      height: "100%",
-      dataFormat: "json",
-      dataSource: dataSource,
-      events: {
-        dataPlotClick: (evt: any) => {
-          const data = evt.data;
-          const seriesTitle = this.getSeriesTitle(data);
-          this.props.onDataPointClick({
-            x: data.categoryLabel,
-            y: data.dataValue,
-            seriesTitle,
-          });
-        },
-      },
-    };
-
-    this.chartInstance = new FusionCharts(chartConfig);
-  };
-
-  componentDidMount() {
-    this.createGraph();
-    FusionCharts.ready(() => {
-      /* Component could be unmounted before FusionCharts is ready,
-      this check ensure we don't render on unmounted component */
-      if (this.chartInstance) {
-        try {
-          this.chartInstance.render();
-        } catch (e) {
-          log.error(e);
-        }
-      }
-    });
-  }
-
-  componentWillUnmount() {
-    if (this.chartInstance) {
-      this.chartInstance = null;
-    }
-  }
-
-  componentDidUpdate(prevProps: ChartComponentProps) {
-    if (!equal(prevProps, this.props)) {
-      const chartType = this.getChartType();
-      this.chartInstance.chartType(chartType);
-      if (this.props.chartType === "CUSTOM_FUSION_CHART") {
-        const { dataSource, type } = this.getCustomFusionChartDataSource();
-        this.chartInstance.chartType(type);
-        this.chartInstance.setChartData(dataSource);
-      } else if (
-        this.props.allowScroll &&
-        this.props.chartType !== "PIE_CHART"
-      ) {
-        this.chartInstance.setChartData(this.getScrollChartDataSource());
-      } else {
-        this.chartInstance.setChartData(this.getChartDataSource());
-      }
-    }
-  }
-
   render() {
     //eslint-disable-next-line  @typescript-eslint/no-unused-vars
-    const { onDataPointClick, ...rest } = this.props;
+    const { hasOnDataPointClick, onDataPointClick, ...rest } = this.props;
+
+    // Avoid propagating the click events to upwards
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const onClick = hasOnDataPointClick
+      ? (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => e.stopPropagation()
+      : undefined;
+
     return (
       <CanvasContainer
         className={this.props.isLoading ? "bp3-skeleton" : ""}
+        onClick={onClick}
         {...rest}
-        id={this.chartContainerId}
-      />
+      >
+        {isBasicEChart(this.state.chartType) && (
+          <ChartsContainer id={this.eChartsContainerId} />
+        )}
+
+        {isCustomEChart(this.state.chartType) && (
+          <CustomEChartIFrameComponent {...this.props} />
+        )}
+
+        {this.state.chartType === "CUSTOM_FUSION_CHART" && (
+          <ChartsContainer id={this.customFusionChartContainerId} />
+        )}
+
+        {this.state.eChartsError && (
+          <ChartErrorComponent error={this.state.eChartsError} />
+        )}
+      </CanvasContainer>
     );
   }
 }
 
-export default ChartComponent;
+/**
+ * TODO: Balaji to refactor code to move out selected widget details to platform
+ */
+export const mapStateToProps = (
+  state: AppState,
+  ownProps: ChartComponentProps,
+) => {
+  const isPreviewMode = selectCombinedPreviewMode(state);
+  const appMode = getAppMode(state);
+
+  return {
+    needsOverlay:
+      appMode == APP_MODE.EDIT &&
+      !isPreviewMode &&
+      ownProps.widgetId !== getWidgetPropsForPropertyPane(state)?.widgetId,
+  };
+};
+
+export default connect(mapStateToProps)(ChartComponent);

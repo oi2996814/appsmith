@@ -1,5 +1,5 @@
-import { Intent as BlueprintIntent } from "@blueprintjs/core";
-import { IconName } from "@blueprintjs/icons";
+import type { Intent as BlueprintIntent } from "@blueprintjs/core";
+import type { IconName } from "@blueprintjs/icons";
 
 export interface DropdownOption {
   label: string;
@@ -26,9 +26,10 @@ export const InputTypes: { [key: string]: string } = {
   PASSWORD: "PASSWORD",
   CURRENCY: "CURRENCY",
   SEARCH: "SEARCH",
+  MULTI_LINE_TEXT: "MULTI_LINE_TEXT",
 };
 
-export type InputType = typeof InputTypes[keyof typeof InputTypes];
+export type InputType = (typeof InputTypes)[keyof typeof InputTypes];
 
 export enum ButtonBorderRadiusTypes {
   SHARP = "SHARP",

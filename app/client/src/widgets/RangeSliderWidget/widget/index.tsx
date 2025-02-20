@@ -1,15 +1,26 @@
 import * as React from "react";
 
-import BaseWidget, { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
 import { TAILWIND_COLORS } from "constants/ThemeConstants";
 
-import RangeSliderComponent, {
-  RangeSliderComponentProps,
-} from "../component/RangeSlider";
+import type { RangeSliderComponentProps } from "../component/RangeSlider";
+import RangeSliderComponent from "../component/RangeSlider";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import contentConfig from "./propertyConfig/contentConfig";
 import styleConfig from "./propertyConfig/styleConfig";
-import { Stylesheet } from "entities/AppTheming";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { Alignment } from "@blueprintjs/core";
+import { LabelPosition } from "components/constants";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
 export interface RangeSliderWidgetProps
   extends WidgetProps,
@@ -49,12 +60,123 @@ class RangeSliderWidget extends BaseWidget<
   RangeSliderWidgetProps,
   WidgetState
 > {
+  static type = "RANGE_SLIDER_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Range Slider",
+      needsMeta: true,
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.SLIDERS],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      min: 0,
+      max: 100,
+      minRange: 5,
+      step: 1,
+      showMarksLabel: true,
+      defaultStartValue: 10,
+      defaultEndValue: 100,
+      marks: [
+        { value: 25, label: "25%" },
+        { value: 50, label: "50%" },
+        { value: 75, label: "75%" },
+      ],
+      isVisible: true,
+      isDisabled: false,
+      tooltipAlwaysOn: false,
+      labelText: "Percentage",
+      labelPosition: LabelPosition.Top,
+      labelAlignment: Alignment.LEFT,
+      labelWidth: 8,
+      labelTextSize: "0.875rem",
+      rows: 8,
+      columns: 40,
+      widgetName: "RangeSlider",
+      shouldScroll: false,
+      shouldTruncate: false,
+      version: 1,
+      animateLoading: true,
+      sliderSize: "m",
+      responsiveBehavior: ResponsiveBehavior.Fill,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      disabledPropsDefaults: {
+        labelPosition: LabelPosition.Top,
+        labelTextSize: "0.875rem",
+      },
+      defaults: {
+        rows: 7,
+        columns: 40,
+      },
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "180px",
+              minHeight: "70px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        vertical: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "70px" },
+        minWidth: { base: "180px" },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return contentConfig;
   }
 
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisable: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+      },
+    };
+  }
+
   static getPropertyPaneStyleConfig() {
     return styleConfig;
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Range slider widget is used to capture user feedback from a range of values",
+      "!url": "https://docs.appsmith.com/widget-reference/circular-progress",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      start: "number",
+      end: "number",
+    };
   }
 
   componentDidUpdate(prevProps: RangeSliderWidgetProps) {
@@ -130,7 +252,7 @@ class RangeSliderWidget extends BaseWidget<
       : sliderValue.toString();
   };
 
-  getPageView() {
+  getWidgetView() {
     return (
       <RangeSliderComponent
         color={this.props.accentColor || TAILWIND_COLORS.green["600"]}
@@ -143,7 +265,7 @@ class RangeSliderWidget extends BaseWidget<
         labelTextColor={this.props.labelTextColor}
         labelTextSize={this.props.labelTextSize}
         labelTooltip={this.props.labelTooltip}
-        labelWidth={this.getLabelWidth()}
+        labelWidth={this.props.labelComponentWidth}
         // If showMarks is off don't show marks at all
         loading={this.props.isLoading}
         marks={this.props.showMarksLabel ? this.props.marks : []}
@@ -160,10 +282,6 @@ class RangeSliderWidget extends BaseWidget<
         tooltipAlwaysOn={this.props.tooltipAlwaysOn}
       />
     );
-  }
-
-  static getWidgetType() {
-    return "RANGE_SLIDER_WIDGET";
   }
 }
 

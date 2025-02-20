@@ -5,7 +5,7 @@ import {
   contentConfig,
   styleConfig,
 } from "widgets/ChartWidget/widget/propertyConfig";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
 import { ValidationTypes } from "constants/WidgetValidation";
 
 describe("getAllPathsFromPropertyConfig", () => {
@@ -278,6 +278,7 @@ describe("getAllPathsFromPropertyConfig", () => {
             type: ValidationTypes.TEXT,
             params: {
               allowedValues: [
+                "YYYY-MM-DDTHH:mm:ss.SSSZ",
                 "Epoch",
                 "Milliseconds",
                 "YYYY-MM-DD",
@@ -308,6 +309,7 @@ describe("getAllPathsFromPropertyConfig", () => {
             type: ValidationTypes.TEXT,
             params: {
               allowedValues: [
+                "YYYY-MM-DDTHH:mm:ss.SSSZ",
                 "Epoch",
                 "Milliseconds",
                 "YYYY-MM-DD",
@@ -510,7 +512,8 @@ describe("getAllPathsFromPropertyConfig", () => {
       ],
       setAdaptiveYMin: "0",
     };
-    const config = [...contentConfig, ...styleConfig];
+
+    const config = [...contentConfig(), ...styleConfig];
 
     const bindingPaths = {
       chartType: EvaluationSubstitutionType.TEMPLATE,
@@ -535,6 +538,7 @@ describe("getAllPathsFromPropertyConfig", () => {
       validationPaths: {
         "chartData.random-id.data": {
           params: {
+            default: [],
             children: {
               params: {
                 required: true,
@@ -576,6 +580,7 @@ describe("getAllPathsFromPropertyConfig", () => {
               "PIE_CHART",
               "COLUMN_CHART",
               "AREA_CHART",
+              "CUSTOM_ECHART",
               "CUSTOM_FUSION_CHART",
             ],
           },

@@ -1,60 +1,81 @@
-import React, { memo, useCallback, useEffect, useRef } from "react";
-import _, { get, isFunction } from "lodash";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import _, { get, isFunction, merge } from "lodash";
 import equal from "fast-deep-equal/es6";
 import * as log from "loglevel";
 
-import {
-  ControlPropertyLabelContainer,
-  ControlWrapper,
-} from "components/propertyControls/StyledControls";
-import { JSToggleButton } from "design-system";
+import { ControlWrapper } from "components/propertyControls/StyledControls";
+import { ToggleButton, Tooltip, Button } from "@appsmith/ads";
 import PropertyControlFactory from "utils/PropertyControlFactory";
 import PropertyHelpLabel from "pages/Editor/PropertyPane/PropertyHelpLabel";
 import { useDispatch, useSelector } from "react-redux";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import type { UpdateWidgetPropertyPayload } from "actions/controlActions";
 import {
   batchUpdateMultipleWidgetProperties,
   batchUpdateWidgetProperty,
   deleteWidgetProperty,
   setWidgetDynamicProperty,
-  UpdateWidgetPropertyPayload,
 } from "actions/controlActions";
-import {
-  PropertyHookUpdates,
-  PropertyPaneControlConfig,
-} from "constants/PropertyControlConstants";
-import { IPanelProps } from "@blueprintjs/core";
+import type { PropertyPaneControlConfig } from "constants/PropertyControlConstants";
+import type { IPanelProps } from "@blueprintjs/core";
 import PanelPropertiesEditor from "./PanelPropertiesEditor";
+import type { DynamicPath } from "utils/DynamicBindingUtils";
 import {
-  DynamicPath,
   getEvalValuePath,
   isDynamicValue,
   THEME_BINDING_REGEX,
 } from "utils/DynamicBindingUtils";
+import type { WidgetProperties } from "selectors/propertyPaneSelectors";
 import {
   getShouldFocusPropertyPath,
   getWidgetPropsForPropertyName,
-  WidgetProperties,
 } from "selectors/propertyPaneSelectors";
-import { EnhancementFns } from "selectors/widgetEnhancementSelectors";
-import { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
+import type { EnhancementFns } from "selectors/widgetEnhancementSelectors";
+import type { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
 import AppsmithConsole from "utils/AppsmithConsole";
-import { ENTITY_TYPE } from "entities/AppsmithConsole";
+import { ENTITY_TYPE } from "ee/entities/AppsmithConsole/utils";
 import LOG_TYPE from "entities/AppsmithConsole/logtype";
 import { getExpectedValue } from "utils/validation/common";
-import { ControlData } from "components/propertyControls/BaseControl";
-import { AppState } from "@appsmith/reducers";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
-import { TooltipComponent } from "design-system";
-import { ReactComponent as ResetIcon } from "assets/icons/control/undo_2.svg";
-import { JS_TOGGLE_DISABLED_MESSAGE } from "@appsmith/constants/messages";
+import type { ControlData } from "components/propertyControls/BaseControl";
+import type { AppState } from "ee/reducers";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import {
+  JS_TOGGLE_DISABLED_MESSAGE,
+  JS_TOGGLE_SWITCH_JS_MESSAGE,
+} from "ee/constants/messages";
 import {
   getPropertyControlFocusElement,
   shouldFocusOnPropertyControl,
 } from "utils/editorContextUtils";
 import PropertyPaneHelperText from "./PropertyPaneHelperText";
-import { setFocusablePropertyPaneField } from "actions/propertyPaneActions";
-import WidgetFactory from "utils/WidgetFactory";
+import {
+  setFocusablePropertyPaneField,
+  setSelectedPropertyPanel,
+} from "actions/propertyPaneActions";
+import WidgetFactory from "WidgetProvider/factory";
+import type { AdditionalDynamicDataTree } from "utils/autocomplete/customTreeTypeDefCreator";
+import clsx from "clsx";
+import styled from "styled-components";
+import { importSvg } from "@appsmith/ads-old";
+import classNames from "classnames";
+import type { PropertyUpdates } from "WidgetProvider/constants";
+import { getIsOneClickBindingOptionsVisibility } from "selectors/oneClickBindingSelectors";
+import { useFeatureFlag } from "utils/hooks/useFeatureFlag";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
+import { savePropertyInSessionStorageIfRequired } from "./helpers";
+import { getParentWidget } from "selectors/widgetSelectors";
+
+const ResetIcon = importSvg(
+  async () => import("assets/icons/control/undo_2.svg"),
+);
+
+const StyledDeviated = styled.div`
+  background-color: var(--ads-v2-color-bg-brand);
+`;
+
+const LabelContainer = styled.div<{ hasEditIcon: boolean }>`
+  ${(props) => props.hasEditIcon && "max-width: calc(100% - 110px);"}
+`;
 
 type Props = PropertyPaneControlConfig & {
   panel: IPanelProps;
@@ -64,19 +85,25 @@ type Props = PropertyPaneControlConfig & {
 };
 
 const SHOULD_NOT_REJECT_DYNAMIC_BINDING_LIST_FOR = ["COLOR_PICKER"];
+// const tooltipModifier = { preventOverflow: { enabled: true } };
 
 const PropertyControl = memo((props: Props) => {
   const dispatch = useDispatch();
 
   const controlRef = useRef<HTMLDivElement | null>(null);
+  const [showEmptyBlock, setShowEmptyBlock] = React.useState(false);
 
   const propsSelector = getWidgetPropsForPropertyName(
     props.propertyName,
     props.dependencies,
     props.evaluatedDependencies,
+    props.dynamicDependencies,
   );
 
   const widgetProperties: WidgetProperties = useSelector(propsSelector, equal);
+  const parentWidget = useSelector((state) =>
+    getParentWidget(state, widgetProperties.widgetId),
+  );
 
   // get the dataTreePath and apply enhancement if exists
   let dataTreePath: string | undefined =
@@ -106,12 +133,14 @@ const PropertyControl = memo((props: Props) => {
   useEffect(() => {
     // This is required because layered panels like Column Panel have Animation of 300ms
     const focusTimeout = props.isPanelProperty ? 300 : 0;
+
     if (shouldFocusPropertyPath) {
       setTimeout(() => {
         if (shouldFocusOnPropertyControl(controlRef.current)) {
           const focusableElement = getPropertyControlFocusElement(
             controlRef.current,
           );
+
           focusableElement?.scrollIntoView({
             block: "center",
             behavior: "smooth",
@@ -146,6 +175,10 @@ const PropertyControl = memo((props: Props) => {
 
   const propertyValue = _.get(widgetProperties, props.propertyName);
 
+  const experimentalJSToggle = useFeatureFlag(
+    FEATURE_FLAG.ab_one_click_learning_popover_enabled,
+  );
+
   /**
    * checks if property value is deviated or not.
    * by deviation, we mean if value of property is same as
@@ -174,8 +207,14 @@ const PropertyControl = memo((props: Props) => {
     updateDataTreePathFn: childWidgetDataTreePathEnhancementFn,
   } = enhancementFns || {};
 
+  const connectDataClicked = useSelector(getIsOneClickBindingOptionsVisibility);
+
   const toggleDynamicProperty = useCallback(
-    (propertyName: string, isDynamic: boolean) => {
+    (
+      propertyName: string,
+      isDynamic: boolean,
+      shouldValidateValueOnDynamicPropertyOff?: boolean,
+    ) => {
       AnalyticsUtil.logEvent("WIDGET_TOGGLE_JS_PROP", {
         widgetType: widgetProperties?.type,
         widgetName: widgetProperties?.widgetName,
@@ -188,10 +227,11 @@ const PropertyControl = memo((props: Props) => {
       // we don't want to remove the path from dynamic binding list
       // on toggling of js in case of few widgets
       if (
-        SHOULD_NOT_REJECT_DYNAMIC_BINDING_LIST_FOR.includes(
+        (SHOULD_NOT_REJECT_DYNAMIC_BINDING_LIST_FOR.includes(
           props.controlType,
         ) &&
-        isDynamicValue(propertyValue)
+          isDynamicValue(propertyValue)) ||
+        !shouldValidateValueOnDynamicPropertyOff
       ) {
         shouldRejectDynamicBindingPathList = false;
       }
@@ -202,13 +242,17 @@ const PropertyControl = memo((props: Props) => {
           propertyName,
           !isDynamic,
           shouldRejectDynamicBindingPathList,
+          !shouldValidateValueOnDynamicPropertyOff,
         ),
       );
     },
     [
-      widgetProperties?.widgetId,
       widgetProperties?.type,
       widgetProperties?.widgetName,
+      widgetProperties?.widgetId,
+      props.controlType,
+      propertyValue,
+      dispatch,
     ],
   );
 
@@ -216,7 +260,7 @@ const PropertyControl = memo((props: Props) => {
     (propertyPaths: string[]) => {
       dispatch(deleteWidgetProperty(widgetProperties.widgetId, propertyPaths));
     },
-    [widgetProperties.widgetId],
+    [dispatch, widgetProperties.widgetId],
   );
   const onBatchUpdateProperties = useCallback(
     (allUpdates: Record<string, unknown>) =>
@@ -225,173 +269,295 @@ const PropertyControl = memo((props: Props) => {
           modify: allUpdates,
         }),
       ),
-    [widgetProperties.widgetId],
+    [dispatch, widgetProperties.widgetId],
   );
   const onBatchUpdatePropertiesOfMultipleWidgets = useCallback(
     (updatesArray: UpdateWidgetPropertyPayload[]) => {
       dispatch(batchUpdateMultipleWidgetProperties(updatesArray));
     },
-    [],
+    [dispatch],
   );
+  const {
+    isTriggerProperty,
+    postUpdateAction,
+    shouldSwitchToNormalMode,
+    updateHook,
+    updateRelatedWidgetProperties,
+  } = props;
 
-  const getWidgetsOwnUpdatesOnPropertyChange = (
-    propertyName: string,
-    propertyValue: any,
-  ): UpdateWidgetPropertyPayload | undefined => {
-    let propertiesToUpdate: Array<PropertyHookUpdates> | undefined;
-    // To support updating multiple properties of same widget.
-    if (props.updateHook) {
-      propertiesToUpdate = props.updateHook(
-        widgetProperties,
-        propertyName,
-        propertyValue,
-      );
-    }
+  const getWidgetsOwnUpdatesOnPropertyChange = useCallback(
+    (
+      propertyName: string,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      propertyValue: any,
+    ): UpdateWidgetPropertyPayload | undefined => {
+      let propertiesToUpdate: Array<PropertyUpdates> | undefined;
 
-    if (propertiesToUpdate) {
-      const allUpdates: Record<string, unknown> = {};
-      const allDeletions: string[] = [];
-      const allDynamicPropertyPathUpdate: DynamicPath[] = [];
-      // TODO(abhinav): DEBUG: Ask Rahul and Ashok, if this causes issues anywhere else.
-
-      // We add the current updated first, so that the updatehooks can override the value
-      // This is needed for transformations in some cases. For example,
-      // the INPUT_TEXT control uses string as default, we can convert this into a number
-      // by calling an updateHook which runs the parseInt over this value.
-      allUpdates[propertyName] = propertyValue;
-      propertiesToUpdate.forEach(
-        ({
-          isDynamicPropertyPath,
-          propertyPath,
+      // To support updating multiple properties of same widget.
+      if (updateHook) {
+        propertiesToUpdate = updateHook(
+          widgetProperties,
+          propertyName,
           propertyValue,
-          shouldDeleteProperty,
-        }) => {
-          if (shouldDeleteProperty) {
-            allDeletions.push(propertyPath);
-          } else {
-            allUpdates[propertyPath] = propertyValue;
-          }
+        );
+      }
 
-          if (isDynamicPropertyPath) {
-            allDynamicPropertyPathUpdate.push({
-              key: propertyPath,
-            });
-          }
-        },
-      );
-      AppsmithConsole.info({
-        logType: LOG_TYPE.WIDGET_UPDATE,
-        text: "Widget properties were updated",
-        source: {
-          type: ENTITY_TYPE.WIDGET,
-          name: widgetProperties.widgetName,
-          id: widgetProperties.widgetId,
-          // TODO: Check whether these properties have
-          // dependent properties
-          // We should send the path that the user sends
-          // instead of sending the path that was updated
-          // as a side effect
-          propertyPath: propertiesToUpdate[0].propertyPath,
-        },
-        state: allUpdates,
-      });
-      return {
-        widgetId: widgetProperties.widgetId,
-        updates: {
-          modify: allUpdates,
-          remove: allDeletions,
-          postUpdateAction: props.postUpdateAction,
-        },
-        dynamicUpdates: {
-          dynamicPropertyPathList: allDynamicPropertyPathUpdate,
-        },
-      };
-    }
-    if (!propertiesToUpdate) {
-      const modify: Record<string, unknown> = {
-        [propertyName]: propertyValue,
-      };
-      AppsmithConsole.info({
-        logType: LOG_TYPE.WIDGET_UPDATE,
-        text: "Widget properties were updated",
-        source: {
-          type: ENTITY_TYPE.WIDGET,
-          name: widgetProperties.widgetName,
-          id: widgetProperties.widgetId,
-          propertyPath: propertyName,
-        },
-        state: {
-          [propertyName]: propertyValue,
-        },
-      });
-
-      return {
-        widgetId: widgetProperties.widgetId,
-        updates: {
-          modify,
-          postUpdateAction: props.postUpdateAction,
-        },
-      };
-    }
-  };
-
-  const getOtherWidgetPropertyChanges = (
-    propertyName: string,
-    propertyValue: any,
-  ) => {
-    let otherWidgetPropertiesToUpdates: UpdateWidgetPropertyPayload[] = [];
-
-    // enhancements are one way to update property of another widget but will have leaks into the dsl
-    // would recommend NOT TO FOLLOW this path for upcoming widgets.
-
-    // if there are enhancements related to the widget, calling them here
-    // enhancements are basically group of functions that are called before widget property
-    // is changed on propertyPane. For e.g - set/update parent property
-    if (childWidgetPropertyUpdateEnhancementFn) {
-      const hookPropertiesUpdates = childWidgetPropertyUpdateEnhancementFn(
-        widgetProperties.widgetName,
-        propertyName,
-        propertyValue,
-        props.isTriggerProperty,
-      );
-
-      if (
-        Array.isArray(hookPropertiesUpdates) &&
-        hookPropertiesUpdates.length > 0
-      ) {
+      if (propertiesToUpdate) {
         const allUpdates: Record<string, unknown> = {};
-        const triggerPaths: string[] = [];
-        hookPropertiesUpdates.forEach(
-          ({ isDynamicTrigger, propertyPath, propertyValue }) => {
-            allUpdates[propertyPath] = propertyValue;
-            if (isDynamicTrigger) triggerPaths.push(propertyPath);
+        const allDeletions: string[] = [];
+        const allDynamicPropertyPathUpdate: DynamicPath[] = [];
+        // TODO(abhinav): DEBUG: Ask Rahul and Ashok, if this causes issues anywhere else.
+
+        // We add the current updated first, so that the updatehooks can override the value
+        // This is needed for transformations in some cases. For example,
+        // the INPUT_TEXT control uses string as default, we can convert this into a number
+        // by calling an updateHook which runs the parseInt over this value.
+        allUpdates[propertyName] = propertyValue;
+        propertiesToUpdate.forEach(
+          ({
+            isDynamicPropertyPath,
+            propertyPath,
+            propertyValue,
+            shouldDeleteProperty,
+          }) => {
+            if (shouldDeleteProperty) {
+              allDeletions.push(propertyPath);
+            } else {
+              allUpdates[propertyPath] = propertyValue;
+            }
+
+            if (isDynamicPropertyPath) {
+              allDynamicPropertyPathUpdate.push({
+                key: propertyPath,
+              });
+            }
           },
         );
+        AppsmithConsole.info({
+          logType: LOG_TYPE.WIDGET_UPDATE,
+          text: "Widget properties were updated",
+          source: {
+            type: ENTITY_TYPE.WIDGET,
+            name: widgetProperties.widgetName,
+            id: widgetProperties.widgetId,
+            // TODO: Check whether these properties have
+            // dependent properties
+            // We should send the path that the user sends
+            // instead of sending the path that was updated
+            // as a side effect
+            propertyPath: propertiesToUpdate[0].propertyPath,
+          },
+          state: allUpdates,
+        });
 
-        const parentEnhancementUpdates: UpdateWidgetPropertyPayload = {
-          widgetId: parentIdWithEnhancementFn,
+        return {
+          widgetId: widgetProperties.widgetId,
           updates: {
             modify: allUpdates,
-            triggerPaths,
+            remove: allDeletions,
+            postUpdateAction: postUpdateAction,
+          },
+          dynamicUpdates: {
+            dynamicPropertyPathList: allDynamicPropertyPathUpdate,
           },
         };
-        otherWidgetPropertiesToUpdates.push(parentEnhancementUpdates);
       }
-    }
-    if (props.updateRelatedWidgetProperties) {
-      const relatedWidgetUpdates = props.updateRelatedWidgetProperties(
-        propertyName,
-        propertyValue,
-        widgetProperties,
-      );
-      if (Array.isArray(relatedWidgetUpdates) && relatedWidgetUpdates.length) {
-        otherWidgetPropertiesToUpdates = otherWidgetPropertiesToUpdates.concat(
-          relatedWidgetUpdates,
+
+      if (!propertiesToUpdate) {
+        const modify: Record<string, unknown> = {
+          [propertyName]: propertyValue,
+        };
+
+        AppsmithConsole.info({
+          logType: LOG_TYPE.WIDGET_UPDATE,
+          text: "Widget properties were updated",
+          source: {
+            type: ENTITY_TYPE.WIDGET,
+            name: widgetProperties.widgetName,
+            id: widgetProperties.widgetId,
+            propertyPath: propertyName,
+          },
+          state: {
+            [propertyName]: propertyValue,
+          },
+        });
+
+        return {
+          widgetId: widgetProperties.widgetId,
+          updates: {
+            modify,
+            postUpdateAction: postUpdateAction,
+          },
+        };
+      }
+    },
+    [postUpdateAction, updateHook, widgetProperties],
+  );
+
+  const getOtherWidgetPropertyChanges = useCallback(
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (propertyName: string, propertyValue: any) => {
+      let otherWidgetPropertiesToUpdates: UpdateWidgetPropertyPayload[] = [];
+
+      // enhancements are one way to update property of another widget but will have leaks into the dsl
+      // would recommend NOT TO FOLLOW this path for upcoming widgets.
+
+      // if there are enhancements related to the widget, calling them here
+      // enhancements are basically group of functions that are called before widget property
+      // is changed on propertyPane. For e.g - set/update parent property
+      if (childWidgetPropertyUpdateEnhancementFn) {
+        const hookPropertiesUpdates = childWidgetPropertyUpdateEnhancementFn(
+          widgetProperties.widgetName,
+          propertyName,
+          propertyValue,
+          isTriggerProperty,
         );
+
+        if (
+          Array.isArray(hookPropertiesUpdates) &&
+          hookPropertiesUpdates.length > 0
+        ) {
+          const allUpdates: Record<string, unknown> = {};
+          const triggerPaths: string[] = [];
+
+          hookPropertiesUpdates.forEach(
+            ({ isDynamicTrigger, propertyPath, propertyValue }) => {
+              allUpdates[propertyPath] = propertyValue;
+
+              if (isDynamicTrigger) triggerPaths.push(propertyPath);
+            },
+          );
+
+          const parentEnhancementUpdates: UpdateWidgetPropertyPayload = {
+            widgetId: parentIdWithEnhancementFn,
+            updates: {
+              modify: allUpdates,
+              triggerPaths,
+            },
+          };
+
+          otherWidgetPropertiesToUpdates.push(parentEnhancementUpdates);
+        }
       }
-    }
-    return otherWidgetPropertiesToUpdates;
-  };
+
+      if (updateRelatedWidgetProperties) {
+        const relatedWidgetUpdates = updateRelatedWidgetProperties(
+          propertyName,
+          propertyValue,
+          widgetProperties,
+        );
+
+        if (
+          Array.isArray(relatedWidgetUpdates) &&
+          relatedWidgetUpdates.length
+        ) {
+          otherWidgetPropertiesToUpdates =
+            otherWidgetPropertiesToUpdates.concat(relatedWidgetUpdates);
+        }
+      }
+
+      return otherWidgetPropertiesToUpdates;
+    },
+    [
+      childWidgetPropertyUpdateEnhancementFn,
+      isTriggerProperty,
+      parentIdWithEnhancementFn,
+      updateRelatedWidgetProperties,
+      widgetProperties,
+    ],
+  );
+
+  const getPropertyUpdatesWithAssociatedWidgetUpdates = useCallback(
+    (
+      propertyName: string,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      propertyValue: any,
+    ): UpdateWidgetPropertyPayload[] => {
+      const selfUpdates: UpdateWidgetPropertyPayload | undefined =
+        getWidgetsOwnUpdatesOnPropertyChange(propertyName, propertyValue);
+
+      const enhancementsToOtherWidgets: UpdateWidgetPropertyPayload[] =
+        getOtherWidgetPropertyChanges(propertyName, propertyValue);
+
+      let allPropertiesToUpdates: UpdateWidgetPropertyPayload[] = [];
+
+      if (selfUpdates) {
+        allPropertiesToUpdates.push(selfUpdates);
+
+        // ideally we should not allow updating another widget without any updates on its own.
+        if (enhancementsToOtherWidgets && enhancementsToOtherWidgets.length) {
+          allPropertiesToUpdates = allPropertiesToUpdates.concat(
+            enhancementsToOtherWidgets,
+          );
+        }
+      }
+
+      return allPropertiesToUpdates;
+    },
+    [getOtherWidgetPropertyChanges, getWidgetsOwnUpdatesOnPropertyChange],
+  );
+
+  const onBatchUpdateWithAssociatedWidgetUpdates = useCallback(
+    (
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updates: { propertyName: string; propertyValue: any }[],
+      isUpdatedViaKeyboard?: boolean,
+    ) => {
+      AnalyticsUtil.logEvent("WIDGET_PROPERTY_UPDATE", {
+        widgetType: widgetProperties.type,
+        widgetName: widgetProperties.widgetName,
+        updates,
+        isUpdatedViaKeyboard,
+        isUpdatedFromSearchResult: props.isSearchResult,
+      });
+      const consolidatedUpdates = updates
+        .flatMap(({ propertyName, propertyValue }) =>
+          getPropertyUpdatesWithAssociatedWidgetUpdates(
+            propertyName,
+            propertyValue,
+          ),
+        )
+        .reduce(
+          (
+            acc: UpdateWidgetPropertyPayload[],
+            curr: UpdateWidgetPropertyPayload,
+          ) => {
+            const findWidgetIndex = acc.findIndex(
+              (val) => val.widgetId === curr.widgetId,
+            );
+
+            if (findWidgetIndex >= 0) {
+              //merge updates of the same widget
+              const mergeCopy = merge({}, acc[findWidgetIndex], curr);
+
+              acc[findWidgetIndex] = mergeCopy;
+            } else {
+              acc.push(curr);
+            }
+
+            return acc;
+          },
+          [],
+        );
+
+      if (consolidatedUpdates && consolidatedUpdates.length) {
+        // updating properties of a widget(s) should be done only once when property value changes.
+        // to make sure dsl updates are atomic which is a necessity for undo/redo.
+        onBatchUpdatePropertiesOfMultipleWidgets(consolidatedUpdates);
+      }
+    },
+    [
+      getPropertyUpdatesWithAssociatedWidgetUpdates,
+      onBatchUpdatePropertiesOfMultipleWidgets,
+      props.isSearchResult,
+      widgetProperties.type,
+      widgetProperties.widgetName,
+    ],
+  );
 
   /**
    * this function is called whenever we change any property in the property pane
@@ -401,8 +567,11 @@ const PropertyControl = memo((props: Props) => {
   const onPropertyChange = useCallback(
     (
       propertyName: string,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       propertyValue: any,
       isUpdatedViaKeyboard?: boolean,
+      isDynamicPropertyPath?: boolean,
     ) => {
       AnalyticsUtil.logEvent("WIDGET_PROPERTY_UPDATE", {
         widgetType: widgetProperties.type,
@@ -412,41 +581,61 @@ const PropertyControl = memo((props: Props) => {
         isUpdatedViaKeyboard,
         isUpdatedFromSearchResult: props.isSearchResult,
       });
-
-      const selfUpdates:
-        | UpdateWidgetPropertyPayload
-        | undefined = getWidgetsOwnUpdatesOnPropertyChange(
-        propertyName,
-        propertyValue,
-      );
-
-      const enhancementsToOtherWidgets: UpdateWidgetPropertyPayload[] = getOtherWidgetPropertyChanges(
-        propertyName,
-        propertyValue,
-      );
-      let allPropertiesToUpdates: UpdateWidgetPropertyPayload[] = [];
-      if (selfUpdates) {
-        allPropertiesToUpdates.push(selfUpdates);
-        // ideally we should not allow updating another widget without any updates on its own.
-        if (enhancementsToOtherWidgets && enhancementsToOtherWidgets.length) {
-          allPropertiesToUpdates = allPropertiesToUpdates.concat(
-            enhancementsToOtherWidgets,
-          );
-        }
-      }
+      const allPropertiesToUpdates =
+        getPropertyUpdatesWithAssociatedWidgetUpdates(
+          propertyName,
+          propertyValue,
+        );
 
       if (allPropertiesToUpdates && allPropertiesToUpdates.length) {
+        const update = allPropertiesToUpdates[0];
+
+        if (isDynamicPropertyPath && update) {
+          allPropertiesToUpdates[0] = merge({}, update, {
+            dynamicUpdates: {
+              dynamicPropertyPathList: [
+                {
+                  key: propertyName,
+                },
+              ],
+            },
+          });
+        }
+
         // updating properties of a widget(s) should be done only once when property value changes.
         // to make sure dsl updates are atomic which is a necessity for undo/redo.
         onBatchUpdatePropertiesOfMultipleWidgets(allPropertiesToUpdates);
+
+        savePropertyInSessionStorageIfRequired({
+          isReusable: !!props.isReusable,
+          widgetProperties,
+          propertyName,
+          propertyValue,
+          parentWidgetId: parentWidget?.widgetId,
+          parentWidgetType: parentWidget?.type,
+        });
       }
     },
-    [widgetProperties],
+    [
+      getPropertyUpdatesWithAssociatedWidgetUpdates,
+      onBatchUpdatePropertiesOfMultipleWidgets,
+      props.isSearchResult,
+      widgetProperties.type,
+      widgetProperties.widgetName,
+    ],
   );
 
   const openPanel = useCallback(
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (panelProps: any) => {
       if (props.panelConfig) {
+        dispatch(
+          setSelectedPropertyPanel(
+            `${widgetProperties.widgetName}.${props.propertyName}`,
+            panelProps.index,
+          ),
+        );
         props.panel.openPanel({
           component: PanelPropertiesEditor,
           props: {
@@ -460,8 +649,86 @@ const PropertyControl = memo((props: Props) => {
         });
       }
     },
-    [props.panelConfig, onPropertyChange, props.propertyName],
+    [
+      widgetProperties.widgetName,
+      props.panelConfig,
+      props.panel,
+      props.propertyName,
+      props.theme,
+      onBatchUpdateProperties,
+    ],
   );
+
+  const [isRenaming, setIsRenaming] = useState(false);
+
+  const [editedName, setEditedName] = useState(props.propertyName);
+
+  const hasRenamingError = useCallback(() => {
+    return (
+      editedName.trim() === "" ||
+      (editedName !== props.propertyName &&
+        widgetProperties.hasOwnProperty(editedName))
+    );
+  }, [props, widgetProperties, editedName]);
+
+  const onEditSave = useCallback(() => {
+    if (hasRenamingError()) {
+      return;
+    } else if (editedName.trim() && editedName !== props.propertyName) {
+      let modify = {
+        [editedName]: widgetProperties[props.propertyName],
+      };
+
+      let triggerPaths: string[] = [];
+
+      if (
+        props.controlConfig &&
+        typeof props.controlConfig.onEdit === "function"
+      ) {
+        const updates = props.controlConfig.onEdit(
+          widgetProperties,
+          editedName,
+        );
+
+        modify = {
+          ...modify,
+          ...updates.modify,
+        };
+
+        triggerPaths = updates.triggerPaths;
+      }
+
+      dispatch(
+        batchUpdateWidgetProperty(widgetProperties.widgetId, {
+          modify,
+          triggerPaths,
+        }),
+      );
+
+      onDeleteProperties([props.propertyName]);
+    }
+
+    resetEditing();
+
+    AnalyticsUtil.logEvent("CUSTOM_WIDGET_EDIT_EVENT_SAVE_CLICKED", {
+      widgetId: widgetProperties.widgetId,
+    });
+  }, [
+    props,
+    batchUpdateWidgetProperty,
+    onDeleteProperties,
+    props.propertyName,
+    editedName,
+  ]);
+
+  const resetEditing = useCallback(() => {
+    setEditedName(props.propertyName);
+    setIsRenaming(false);
+
+    AnalyticsUtil.logEvent("CUSTOM_WIDGET_EDIT_EVENT_CANCEL_CLICKED", {
+      widgetId: widgetProperties.widgetId,
+    });
+  }, [props.propertyName]);
 
   const { propertyName } = props;
 
@@ -471,7 +738,7 @@ const PropertyControl = memo((props: Props) => {
       (props.hidden && props.hidden(widgetProperties, props.propertyName)) ||
       props.invisible ||
       (childWidgetShouldHidePropertyFn &&
-        childWidgetShouldHidePropertyFn(props.propertyName))
+        childWidgetShouldHidePropertyFn(widgetProperties, props.propertyName))
     ) {
       return null;
     }
@@ -513,7 +780,9 @@ const PropertyControl = memo((props: Props) => {
       additionalDynamicData: {},
       label,
     };
+
     config.expected = getExpectedValue(props.validation);
+
     if (widgetProperties.isPropertyDynamicTrigger) {
       config.validationMessage = "";
       config.expected = {
@@ -526,19 +795,15 @@ const PropertyControl = memo((props: Props) => {
 
     const isDynamic: boolean = widgetProperties.isPropertyDynamicPath;
     const isConvertible = !!props.isJSConvertible;
-    const className = label
-      .split(" ")
-      .join("")
-      .toLowerCase();
+    const className = label.split(" ").join("").toLowerCase();
 
-    let additionAutocomplete:
-      | Record<string, Record<string, unknown>>
-      | undefined = undefined;
+    let additionAutocomplete: AdditionalDynamicDataTree | undefined;
+
     if (additionalAutoComplete) {
       additionAutocomplete = additionalAutoComplete(widgetProperties);
     } else if (childWidgetAutoCompleteEnhancementFn) {
       additionAutocomplete = childWidgetAutoCompleteEnhancementFn() as
-        | Record<string, Record<string, unknown>>
+        | AdditionalDynamicDataTree
         | undefined;
     }
 
@@ -575,13 +840,14 @@ const PropertyControl = memo((props: Props) => {
     };
 
     const uniqId = btoa(`${widgetProperties.widgetId}.${propertyName}`);
-    const canDisplayValueInUI = PropertyControlFactory.controlUIToggleValidation.get(
+    const controlMethods = PropertyControlFactory.controlMethods.get(
       config.controlType,
     );
 
     const customJSControl = getCustomJSControl();
 
     let isToggleDisabled = false;
+
     if (
       isDynamic // JS toggle button is ON
     ) {
@@ -591,17 +857,19 @@ const PropertyControl = memo((props: Props) => {
         propertyValue !== ""
       ) {
         let value = propertyValue;
+
         // extract out the value from binding, if there is custom JS control (Table & JSONForm widget)
         if (customJSControl && isDynamicValue(value)) {
-          const extractValue = PropertyControlFactory.inputComputedValueMap.get(
-            customJSControl,
-          );
+          const extractValue =
+            PropertyControlFactory.inputComputedValueMap.get(customJSControl);
+
           if (extractValue)
             value = extractValue(value, widgetProperties.widgetName);
         }
 
         // disable button if value can't be represented in UI mode
-        if (!canDisplayValueInUI?.(config, value)) isToggleDisabled = true;
+        if (!controlMethods?.canDisplayValueInUI?.(config, value))
+          isToggleDisabled = true;
       }
 
       // Enable button if the value is same as the one defined in theme stylesheet.
@@ -614,10 +882,41 @@ const PropertyControl = memo((props: Props) => {
       }
     }
 
+    const helpText =
+      config.controlType === "ACTION_SELECTOR"
+        ? `Configure one or chain multiple actions. ${props.helpText}. All nested actions run at the same time.`
+        : props.helpText;
+
+    if (config.controlType === "ACTION_SELECTOR") {
+      config.additionalControlData = {
+        ...config.additionalControlData,
+        showEmptyBlock,
+        setShowEmptyBlock,
+      };
+    }
+
+    if (shouldSwitchToNormalMode) {
+      const switchMode = shouldSwitchToNormalMode(
+        isDynamic,
+        isToggleDisabled,
+        connectDataClicked,
+      );
+
+      if (switchMode) {
+        toggleDynamicProperty(propertyName, true);
+      }
+    }
+
+    const JSToggleTooltip = isToggleDisabled
+      ? JS_TOGGLE_DISABLED_MESSAGE
+      : !isDynamic
+        ? JS_TOGGLE_SWITCH_JS_MESSAGE
+        : "";
+
     try {
       return (
         <ControlWrapper
-          className={`t--property-control-wrapper t--property-control-${className} group`}
+          className={`t--property-control-wrapper t--property-control-${className} group relative`}
           data-guided-tour-iid={propertyName}
           id={uniqId}
           key={config.id}
@@ -629,53 +928,201 @@ const PropertyControl = memo((props: Props) => {
           }
           ref={controlRef}
         >
-          <ControlPropertyLabelContainer className="gap-1">
-            <PropertyHelpLabel
-              label={label}
-              theme={props.theme}
-              tooltip={props.helpText}
-            />
-            {isConvertible && (
-              <TooltipComponent
-                content={JS_TOGGLE_DISABLED_MESSAGE}
-                disabled={!isToggleDisabled}
-                hoverOpenDelay={200}
-                openOnTargetFocus={false}
-                position="auto"
-              >
-                <JSToggleButton
-                  handleClick={() =>
-                    toggleDynamicProperty(propertyName, isDynamic)
-                  }
-                  isActive={isDynamic}
-                  isToggleDisabled={isToggleDisabled}
+          {isRenaming && config.controlConfig?.allowEdit ? (
+            <div className="flex items-center justify-between">
+              <div className="grow">
+                <input
+                  autoFocus
+                  className={clsx(
+                    "w-full rounded-sm !outline !outline-2 !outline-offset-1",
+                    hasRenamingError()
+                      ? "!outline-[var(--ads-v2-colors-control-field-error-border)]"
+                      : "!outline-[#8BB0FA]",
+                  )}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    // Non-word characters are replaced with underscores for valid property naming
+                    setEditedName(value.split(/\W+/).join("_"));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      onEditSave();
+                    } else if (e.key === "Escape") {
+                      resetEditing();
+                    }
+                  }}
+                  placeholder="Enter label"
+                  value={editedName}
                 />
-              </TooltipComponent>
-            )}
-            {isPropertyDeviatedFromTheme && (
-              <>
-                <TooltipComponent
-                  content="Value deviated from theme"
-                  openOnTargetFocus={false}
-                >
-                  <div className="w-2 h-2 rounded-full bg-primary-500" />
-                </TooltipComponent>
-                <button
-                  className="hidden ml-auto focus:ring-2 group-hover:block reset-button"
-                  onClick={resetPropertyValueToTheme}
-                >
-                  <TooltipComponent
-                    boundary="viewport"
-                    content="Reset value"
-                    openOnTargetFocus={false}
-                    position="top-right"
+              </div>
+              <div>
+                <Button
+                  className={clsx(
+                    `${config.label}`,
+                    "edit-control flex items-center justify-center text-center h-7 w-7",
+                    `t--edit-control-${config.label}`,
+                  )}
+                  isDisabled={hasRenamingError()}
+                  isIconButton
+                  kind="tertiary"
+                  onClick={() => {
+                    onEditSave();
+                  }}
+                  size="sm"
+                  startIcon="check-line"
+                />
+              </div>
+              <div>
+                <Button
+                  className={clsx(
+                    `${config.label}`,
+                    "edit-control flex items-center justify-center text-center h-7 w-7",
+                    `t--edit-control-${config.label}`,
+                  )}
+                  isIconButton
+                  kind="tertiary"
+                  onClick={() => {
+                    resetEditing();
+                  }}
+                  size="sm"
+                  startIcon="close-x"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <LabelContainer
+                className={clsx("flex items-center justify-right gap-1")}
+                hasEditIcon={
+                  !!config.controlConfig?.allowEdit ||
+                  !!config.controlConfig?.allowDelete
+                }
+              >
+                <PropertyHelpLabel
+                  className="fit-content"
+                  label={label}
+                  theme={props.theme}
+                  tooltip={helpText}
+                />
+                {isConvertible && (
+                  <Tooltip
+                    content={JSToggleTooltip}
+                    isDisabled={!JSToggleTooltip}
                   >
-                    <ResetIcon className="w-5 h-5" />
-                  </TooltipComponent>
-                </button>
-              </>
-            )}
-          </ControlPropertyLabelContainer>
+                    <span>
+                      <ToggleButton
+                        className={classNames({
+                          "t--js-toggle": true,
+                          "is-active": isDynamic,
+                          "!h-[20px]": experimentalJSToggle,
+                        })}
+                        icon="js-toggle-v2"
+                        isDisabled={isToggleDisabled}
+                        isSelected={isDynamic}
+                        onClick={() =>
+                          toggleDynamicProperty(
+                            propertyName,
+                            isDynamic,
+                            controlMethods?.shouldValidateValueOnDynamicPropertyOff(
+                              config,
+                              propertyValue,
+                            ),
+                          )
+                        }
+                        size={experimentalJSToggle ? "md" : "sm"}
+                      />
+                    </span>
+                  </Tooltip>
+                )}
+                {isPropertyDeviatedFromTheme && (
+                  <>
+                    <Tooltip content="Value deviated from theme">
+                      <StyledDeviated className="w-2 h-2 rounded-full" />
+                    </Tooltip>
+                    <button
+                      className="hidden ml-auto focus:ring-2 group-hover:block reset-button"
+                      onClick={resetPropertyValueToTheme}
+                    >
+                      <Tooltip content="Reset value" placement="topRight">
+                        <ResetIcon className="w-5 h-5" />
+                      </Tooltip>
+                    </button>
+                  </>
+                )}
+              </LabelContainer>
+              <div className={clsx("flex items-center justify-right")}>
+                {config.controlConfig?.allowEdit && (
+                  <Button
+                    className={clsx(
+                      `${config.label}`,
+                      "edit-control flex items-center justify-center text-center h-7 w-7",
+                      `t--edit-control-${config.label}`,
+                    )}
+                    isIconButton
+                    kind="tertiary"
+                    onClick={() => {
+                      setIsRenaming(true);
+                      AnalyticsUtil.logEvent(
+                        "CUSTOM_WIDGET_EDIT_EVENT_CLICKED",
+                        {
+                          widgetId: widgetProperties.widgetId,
+                        },
+                      );
+                    }}
+                    size="sm"
+                    startIcon="pencil-line"
+                  />
+                )}
+                {config.controlConfig?.allowDelete && (
+                  <Button
+                    className={clsx(
+                      `${config.label}`,
+                      "delete-control flex items-center justify-center text-center h-7 w-7",
+                      `t--delete-control-${config.label}`,
+                    )}
+                    isIconButton
+                    kind="tertiary"
+                    onClick={() => {
+                      if (
+                        config.controlConfig &&
+                        typeof config.controlConfig.onDelete === "function"
+                      ) {
+                        const updates =
+                          config.controlConfig.onDelete(widgetProperties);
+
+                        onBatchUpdateProperties(updates);
+                      }
+
+                      onDeleteProperties([config.propertyName]);
+
+                      AnalyticsUtil.logEvent(
+                        "CUSTOM_WIDGET_DELETE_EVENT_CLICKED",
+                        {
+                          widgetId: widgetProperties.widgetId,
+                        },
+                      );
+                    }}
+                    size="sm"
+                    startIcon="trash"
+                  />
+                )}
+                {!isDynamic && config.controlType === "ACTION_SELECTOR" && (
+                  <Button
+                    className={clsx(
+                      `${config.label}`,
+                      "add-action flex items-center justify-center text-center h-7 w-7",
+                      `t--add-action-${config.label}`,
+                    )}
+                    isIconButton
+                    kind="tertiary"
+                    onClick={() => setShowEmptyBlock(true)}
+                    startIcon="plus"
+                  />
+                )}
+              </div>
+            </div>
+          )}
           {PropertyControlFactory.createControl(
             config,
             {
@@ -683,26 +1130,33 @@ const PropertyControl = memo((props: Props) => {
               onBatchUpdateProperties: onBatchUpdateProperties,
               openNextPanel: openPanel,
               deleteProperties: onDeleteProperties,
+              onBatchUpdateWithAssociatedUpdates:
+                onBatchUpdateWithAssociatedWidgetUpdates,
               theme: props.theme,
             },
             isDynamic,
             customJSControl,
             additionAutocomplete,
             hideEvaluatedValue(),
+            props.isSearchResult,
           )}
           <PropertyPaneHelperText helperText={helperText} />
         </ControlWrapper>
       );
     } catch (e) {
       log.error(e);
+
       return null;
     }
   }
+
   return null;
 });
 
 PropertyControl.displayName = "PropertyControl";
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (PropertyControl as any).whyDidYouRender = {
   logOnDifferentValues: false,
 };

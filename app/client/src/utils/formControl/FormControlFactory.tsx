@@ -1,5 +1,5 @@
-import { ControlType } from "constants/PropertyControlConstants";
-import {
+import type { ControlType } from "constants/PropertyControlConstants";
+import type {
   ControlBuilder,
   ControlProps,
   ControlData,
@@ -35,9 +35,11 @@ class FormControlFactory {
         key: controlData.id,
       };
       const control = controlBuilder.buildPropertyControl(controlProps);
+
       return control;
     } else {
       log.error(`Control type ${controlData.controlType} not found`);
+
       return <p>{`Control type ${controlData.controlType} not found`}</p>;
     }
   }

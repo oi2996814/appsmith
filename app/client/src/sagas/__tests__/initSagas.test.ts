@@ -1,62 +1,95 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import { type ReduxAction } from "actions/ReduxActionTypes";
 import { APP_MODE } from "entities/App";
-import AppEngine from "entities/Engine";
 import AppEngineFactory from "entities/Engine/factory";
-import { call } from "redux-saga/effects";
+import { getInitResponses } from "sagas/InitSagas";
 import { startAppEngine } from "sagas/InitSagas";
+import type { AppEnginePayload } from "entities/Engine";
+import { testSaga } from "redux-saga-test-plan";
+import { generateAutoHeightLayoutTreeAction } from "actions/autoHeightActions";
+import mockResponse from "./mockConsolidatedApiResponse.json";
+import { startRootSpan } from "instrumentation/generateTraces";
 
 jest.mock("../../api/Api", () => ({
   __esModule: true,
   default: class Api {},
 }));
 
+// Mock the entire AppEngineFactory module
+jest.mock("entities/Engine/factory", () => ({
+  __esModule: true,
+
+  default: class AppEngineFactory {
+    static create = jest.fn();
+  },
+}));
+
 describe("tests the sagas in initSagas", () => {
+  const pageId = "pageId";
+  const basePageId = "basePageId";
+  const action: ReduxAction<AppEnginePayload> = {
+    type: ReduxActionTypes.INITIALIZE_EDITOR,
+    payload: {
+      mode: APP_MODE.EDIT,
+      basePageId: basePageId,
+      applicationId: "applicationId",
+    },
+  };
+
   it("tests the order of execute in startAppEngine", () => {
-    const action = {
-      type: ReduxActionTypes.INITIALIZE_EDITOR,
-      payload: {
-        applicationId: "appId",
-        pageId: "pageId",
-        mode: APP_MODE.EDIT,
-      },
+    const engine = {
+      startPerformanceTracking: jest.fn(),
+      setupEngine: jest.fn(),
+      loadAppData: jest.fn().mockResolvedValue({
+        applicationId: action.payload.applicationId,
+        toLoadPageId: pageId,
+        toLoadBasePageId: action.payload.basePageId,
+      }),
+      loadAppURL: jest.fn(),
+      loadAppEntities: jest.fn(),
+      loadGit: jest.fn(),
+      completeChore: jest.fn(),
+      stopPerformanceTracking: jest.fn(),
     };
-    const gen = startAppEngine(action);
-    const engine: AppEngine = AppEngineFactory.create(
-      APP_MODE.EDIT,
-      APP_MODE.EDIT,
-    );
-    expect(JSON.stringify(gen.next().value)).toStrictEqual(
-      JSON.stringify(call(engine.setupEngine, action.payload)),
-    );
-    expect(JSON.stringify(gen.next().value)).toStrictEqual(
-      JSON.stringify(call(engine.loadAppData, action.payload)),
-    );
-    expect(
-      JSON.stringify(
-        gen.next({
-          applicationId: action.payload.applicationId,
-          toLoadPageId: action.payload.pageId,
-        }).value,
-      ),
-    ).toStrictEqual(
-      JSON.stringify(
-        call(engine.loadAppURL, action.payload.pageId, action.payload.pageId),
-      ),
-    );
-    expect(JSON.stringify(gen.next().value)).toStrictEqual(
-      JSON.stringify(
-        call(
-          engine.loadAppEntities,
-          action.payload.pageId,
-          action.payload.applicationId,
-        ),
-      ),
-    );
-    expect(JSON.stringify(gen.next().value)).toStrictEqual(
-      JSON.stringify(call(engine.loadGit, action.payload.applicationId)),
-    );
-    expect(JSON.stringify(gen.next().value)).toStrictEqual(
-      JSON.stringify(call(engine.completeChore)),
-    );
+
+    const mockRootSpan = startRootSpan("startAppEngine");
+
+    (AppEngineFactory.create as jest.Mock).mockReturnValue(engine);
+
+    testSaga(startAppEngine, action)
+      .next()
+      .call(engine.setupEngine, action.payload, mockRootSpan)
+      .next()
+      .call(getInitResponses, { ...action.payload })
+      .next(mockResponse.data)
+      .put({ type: ReduxActionTypes.LINT_SETUP })
+      .next()
+      .call(engine.loadAppData, action.payload, mockResponse.data, mockRootSpan)
+      .next({
+        applicationId: action.payload.applicationId,
+        toLoadPageId: pageId,
+        toLoadBasePageId: basePageId,
+      })
+      .call(engine.loadAppURL, {
+        basePageId: action.payload.basePageId,
+        basePageIdInUrl: action.payload.basePageId,
+        rootSpan: mockRootSpan,
+      })
+      .next()
+      .call(
+        engine.loadAppEntities,
+        pageId,
+        action.payload.applicationId,
+        mockResponse.data,
+        mockRootSpan,
+      )
+      .next()
+      .call(engine.loadGit, action.payload.applicationId, mockRootSpan)
+      .next()
+      .call(engine.completeChore, mockRootSpan)
+      .next()
+      .put(generateAutoHeightLayoutTreeAction(true, false))
+      .next()
+      .isDone();
   });
 });

@@ -1,9 +1,7 @@
 import { createReducer } from "utils/ReducerUtils";
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { SetCrudInfoModalOpenPayload } from "actions/crudInfoModalActions";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { SetCrudInfoModalOpenPayload } from "actions/crudInfoModalActions";
 
 const initialState: CrudInfoModalReduxState = {
   crudInfoModalOpen: false,
@@ -23,10 +21,10 @@ const crudInfoModalReducer = createReducer(initialState, {
   },
 });
 
-export type GenerateCRUDSuccessInfoData = {
+export interface GenerateCRUDSuccessInfoData {
   successImageUrl: string;
   successMessage: string;
-};
+}
 
 export interface CrudInfoModalReduxState {
   crudInfoModalOpen: boolean;

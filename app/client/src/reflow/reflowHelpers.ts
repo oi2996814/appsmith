@@ -1,7 +1,7 @@
-import { OccupiedSpace } from "constants/CanvasEditorConstants";
+import type { OccupiedSpace } from "constants/CanvasEditorConstants";
 import { GridDefaults } from "constants/WidgetConstants";
 import { isEmpty } from "lodash";
-import {
+import type {
   CollidingSpace,
   CollisionAccessors,
   CollisionMap,
@@ -11,13 +11,15 @@ import {
   DirectionalMovement,
   DirectionalVariables,
   GridProps,
-  HORIZONTAL_RESIZE_MIN_LIMIT,
   PrevReflowState,
-  ReflowDirection,
   ReflowedSpaceMap,
   SecondOrderCollisionMap,
   SpaceMap,
   SpaceMovementMap,
+} from "./reflowTypes";
+import {
+  HORIZONTAL_RESIZE_MIN_LIMIT,
+  ReflowDirection,
   VERTICAL_RESIZE_MIN_LIMIT,
 } from "./reflowTypes";
 import {
@@ -132,14 +134,16 @@ export function getMovementMap(
 
     let staticOccupiedLength = 0,
       maxOccupiedSpace = 0;
+
     if (!directionalVariables[childNode.collidingId]) {
       directionalVariables[childNode.collidingId] = {};
     }
+
     if (directionalVariables[childNode.collidingId][childDirection]) {
-      [staticOccupiedLength, maxOccupiedSpace] = directionalVariables[
-        childNode.collidingId
-      ][childDirection];
+      [staticOccupiedLength, maxOccupiedSpace] =
+        directionalVariables[childNode.collidingId][childDirection];
     }
+
     staticOccupiedLength = Math.max(staticOccupiedLength, occupiedLength);
     maxOccupiedSpace = Math.max(maxOccupiedSpace, occupiedSpace);
     directionalVariables[childNode.collidingId][childDirection] = [
@@ -211,6 +215,7 @@ export function getCollisionTree(
 
   for (let i = 0; i < collidingSpaces.length; i++) {
     const collidingSpace = collidingSpaces[i];
+
     if (
       checkProcessNodeForTree(collidingSpace, globalProcessedNodes)
         .shouldProcessNode
@@ -234,29 +239,27 @@ export function getCollisionTree(
       );
 
       // this method recursively builds the tree structure
-      const {
-        collisionTree: currentCollisionTree,
-        occupiedLength,
-      } = getCollisionTreeHelper(
-        newSpacePositions,
-        currentOccSpaces,
-        currentOccSpacesMap,
-        OGOccupiedSpacesMap,
-        currentCollidingSpace,
-        globalDirection,
-        currentDirection,
-        currentAccessors,
-        collidingSpaces,
-        collidingSpaceMap,
-        gridProps,
-        i,
-        prevMovementMap,
-        prevReflowState,
-        true,
-        isSecondRun,
-        globalProcessedNodes,
-        secondOrderCollisionMap,
-      );
+      const { collisionTree: currentCollisionTree, occupiedLength } =
+        getCollisionTreeHelper(
+          newSpacePositions,
+          currentOccSpaces,
+          currentOccSpacesMap,
+          OGOccupiedSpacesMap,
+          currentCollidingSpace,
+          globalDirection,
+          currentDirection,
+          currentAccessors,
+          collidingSpaces,
+          collidingSpaceMap,
+          gridProps,
+          i,
+          prevMovementMap,
+          prevReflowState,
+          true,
+          isSecondRun,
+          globalProcessedNodes,
+          secondOrderCollisionMap,
+        );
       //To get colliding Value of the space relative to the Canvas edges
       const relativeCollidingValue = getRelativeCollidingValue(
         currentAccessors,
@@ -265,6 +268,7 @@ export function getCollisionTree(
         gridProps,
         occupiedLength,
       );
+
       if (currentCollisionTree) {
         collisionTrees.push({
           ...currentCollisionTree,
@@ -276,6 +280,7 @@ export function getCollisionTree(
         if (!globalProcessedNodes[currentCollidingSpace.id]) {
           globalProcessedNodes[currentCollidingSpace.id] = {};
         }
+
         //add value to cache
         globalProcessedNodes[currentCollidingSpace.id][
           currentCollidingSpace.direction
@@ -342,6 +347,7 @@ function getCollisionTreeHelper(
   secondOrderCollisionMap?: SecondOrderCollisionMap,
 ) {
   if (!collidingSpace) return {};
+
   let occupiedLength = 0;
   const collisionTree: CollisionTree = { ...collidingSpace, children: {} };
 
@@ -374,20 +380,18 @@ function getCollisionTreeHelper(
     return {};
 
   // to get it's colliding spaces
-  const {
-    collidingSpaces,
-    occupiedSpacesInDirection,
-  } = getCollidingSpacesInDirection(
-    resizedDimensions,
-    collidingSpace,
-    globalDirection,
-    direction,
-    gridProps,
-    prevReflowState,
-    collidingSpaceMap,
-    occupiedSpaces,
-    isDirectCollidingSpace,
-  );
+  const { collidingSpaces, occupiedSpacesInDirection } =
+    getCollidingSpacesInDirection(
+      resizedDimensions,
+      collidingSpace,
+      globalDirection,
+      direction,
+      gridProps,
+      prevReflowState,
+      collidingSpaceMap,
+      occupiedSpaces,
+      isDirectCollidingSpace,
+    );
 
   if (isDirectCollidingSpace && secondOrderCollisionMap) {
     //initialize if undefined
@@ -428,6 +432,7 @@ function getCollisionTreeHelper(
       modifiedCollidingSpace,
       globalProcessedNodes,
     );
+
     if (shouldProcessNode) {
       //Recursively call to build the tree
       const {
@@ -468,6 +473,7 @@ function getCollisionTreeHelper(
           gridProps,
           currentOccupiedLength,
         );
+
         //add value to cache
         globalProcessedNodes[modifiedCollidingSpace.id][
           modifiedCollidingSpace.direction
@@ -484,6 +490,7 @@ function getCollisionTreeHelper(
           };
         }
       }
+
       //store overall maximum travel
       if (currentOccupiedLength)
         occupiedLength = Math.max(occupiedLength, currentOccupiedLength);
@@ -493,6 +500,7 @@ function getCollisionTreeHelper(
       };
     }
   }
+
   return {
     collisionTree,
     occupiedLength:
@@ -500,8 +508,8 @@ function getCollisionTreeHelper(
       (accessors.isHorizontal
         ? HORIZONTAL_RESIZE_MIN_LIMIT
         : collidingSpace.fixedHeight && accessors.directionIndicator < 0
-        ? collidingSpace.fixedHeight
-        : VERTICAL_RESIZE_MIN_LIMIT),
+          ? collidingSpace.fixedHeight
+          : VERTICAL_RESIZE_MIN_LIMIT),
   };
 }
 
@@ -577,6 +585,7 @@ export function getModifiedArgumentsForCollisionTree(
       return a[currentAccessors.direction] - b[currentAccessors.direction];
     });
   }
+
   return {
     currentOccSpacesMap,
     currentAccessors,
@@ -632,6 +641,7 @@ function getMovementMapHelper(
         globalCollisionTrees.splice(index + 1, 0, childNode);
         continue;
       }
+
       const nextEmptySpaces =
         emptySpaces +
         Math.abs(prevWidgetDistance - childNode[accessors.oppositeDirection]);
@@ -642,6 +652,7 @@ function getMovementMapHelper(
         occupiedSpace,
         shouldProcessNode,
       } = checkProcessNodeForTree(childNode, globalProcessedNodes);
+
       //process the nodes if either one is undefined
       if (
         shouldProcessNode ||
@@ -664,10 +675,12 @@ function getMovementMapHelper(
           shouldResize,
           globalProcessedNodes,
         );
+
         //initialize if undefined
         if (!globalProcessedNodes[childNode.id]) {
           globalProcessedNodes[childNode.id] = {};
         }
+
         //add value to cache
         globalProcessedNodes[childNode.id][childNode.direction] = {
           value: childNode.collidingValue,
@@ -729,6 +742,7 @@ function getMovementMapHelper(
     )
   ) {
     const { isHorizontal } = getAccessor(direction);
+
     return isHorizontal
       ? {
           occupiedSpace:
@@ -772,8 +786,8 @@ function getMovementMapHelper(
       (accessors.isHorizontal
         ? HORIZONTAL_RESIZE_MIN_LIMIT
         : collisionTree.fixedHeight && accessors.directionIndicator < 0
-        ? collisionTree.fixedHeight
-        : VERTICAL_RESIZE_MIN_LIMIT),
+          ? collisionTree.fixedHeight
+          : VERTICAL_RESIZE_MIN_LIMIT),
     currentEmptySpaces,
   };
 }
@@ -980,5 +994,6 @@ function getMovementVariables(
 
     movementVariablesMap[newSpacePositionId] = directionalMovements;
   }
+
   return movementVariablesMap;
 }

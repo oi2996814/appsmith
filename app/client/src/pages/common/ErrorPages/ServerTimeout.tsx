@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, Size } from "design-system";
+import { Button } from "@appsmith/ads";
 
 import Page from "./Page";
 import {
@@ -7,22 +7,20 @@ import {
   PAGE_SERVER_TIMEOUT_DESCRIPTION,
   PAGE_SERVER_TIMEOUT_ERROR_CODE,
   PAGE_SERVER_TIMEOUT_TITLE,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 
 function ServerTimeout() {
   return (
     <Page
       cta={
         <Button
-          category="primary"
           className="button-position"
-          fill="true"
+          kind="primary"
           onClick={() => window.location.reload()}
-          size={Size.large}
-          tag="button"
-          text={"Retry"}
-          variant="info"
-        />
+          size="md"
+        >
+          Retry
+        </Button>
       }
       description={createMessage(PAGE_SERVER_TIMEOUT_DESCRIPTION)}
       errorCode={createMessage(PAGE_SERVER_TIMEOUT_ERROR_CODE)}

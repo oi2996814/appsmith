@@ -1,11 +1,12 @@
 import { startCase } from "lodash";
-import classNames from "classnames";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import styled from "styled-components";
 
-import { AppTheme } from "entities/AppTheming";
-import { TooltipComponent } from "design-system";
+import type { AppTheme } from "entities/AppTheming";
+import { Tooltip } from "@appsmith/ads";
 import ColorPickerComponent from "components/propertyControls/ColorPickerComponentV2";
+import { capitalizeFirstLetter } from "utils/helpers";
+import { objectKeys } from "@appsmith/utils";
 
 interface ThemeColorControlProps {
   theme: AppTheme;
@@ -16,6 +17,14 @@ const ColorBox = styled.div<{
   background: string;
 }>`
   background: ${({ background }) => background};
+  border: 2px solid var(--ads-v2-color-border);
+  width: 20px;
+  height: 20px;
+  border-radius: var(--ads-v2-border-radius-circle);
+  cursor: pointer;
+  &.selected {
+    border-color: var(--ads-v2-color-border-emphasis);
+  }
 `;
 
 function ThemeColorControl(props: ThemeColorControlProps) {
@@ -23,55 +32,72 @@ function ThemeColorControl(props: ThemeColorControlProps) {
   const [autoFocus, setAutoFocus] = useState(false);
   const userDefinedColors = theme.properties.colors;
   const [selectedColor, setSelectedColor] = useState<string>("primaryColor");
+  const [isFullColorPicker, setFullColorPicker] = React.useState(false);
+
+  const onColorClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const colorName = e.currentTarget.getAttribute("data-color-name");
+
+      if (!colorName) return;
+
+      setAutoFocus(selectedColor === colorName ? !autoFocus : true);
+      setSelectedColor(colorName);
+    },
+    [autoFocus, selectedColor],
+  );
+
+  const onChangeColor = useCallback(
+    (color: string) => {
+      updateTheme({
+        ...theme,
+        properties: {
+          ...theme.properties,
+          colors: {
+            ...theme.properties.colors,
+            [selectedColor]: color,
+          },
+        },
+      });
+    },
+    [selectedColor, theme, updateTheme],
+  );
 
   return (
     <div className="space-y-2">
       <div className="flex space-x-2">
-        {Object.keys(theme.properties.colors).map(
-          (colorName: string, index: number) => {
-            return (
-              <TooltipComponent content={startCase(colorName)} key={index}>
-                <ColorBox
-                  background={userDefinedColors[colorName]}
-                  className={classNames({
-                    "w-6 h-6 rounded-full border-2 cursor-pointer ring-gray-700": true,
-                    "ring-1": selectedColor === colorName,
-                  })}
-                  onClick={() => {
-                    setAutoFocus(
-                      selectedColor === colorName ? !autoFocus : true,
-                    );
-                    setSelectedColor(colorName);
-                  }}
-                />
-              </TooltipComponent>
-            );
-          },
-        )}
+        {objectKeys(theme.properties.colors).map((colorName, index) => {
+          return (
+            <Tooltip
+              content={capitalizeFirstLetter(startCase(colorName as string))}
+              key={index}
+            >
+              <ColorBox
+                background={userDefinedColors[colorName]}
+                className={selectedColor === colorName ? "selected" : ""}
+                data-color-name={colorName}
+                data-testid={`theme-${colorName}`}
+                onClick={onColorClick}
+              />
+            </Tooltip>
+          );
+        })}
       </div>
       {selectedColor && (
         <div className="pt-1 space-y-1">
-          <h3>{startCase(selectedColor)}</h3>
+          <h3>{capitalizeFirstLetter(startCase(selectedColor))}</h3>
           <ColorPickerComponent
             autoFocus={autoFocus}
-            changeColor={(color: string) => {
-              updateTheme({
-                ...theme,
-                properties: {
-                  ...theme.properties,
-                  colors: {
-                    ...theme.properties.colors,
-                    [selectedColor]: color,
-                  },
-                },
-              });
-            }}
+            changeColor={onChangeColor}
             color={userDefinedColors[selectedColor]}
+            data-color={selectedColor}
+            isFullColorPicker={isFullColorPicker}
             isOpen={autoFocus}
             key={selectedColor}
+            onPopupClosed={() => setAutoFocus(false)}
             portalContainer={
               document.getElementById("app-settings-portal") || undefined
             }
+            setFullColorPicker={setFullColorPicker}
           />
         </div>
       )}

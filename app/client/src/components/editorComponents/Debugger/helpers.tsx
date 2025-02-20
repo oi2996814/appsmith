@@ -1,19 +1,17 @@
-import { Log, LOG_CATEGORY, Severity } from "entities/AppsmithConsole";
+import type { Log } from "entities/AppsmithConsole";
+import { LOG_CATEGORY, Severity } from "entities/AppsmithConsole";
 import React from "react";
 import styled from "styled-components";
-import { getTypographyByKey } from "design-system";
+import { getTypographyByKey } from "@appsmith/ads-old";
+import { createMessage, OPEN_THE_DEBUGGER, PRESS } from "ee/constants/messages";
+import type { DependencyMap } from "utils/DynamicBindingUtils";
+import { isChildPropertyPath } from "utils/DynamicBindingUtils";
 import {
-  createMessage,
-  OPEN_THE_DEBUGGER,
-  PRESS,
-} from "@appsmith/constants/messages";
-import { DependencyMap, isChildPropertyPath } from "utils/DynamicBindingUtils";
-import {
-  matchBuilderPath,
   matchApiPath,
+  matchBuilderPath,
   matchQueryPath,
 } from "constants/routes";
-import { getEntityNameAndPropertyPath } from "@appsmith/workers/Evaluation/evaluationUtils";
+import { getEntityNameAndPropertyPath } from "ee/workers/Evaluation/evaluationUtils";
 import { modText } from "utils/helpers";
 import { union } from "lodash";
 
@@ -23,11 +21,11 @@ const BlankStateWrapper = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  color: ${(props) => props.theme.colors.debugger.blankState.color};
-  ${getTypographyByKey("p1")}
+  color: var(--ads-v2-color-fg);
 
+  ${getTypographyByKey("p1")}
   .debugger-shortcut {
-    color: ${(props) => props.theme.colors.debugger.blankState.shortcut};
+    color: var(--ads-v2-color-fg);
     ${getTypographyByKey("h5")}
   }
 `;
@@ -53,12 +51,6 @@ export function BlankState(props: {
   );
 }
 
-export enum DEBUGGER_TAB_KEYS {
-  ERROR_TAB = "ERROR",
-  LOGS_TAB = "LOGS_TAB",
-  INSPECT_TAB = "INSPECT_TAB",
-}
-
 export const SeverityIcon: Record<Severity, string> = {
   [Severity.INFO]: "success",
   [Severity.ERROR]: "close-circle",
@@ -80,6 +72,8 @@ const truncate = (input: string, suffix = "", truncLen = 100) => {
 };
 
 // Converts the data from the log object to a string
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createLogTitleString(data: any[]) {
   try {
     // convert mixed array to string
@@ -88,28 +82,37 @@ export function createLogTitleString(data: any[]) {
       if (typeof curr === "boolean") {
         return `${acc} ${curr}`;
       }
+
       if (curr === null || curr === undefined) {
         return `${acc} undefined`;
       }
+
       if (curr instanceof Promise) {
         return `${acc} Promise ${curr.constructor.name}`;
       }
+
       if (typeof curr === "string") {
         return `${acc} ${truncate(curr)}`;
       }
+
       if (typeof curr === "number") {
         return `${acc} ${truncate(curr.toString())}`;
       }
+
       if (typeof curr === "function") {
         return `${acc} func() ${curr.name}`;
       }
+
       if (typeof curr === "object") {
         let suffix = "}";
+
         if (Array.isArray(curr)) {
           suffix = "]";
         }
+
         return `${acc} ${truncate(JSON.stringify(curr, null, "\t"), suffix)}`;
       }
+
       acc = `${acc} -`;
     }, "");
   } catch (error) {
@@ -137,17 +140,19 @@ export function getDependenciesFromInverseDependencies(
   deps: DependencyMap,
   entityName: string | null,
 ) {
-  if (!entityName) return null;
+  if (!entityName || !deps) return null;
 
   const directDependencies = new Set<string>();
   const inverseDependencies = new Set<string>();
 
   Object.entries(deps).forEach(([dependant, dependencies]) => {
     const { entityName: entity } = getEntityNameAndPropertyPath(dependant);
+
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (dependencies as any).map((dependency: any) => {
-      const { entityName: entityDependency } = getEntityNameAndPropertyPath(
-        dependency,
-      );
+      const { entityName: entityDependency } =
+        getEntityNameAndPropertyPath(dependency);
 
       /**
        * Remove appsmith from the entity dropdown, under the property pane.
@@ -176,26 +181,37 @@ export function getDependencyChain(
   propertyPath: string,
   inverseMap: DependencyMap,
 ) {
-  let currentChain: string[] = [];
-  const dependents = inverseMap[propertyPath];
+  const visited = new Set<string>();
 
-  if (!dependents || !dependents.length) return currentChain;
+  return getDependencyChainHelper(propertyPath);
 
-  const { entityName } = getEntityNameAndPropertyPath(propertyPath);
+  function getDependencyChainHelper(propertyPath: string): string[] {
+    let currentChain: string[] = [];
+    const dependents = inverseMap[propertyPath];
 
-  dependents.map((dependentPath) => {
-    if (!isChildPropertyPath(entityName, dependentPath)) {
-      currentChain.push(dependentPath);
+    if (!dependents || !dependents.length) return currentChain;
+
+    if (visited.has(propertyPath)) return currentChain;
+
+    const { entityName } = getEntityNameAndPropertyPath(propertyPath);
+
+    visited.add(propertyPath);
+
+    for (const dependentPath of dependents) {
+      if (!isChildPropertyPath(entityName, dependentPath)) {
+        currentChain.push(dependentPath);
+      }
+
+      if (dependentPath !== entityName) {
+        currentChain = union(
+          currentChain,
+          getDependencyChain(dependentPath, inverseMap),
+        );
+      }
     }
 
-    if (dependentPath !== entityName) {
-      currentChain = union(
-        currentChain,
-        getDependencyChain(dependentPath, inverseMap),
-      );
-    }
-  });
-  return currentChain;
+    return currentChain;
+  }
 }
 
 export const doesEntityHaveErrors = (

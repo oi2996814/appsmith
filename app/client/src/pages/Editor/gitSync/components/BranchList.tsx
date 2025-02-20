@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getTypographyByKey, TextInput } from "design-system";
+import { getTypographyByKey } from "@appsmith/ads-old";
 import styled, { useTheme } from "styled-components";
-import { Colors } from "constants/Colors";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
   createNewBranchInit,
   fetchBranchesInit,
+  fetchGitProtectedBranchesInit,
   switchGitBranchInit,
 } from "actions/gitSyncActions";
 import {
@@ -15,6 +15,8 @@ import {
   getFetchingBranches,
   getGitBranches,
   getGitBranchNames,
+  getIsGetProtectedBranchesLoading,
+  getProtectedBranchesSelector,
 } from "selectors/gitSyncSelectors";
 
 import Skeleton from "components/utils/Skeleton";
@@ -27,38 +29,41 @@ import {
   FIND_OR_CREATE_A_BRANCH,
   SWITCH_BRANCHES,
   SYNC_BRANCHES,
-} from "@appsmith/constants/messages";
-import { Space } from "./StyledComponents";
-import { Icon, IconSize, IconWrapper } from "design-system";
+} from "ee/constants/messages";
+import {
+  Icon,
+  Spinner,
+  Tooltip,
+  Button,
+  SearchInput,
+  Text,
+} from "@appsmith/ads";
 import { get } from "lodash";
-import { Spinner, TooltipComponent as Tooltip } from "design-system";
 import {
   isLocalBranch,
   isRemoteBranch,
   removeSpecialChars,
 } from "pages/Editor/gitSync/utils";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import { useActiveHoverIndex, useFilteredBranches } from "../hooks";
 import { BranchListItemContainer } from "./BranchListItemContainer";
 import { RemoteBranchList } from "./RemoteBranchList";
 import { LocalBranchList } from "./LocalBranchList";
-import { Theme } from "constants/DefaultTheme";
+import type { Theme } from "constants/DefaultTheme";
+import { Space } from "./StyledComponents";
 
 const ListContainer = styled.div`
   flex: 1;
   overflow: auto;
-  width: 300px;
+  width: calc(300px + 5px);
+  margin-right: -5px;
   position: relative;
 `;
 
 const BranchDropdownContainer = styled.div`
-  height: 40vh;
+  height: 45vh;
   display: flex;
   flex-direction: column;
-
-  & .title {
-    ${getTypographyByKey("p1")};
-  }
 
   padding: ${(props) => props.theme.spaces[5]}px;
   min-height: 0;
@@ -73,10 +78,7 @@ const CreateNewBranchContainer = styled.div`
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-
-  & ${IconWrapper} {
-    display: inline;
-  }
+  margin-right: 4px;
 
   & div {
     margin-left: ${(props) => props.theme.spaces[4]}px;
@@ -86,20 +88,19 @@ const CreateNewBranchContainer = styled.div`
 
   & .large-text {
     ${getTypographyByKey("p1")};
-    color: ${Colors.BLACK};
+    color: var(--ads-v2-color-fg);
   }
 
   & .small-text {
     ${getTypographyByKey("p3")};
-    color: ${Colors.GREY_7};
+    color: var(--ads-v2-color-fg-muted);
   }
 `;
 
-const SpinnerContainer = styled.div`
+const SpinnerContainer = styled.div<{ isCreatingNewBranch: boolean }>`
   align-self: center;
   width: 12px;
-  position: absolute;
-  right: 16px;
+  visibility: ${(props) => (props.isCreatingNewBranch ? "visible" : "hidden")};
 `;
 
 function CreateNewBranch({
@@ -109,7 +110,8 @@ function CreateNewBranch({
   hovered,
   isCreatingNewBranch,
   onClick,
-  shouldScrollIntoView,
+  shouldScrollIntoView, // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 }: any) {
   useEffect(() => {
     if (itemRef.current && shouldScrollIntoView)
@@ -129,20 +131,27 @@ function CreateNewBranch({
         alignItems: "flex-start",
         cursor: isCreatingNewBranch ? "not-allowed" : "pointer",
         display: "flex",
-        background: hovered ? Colors.GREY_3 : "unset",
+        justifyContent: "space-between",
+        background: hovered ? "var(--ads-v2-color-bg-muted)" : "unset",
         padding: get(theme, "spaces[5]"),
+        borderRadius: "var(--ads-v2-border-radius)",
       }}
     >
-      <Icon
-        fillColor={get(theme, "colors.gitSyncModal.closeIcon")}
-        name="git-branch"
-        size={IconSize.XXXL}
-      />
-      <CreateNewBranchContainer className={className} ref={itemRef}>
-        <div className="large-text">{`Create branch: ${branch} `}</div>
-        <div className="small-text">{`from '${currentBranch}'`}</div>
-      </CreateNewBranchContainer>
-      <SpinnerContainer>{isCreatingNewBranch && <Spinner />}</SpinnerContainer>
+      <div className="flex">
+        <Icon
+          color={get(theme, "colors.gitSyncModal.closeIcon")}
+          name="git-branch"
+          size="lg"
+        />
+        <CreateNewBranchContainer className={className} ref={itemRef}>
+          <div className="large-text">{`Create branch: ${branch} `}</div>
+          <div className="small-text">{`from '${currentBranch}'`}</div>
+        </CreateNewBranchContainer>
+      </div>
+
+      <SpinnerContainer isCreatingNewBranch={isCreatingNewBranch}>
+        <Spinner data-testid={"t--branch-creating-spinner"} size="sm" />
+      </SpinnerContainer>
     </div>
   );
 }
@@ -185,39 +194,36 @@ export function Header({
       }}
     >
       <div style={{ display: "flex", alignItems: "center" }}>
-        <span className="title">{title}</span>
+        <Text color={"var(--ads-v2-color-fg-emphasis-plus)"} kind="heading-s">
+          {title}
+        </Text>
         <span
           style={{
             display: "inline-block",
             marginLeft: get(theme, "spaces[1]"),
           }}
         >
-          <Tooltip
-            content={createMessage(SYNC_BRANCHES)}
-            hoverOpenDelay={10}
-            modifiers={{
-              flip: { enabled: false },
-            }}
-            position="top"
-          >
-            <Icon
+          <Tooltip content={createMessage(SYNC_BRANCHES)} placement="top">
+            <Button
               className="t--sync-branches"
-              fillColor={get(theme, "colors.gitSyncModal.closeIcon")}
-              hoverFillColor={Colors.BLACK}
-              name="refresh"
+              color={get(theme, "colors.gitSyncModal.closeIcon")}
+              isIconButton
+              kind="tertiary"
               onClick={fetchBranches}
-              size={IconSize.XXXL}
+              size="md"
+              startIcon="refresh"
             />
           </Tooltip>
         </span>
       </div>
-      <Icon
+      <Button
         className="t--close-branch-list"
-        fillColor={get(theme, "colors.gitSyncModal.closeIcon")}
-        hoverFillColor={Colors.BLACK}
-        name="close-modal"
+        color={get(theme, "colors.gitSyncModal.closeIcon")}
+        isIconButton
+        kind="tertiary"
         onClick={closePopup}
-        size={IconSize.XXXXL}
+        size="md"
+        startIcon="close-modal"
       />
     </div>
   );
@@ -232,6 +238,7 @@ export default function BranchList(props: {
       source: "BRANCH_LIST_POPUP_FROM_BOTTOM_BAR",
     });
     dispatch(fetchBranchesInit({ pruneBranches: true }));
+    dispatch(fetchGitProtectedBranchesInit());
   };
 
   const branches = useSelector(getGitBranches);
@@ -239,7 +246,10 @@ export default function BranchList(props: {
   const currentBranch = useSelector(getCurrentGitBranch);
   const fetchingBranches = useSelector(getFetchingBranches);
   const defaultBranch = useSelector(getDefaultGitBranchName);
-
+  const protectedBranches = useSelector(getProtectedBranchesSelector);
+  const isGetProtectedBranchesLoading = useSelector(
+    getIsGetProtectedBranchesLoading,
+  );
   const [searchText, changeSearchTextInState] = useState("");
   const changeSearchText = (text: string) => {
     changeSearchTextInState(removeSpecialChars(text));
@@ -273,10 +283,12 @@ export default function BranchList(props: {
 
   const handleCreateNewBranch = () => {
     if (isCreatingNewBranch) return;
+
     AnalyticsUtil.logEvent("GS_CREATE_NEW_BRANCH", {
       source: "BRANCH_LIST_POPUP_FROM_BOTTOM_BAR",
     });
     const branch = searchText;
+
     setIsCreatingNewBranch(true);
     dispatch(
       createNewBranchInit({
@@ -286,6 +298,7 @@ export default function BranchList(props: {
         },
         onSuccessCallback: () => {
           setIsCreatingNewBranch(false);
+
           if (typeof props.setIsPopupOpen === "function")
             props.setIsPopupOpen(false);
         },
@@ -324,7 +337,11 @@ export default function BranchList(props: {
     activeHoverIndex,
     defaultBranch,
     switchBranch,
+    protectedBranches,
   );
+
+  const loading = fetchingBranches || isGetProtectedBranchesLoading;
+
   return (
     <BranchListHotkeys
       handleDownKey={handleDownKey}
@@ -341,17 +358,18 @@ export default function BranchList(props: {
           }}
           fetchBranches={pruneAndFetchBranches}
         />
-        <Space size={4} />
+        <Space size={3} />
         <div style={{ width: 300 }}>
-          {fetchingBranches && (
+          {loading && (
             <div style={{ width: "100%", height: textInputHeight }}>
               <Skeleton />
             </div>
           )}
-          {!fetchingBranches && (
-            <TextInput
+          {!loading && (
+            <SearchInput
               autoFocus
               className="branch-search t--branch-search-input"
+              // @ts-expect-error Fix this the next time the file is edited
               fill
               onChange={changeSearchText}
               placeholder={createMessage(FIND_OR_CREATE_A_BRANCH)}
@@ -359,9 +377,12 @@ export default function BranchList(props: {
             />
           )}
         </div>
-        {fetchingBranches && <BranchesLoading />}
-        {!fetchingBranches && (
+        <Space size={3} />
+
+        {loading && <BranchesLoading />}
+        {!loading && (
           <ListContainer>
+            <Space size={5} />
             {isCreateNewBranchInputValid && (
               <CreateNewBranch
                 branch={searchText}
@@ -374,6 +395,7 @@ export default function BranchList(props: {
               />
             )}
             {localBranchList}
+            <Space size={5} />
             {remoteBranchList}
           </ListContainer>
         )}

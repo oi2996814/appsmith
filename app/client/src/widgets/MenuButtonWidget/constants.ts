@@ -1,12 +1,13 @@
-import { WidgetProps } from "widgets/BaseWidget";
-import { Alignment } from "@blueprintjs/core";
-import { IconName, IconNames } from "@blueprintjs/icons";
-import {
+import type { WidgetProps } from "widgets/BaseWidget";
+import type { Alignment } from "@blueprintjs/core";
+import type { IconName } from "@blueprintjs/icons";
+import { IconNames } from "@blueprintjs/icons";
+import type {
   ButtonBorderRadius,
   ButtonVariant,
   ButtonPlacement,
 } from "components/constants";
-import { RenderMode } from "constants/WidgetConstants";
+import type { RenderMode } from "constants/WidgetConstants";
 
 export enum MenuItemsSource {
   STATIC = "STATIC",
@@ -58,6 +59,7 @@ export interface MenuButtonWidgetProps extends WidgetProps {
 export interface MenuButtonComponentProps {
   label?: string;
   isDisabled?: boolean;
+  shouldFitContent: boolean;
   isVisible?: boolean;
   isCompact?: boolean;
   menuItems: MenuItems;
@@ -78,6 +80,9 @@ export interface MenuButtonComponentProps {
   menuItemsSource: MenuItemsSource;
   configureMenuItems: ConfigureMenuItems;
   sourceData?: Array<Record<string, unknown>>;
+  maxWidth?: number;
+  minWidth?: number;
+  minHeight?: number;
 }
 
 export interface PopoverContentProps {

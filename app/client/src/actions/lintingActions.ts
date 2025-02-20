@@ -1,13 +1,11 @@
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { LintErrors } from "reducers/lintingReducers/lintErrorsReducers";
+import type { LintErrorsStore } from "reducers/lintingReducers/lintErrorsReducers";
+import type { ReduxAction } from "./ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 
-export type SetLintErrorsAction = ReduxAction<{ errors: LintErrors }>;
+export type SetLintErrorsAction = ReduxAction<{ errors: LintErrorsStore }>;
 export const setLintingErrors = (
-  errors: LintErrors,
-): ReduxAction<{ errors: LintErrors }> => {
+  errors: LintErrorsStore,
+): ReduxAction<{ errors: LintErrorsStore }> => {
   return {
     type: ReduxActionTypes.SET_LINT_ERRORS,
     payload: { errors },

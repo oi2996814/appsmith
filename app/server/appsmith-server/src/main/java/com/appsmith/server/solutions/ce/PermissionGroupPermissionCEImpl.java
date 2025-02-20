@@ -2,7 +2,7 @@ package com.appsmith.server.solutions.ce;
 
 import com.appsmith.server.acl.AclPermission;
 
-public class PermissionGroupPermissionCEImpl implements PermissionGroupPermissionCE {
+public class PermissionGroupPermissionCEImpl implements PermissionGroupPermissionCE, DomainPermissionCE {
     @Override
     public AclPermission getEditPermission() {
         return AclPermission.MANAGE_PERMISSION_GROUPS;
@@ -26,5 +26,10 @@ public class PermissionGroupPermissionCEImpl implements PermissionGroupPermissio
     @Override
     public AclPermission getReadPermission() {
         return AclPermission.READ_PERMISSION_GROUPS;
+    }
+
+    @Override
+    public AclPermission getExportPermission(boolean isGitSync, boolean exportWithConfiguration) {
+        return null;
     }
 }

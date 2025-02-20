@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import styled from "styled-components";
-import { ControllerRenderProps } from "react-hook-form";
+import type { ControllerRenderProps } from "react-hook-form";
 import { sortBy } from "lodash";
 
 import Accordion from "../component/Accordion";
@@ -9,7 +9,7 @@ import FieldRenderer from "./FieldRenderer";
 import NestedFormWrapper from "../component/NestedFormWrapper";
 import useUpdateAccessor from "./useObserveAccessor";
 import { FIELD_MARGIN_BOTTOM } from "../component/styleConstants";
-import {
+import type {
   BaseFieldComponentProps,
   FieldComponent,
   FieldComponentBaseProps,
@@ -37,9 +37,9 @@ type ObjectFieldProps = Omit<
   name: string;
 };
 
-type StyledWrapperProps = {
+interface StyledWrapperProps {
   withBottomMargin: boolean;
-};
+}
 
 const COMPONENT_DEFAULT_VALUES: ObjectComponentProps = {
   isDisabled: false,
@@ -81,6 +81,7 @@ function ObjectField({
 
   const objectPassedDefaultValue = useMemo(() => {
     let defaultValue: Record<string, unknown> = {};
+
     if (passedDefaultValue && typeof passedDefaultValue === "object") {
       defaultValue = passedDefaultValue as Record<string, unknown>;
     }
@@ -164,6 +165,7 @@ function ObjectField({
 }
 
 const MemoedObjectField: FieldComponent = React.memo(ObjectField);
+
 MemoedObjectField.componentDefaultValues = COMPONENT_DEFAULT_VALUES;
 
 export default MemoedObjectField;

@@ -1,18 +1,23 @@
-import React from "react";
-import { ThemeProvider } from "styled-components";
-import DividerWidget, { DividerWidgetProps } from "./";
-import configureStore from "redux-mock-store";
 import { render } from "@testing-library/react";
+import { dark, theme } from "constants/DefaultTheme";
+import React from "react";
 import { Provider } from "react-redux";
-import { theme, dark } from "constants/DefaultTheme";
-
-jest.mock("react-dnd", () => ({
-  useDrag: jest.fn().mockReturnValue([{ isDragging: false }, jest.fn()]),
-}));
+import configureStore from "redux-mock-store";
+import { ThemeProvider } from "styled-components";
+import type { DividerWidgetProps } from "./";
+import DividerWidget from "./";
 
 describe("<DividerWidget />", () => {
   const initialState = {
     ui: {
+      appSettingsPane: {
+        isOpen: false,
+      },
+      users: {
+        featureFlag: {
+          data: {},
+        },
+      },
       widgetDragResize: {
         lastSelectedWidget: "Widget1",
         selectedWidgets: ["Widget1"],
@@ -32,6 +37,12 @@ describe("<DividerWidget />", () => {
       },
       autoHeightUI: {
         isAutoHeightWithLimitsChanging: false,
+      },
+      mainCanvas: {
+        width: 1159,
+      },
+      canvasSelection: {
+        isDraggingForSelection: false,
       },
     },
     entities: { canvasWidgets: {}, app: { mode: "canvas" } },
@@ -63,6 +74,7 @@ describe("<DividerWidget />", () => {
     };
     // Mock store to bypass the error of react-redux
     const store = configureStore()(initialState);
+
     return render(
       <Provider store={store}>
         <ThemeProvider
@@ -75,14 +87,14 @@ describe("<DividerWidget />", () => {
   }
 
   test("should render Divider widget horizontal by default", async () => {
-    const { queryByTestId } = renderDividerWidget();
+    const { getByTestId } = renderDividerWidget();
 
-    expect(queryByTestId("dividerHorizontal")).toBeTruthy();
+    expect(getByTestId("dividerHorizontal")).toBeTruthy();
   });
 
   test("should render Divider vertical", async () => {
-    const { queryByTestId } = renderDividerWidget({ orientation: "vertical" });
+    const { getByTestId } = renderDividerWidget({ orientation: "vertical" });
 
-    expect(queryByTestId("dividerVertical")).toBeTruthy();
+    expect(getByTestId("dividerVertical")).toBeTruthy();
   });
 });

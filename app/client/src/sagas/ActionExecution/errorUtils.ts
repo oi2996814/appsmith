@@ -1,22 +1,22 @@
-import { TriggerSource } from "constants/AppsmithActionConstants/ActionConstants";
-import { PropertyEvaluationErrorType } from "utils/DynamicBindingUtils";
-import AppsmithConsole from "utils/AppsmithConsole";
-import LOG_TYPE from "entities/AppsmithConsole/logtype";
 import {
   createMessage,
-  DEBUGGER_TRIGGER_ERROR,
   TRIGGER_ACTION_VALIDATION_ERROR,
-} from "@appsmith/constants/messages";
-import { ENTITY_TYPE } from "entities/AppsmithConsole";
-import { Toaster, Variant } from "design-system";
-import { ApiResponse } from "api/ApiResponses";
+} from "ee/constants/messages";
+import type { ApiResponse } from "api/ApiResponses";
 import { isString } from "lodash";
-import { Types } from "utils/TypeHelpers";
+import type { Types } from "utils/TypeHelpers";
+import type { ActionTriggerKeys } from "ee/workers/Evaluation/fns";
+import { getActionTriggerFunctionNames } from "ee/workers/Evaluation/fns";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import {
-  ActionTriggerFunctionNames,
-  ActionTriggerKeys,
-} from "@appsmith/entities/DataTree/actionTriggers";
-import DebugButton from "components/editorComponents/Debugger/DebugCTA";
+  setDebuggerSelectedTab,
+  showDebugger,
+  showDebuggerLogs,
+} from "actions/debuggerActions";
+import { DEBUGGER_TAB_KEYS } from "components/editorComponents/Debugger/constants";
+import store from "store";
+import showToast from "sagas/ToastSagas";
+import { call, put } from "redux-saga/effects";
 
 /*
  * The base trigger error that also logs the errors in the debugger.
@@ -49,57 +49,46 @@ export class ActionValidationError extends TriggerFailureError {
   ) {
     const errorMessage = createMessage(
       TRIGGER_ACTION_VALIDATION_ERROR,
-      ActionTriggerFunctionNames[functionName],
+      getActionTriggerFunctionNames()[functionName],
       argumentName,
       expectedType,
       received,
     );
+
     super(errorMessage);
   }
 }
 
-export const logActionExecutionError = (
+export function* showToastOnExecutionError(
   errorMessage: string,
-  source?: TriggerSource,
-  triggerPropertyName?: string,
-  errorType?: PropertyEvaluationErrorType,
-) => {
-  if (triggerPropertyName) {
-    AppsmithConsole.addErrors([
-      {
-        payload: {
-          id: `${source?.id}-${triggerPropertyName}`,
-          logType: LOG_TYPE.TRIGGER_EVAL_ERROR,
-          text: createMessage(DEBUGGER_TRIGGER_ERROR, triggerPropertyName),
-          source: {
-            type: ENTITY_TYPE.WIDGET,
-            id: source?.id ?? "",
-            name: source?.name ?? "",
-            propertyPath: triggerPropertyName,
-          },
-          messages: [
-            {
-              type: errorType,
-              message: errorMessage,
-            },
-          ],
-        },
-      },
-    ]);
+  showCTA = true,
+) {
+  function onDebugClick() {
+    AnalyticsUtil.logEvent("OPEN_DEBUGGER", {
+      source: "TOAST",
+    });
+    store.dispatch(showDebuggerLogs());
   }
 
-  Toaster.show({
-    text: errorMessage,
-    variant: Variant.danger,
-    showDebugButton: !!triggerPropertyName && {
-      component: DebugButton,
-      componentProps: {
+  const action = showCTA
+    ? {
+        text: "debug",
+        effect: () => onDebugClick(),
         className: "t--toast-debug-button",
-        source: "TOAST",
-      },
-    },
+      }
+    : undefined;
+
+  // This is the toast that is rendered when any unhandled error occurs in JS object.
+  yield call(showToast, errorMessage, {
+    kind: "error",
+    action,
   });
-};
+}
+
+export function* showDebuggerOnExecutionError() {
+  yield put(showDebugger(true));
+  yield put(setDebuggerSelectedTab(DEBUGGER_TAB_KEYS.ERROR_TAB));
+}
 
 /*
  * Thrown when action execution fails for some reason
@@ -125,12 +114,6 @@ export class UserCancelledActionExecutionError extends PluginActionExecutionErro
   constructor() {
     super("User cancelled action execution", true);
     this.name = "UserCancelledActionExecutionError";
-  }
-}
-
-export class UncaughtPromiseError extends Error {
-  constructor(message: string) {
-    super(message);
   }
 }
 

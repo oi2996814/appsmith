@@ -6,21 +6,16 @@ import log from "loglevel";
  */
 export const getQueryParamsFromString = (search: string | undefined) => {
   if (!search) return {};
+
   try {
-    return JSON.parse(
-      '{"' +
-        decodeURI(search)
-          .replace(/"/g, '\\"')
-          .replace(/&/g, '","')
-          .replace(/=/g, '":"') +
-        '"}',
-    );
+    return Object.fromEntries(new URLSearchParams(search).entries());
   } catch (e) {
     log.error(e, "error parsing search string");
+
     return {};
   }
 };
 
-export default function() {
+export default function () {
   return getQueryParamsFromString(window.location.search.substring(1));
 }

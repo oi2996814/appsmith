@@ -1,4 +1,4 @@
-import { ControllerRenderProps } from "react-hook-form";
+import type { ControllerRenderProps } from "react-hook-form";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import { useCallback, useContext, useEffect, useRef } from "react";
 
@@ -9,11 +9,11 @@ type BaseEvents = Pick<
   "onfocus" | "onblur" | "addEventListener" | "removeEventListener"
 >;
 
-type UseEventsProps = {
+interface UseEventsProps {
   fieldBlurHandler?: ControllerRenderProps["onBlur"];
   onFocusDynamicString?: string;
   onBlurDynamicString?: string;
-};
+}
 
 function useBlurAndFocusEvents<TElement extends BaseEvents>({
   fieldBlurHandler,

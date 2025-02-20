@@ -67,9 +67,9 @@
               {
                 "boxShadow": "none",
                 "widgetName": "IconButton1Copy",
-                "onClick": "{{closeModal('InsertModal')}}",
+                "onClick": "{{closeModal(InsertModal.name)}}",
                 "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
-                "displayName": "Icon Button",
+                "displayName": "Icon button",
                 "iconSVG": "/static/media/icon.1a0c634a.svg",
                 "topRow": 1,
                 "bottomRow": 5,
@@ -145,7 +145,7 @@
               {
                 "boxShadow": "none",
                 "widgetName": "Button5Copy",
-                "onClick": "{{closeModal('UpdateModal')}}",
+                "onClick": "{{closeModal(UpdateModal.name)}}",
                 "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
                 "displayName": "Button",
                 "iconSVG": "/static/media/icon.cca02633.svg",
@@ -184,7 +184,7 @@
               {
                 "boxShadow": "none",
                 "widgetName": "runUpdateQuery",
-                "onClick": "{{updateRecord.run(() => {closeModal('UpdateModal'), () => {};\nselectRecords.run()\t\t\t\t\t\t\t\t\t\t\t\t })}}",
+                "onClick": "{{updateRecord.run(() => {closeModal(UpdateModal.name), () => {};\nselectRecords.run()\t\t\t\t\t\t\t\t\t\t\t\t })}}",
                 "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
                 "dynamicPropertyPathList": [
                   {
@@ -237,9 +237,7 @@
                 "displayName": "Select",
                 "iconSVG": "/static/media/icon.bd99caba5853ad71e4b3d8daffacb3a2.svg",
                 "labelText": "{{Table1.columnOrder[1].toString().replace(/(?:^|\\s|[\"'([{])+\\S/g, match => match.toUpperCase());\n}}",
-                "searchTags": [
-                  "dropdown"
-                ],
+                "searchTags": ["dropdown"],
                 "topRow": 8,
                 "bottomRow": 15,
                 "parentRowSpace": 10,
@@ -298,9 +296,7 @@
                 ],
                 "displayName": "Switch",
                 "iconSVG": "/static/media/icon.a3115bc1c224776de2846985c8819f99.svg",
-                "searchTags": [
-                  "boolean"
-                ],
+                "searchTags": ["boolean"],
                 "topRow": 17,
                 "bottomRow": 21,
                 "parentRowSpace": 10,
@@ -619,7 +615,7 @@
       {
         "boxShadow": "none",
         "widgetName": "InsertButton",
-        "onClick": "{{showModal('InsertModal')}}",
+        "onClick": "{{showModal(InsertModal.name)}}",
         "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
         "dynamicPropertyPathList": [
           {
@@ -669,7 +665,7 @@
       {
         "boxShadow": "none",
         "widgetName": "UpdateButton",
-        "onClick": "{{showModal('UpdateModal')}}",
+        "onClick": "{{showModal(UpdateModal.name)}}",
         "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
         "dynamicPropertyPathList": [],
         "displayName": "Button",
@@ -759,9 +755,9 @@
               {
                 "boxShadow": "none",
                 "widgetName": "IconButton1",
-                "onClick": "{{closeModal('InsertModal')}}",
+                "onClick": "{{closeModal(InsertModal.name)}}",
                 "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
-                "displayName": "Icon Button",
+                "displayName": "Icon button",
                 "iconSVG": "/static/media/icon.1a0c634a.svg",
                 "topRow": 1,
                 "bottomRow": 5,
@@ -834,7 +830,7 @@
               {
                 "boxShadow": "none",
                 "widgetName": "Button5",
-                "onClick": "{{closeModal('InsertModal')}}",
+                "onClick": "{{closeModal(InsertModal.name)}}",
                 "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
                 "displayName": "Button",
                 "iconSVG": "/static/media/icon.cca02633.svg",
@@ -873,7 +869,7 @@
               {
                 "boxShadow": "none",
                 "widgetName": "runInsertQuery",
-                "onClick": "{{insertRecord.run(() => {\nselectRecords.run();\t\t\t\tresetWidget('InsertModal', true);\ncloseModal('InsertModal'), () => {};})}}",
+                "onClick": "{{insertRecord.run(() => {\nselectRecords.run();\t\t\t\tresetWidget('InsertModal', true);\ncloseModal(InsertModal.name), () => {};})}}",
                 "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
                 "dynamicPropertyPathList": [
                   {
@@ -926,9 +922,7 @@
                 "displayName": "Select",
                 "iconSVG": "/static/media/icon.bd99caba5853ad71e4b3d8daffacb3a2.svg",
                 "labelText": "{{Table1.columnOrder[1].toString().replace(/(?:^|\\s|[\"'([{])+\\S/g, match => match.toUpperCase());\n}}",
-                "searchTags": [
-                  "dropdown"
-                ],
+                "searchTags": ["dropdown"],
                 "topRow": 8,
                 "bottomRow": 15,
                 "parentRowSpace": 10,
@@ -979,9 +973,7 @@
                 "widgetName": "Insertareweworking",
                 "displayName": "Switch",
                 "iconSVG": "/static/media/icon.a3115bc1c224776de2846985c8819f99.svg",
-                "searchTags": [
-                  "boolean"
-                ],
+                "searchTags": ["boolean"],
                 "topRow": 17,
                 "bottomRow": 21,
                 "parentRowSpace": 10,
@@ -1051,7 +1043,7 @@
         "widgetName": "IconButton2",
         "onClick": "{{deleteAllRecords.run(() => selectRecords.run(), () => {})}}",
         "buttonColor": "{{appsmith.theme.colors.primaryColor}}",
-        "displayName": "Icon Button",
+        "displayName": "Icon button",
         "iconSVG": "/static/media/icon.1a0c634a.svg",
         "topRow": 2,
         "bottomRow": 6,

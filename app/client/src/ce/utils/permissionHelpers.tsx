@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export enum PERMISSION_TYPE {
   /* Workspace permissions */
-  CREATE_WORKSPACE = "createWorkspaces:tenant",
+  CREATE_WORKSPACE = "createWorkspaces:organization",
   MANAGE_WORKSPACE = "manage:workspaces",
   READ_WORKSPACE = "read:workspaces",
   INVITE_USER_TO_WORKSPACE = "inviteUsers:workspace",
@@ -19,6 +19,7 @@ export enum PERMISSION_TYPE {
   CREATE_APPLICATION = "create:applications",
   /* Datasource permissions */
   CREATE_DATASOURCES = "create:datasources",
+  READ_DATASOURCES = "read:datasources",
   EXECUTE_DATASOURCES = "execute:datasources",
   CREATE_DATASOURCE_ACTIONS = "create:datasourceActions",
   DELETE_DATASOURCES = "delete:datasources",
@@ -35,6 +36,11 @@ export enum PERMISSION_TYPE {
   MANAGE_ACTIONS = "manage:actions",
   DELETE_ACTIONS = "delete:actions",
   EXECUTE_ACTIONS = "execute:actions",
+  /* Git application permissions */
+  GIT_APPLICATION_CONNECT = "connectToGit:applications",
+  GIT_APPLICATION_MANAGE_PROTECTED_BRANCHES = "manageProtectedBranches:applications",
+  GIT_APPLICATION_MANAGE_DEFAULT_BRANCH = "manageDefaultBranches:applications",
+  GIT_APPLICATION_MANAGE_AUTO_COMMIT = "manageAutoCommit:applications",
 }
 
 export enum LOGIC_FILTER {
@@ -54,6 +60,7 @@ export const isPermitted = (
       return type.some((t) => permissions.includes(t));
     }
   }
+
   return permissions.includes(type);
 };
 
@@ -69,11 +76,23 @@ export const hasDeleteWorkspacePermission = (permissions: string[] = []) => {
   return isPermitted(permissions, PERMISSION_TYPE.MANAGE_WORKSPACE);
 };
 
+export const hasInviteUserToApplicationPermission = (
+  permissions: string[] = [],
+) => {
+  return isPermitted(permissions, PERMISSION_TYPE.INVITE_USER_TO_WORKSPACE);
+};
+
 export const hasCreateWorkspacePermission = (_permissions?: string[]) => true;
 
 export const hasCreateDatasourcePermission = (_permissions?: string[]) => true;
 
+export const hasReadDatasourcePermission = (_permissions?: string[]) => true;
+
 export const hasManageDatasourcePermission = (_permissions?: string[]) => true;
+
+export const hasManageWorkspaceDatasourcePermission = (
+  _permissions?: string[],
+) => true;
 
 export const hasDeleteDatasourcePermission = (_permissions?: string[]) => true;
 
@@ -93,3 +112,40 @@ export const hasManageActionPermission = (_permissions?: string[]) => true;
 export const hasDeleteActionPermission = (_permissions?: string[]) => true;
 
 export const hasExecuteActionPermission = (_permissions?: string[]) => true;
+
+export const hasAuditLogsReadPermission = (_permissions?: string[]) => true;
+
+export const hasManageWorkspaceEnvironmentPermission = (
+  _permissions?: string[],
+) => false;
+
+export const hasGitAppConnectPermission = (permissions: string[] = []) => {
+  return isPermitted(permissions, PERMISSION_TYPE.GIT_APPLICATION_CONNECT);
+};
+
+export const hasGitAppManageProtectedBranchesPermission = (
+  permissions: string[] = [],
+) => {
+  return isPermitted(
+    permissions,
+    PERMISSION_TYPE.GIT_APPLICATION_MANAGE_PROTECTED_BRANCHES,
+  );
+};
+
+export const hasGitAppManageDefaultBranchPermission = (
+  permissions: string[] = [],
+) => {
+  return isPermitted(
+    permissions,
+    PERMISSION_TYPE.GIT_APPLICATION_MANAGE_DEFAULT_BRANCH,
+  );
+};
+
+export const hasGitAppManageAutoCommitPermission = (
+  permissions: string[] = [],
+) => {
+  return isPermitted(
+    permissions,
+    PERMISSION_TYPE.GIT_APPLICATION_MANAGE_AUTO_COMMIT,
+  );
+};

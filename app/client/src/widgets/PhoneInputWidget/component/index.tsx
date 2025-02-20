@@ -3,15 +3,12 @@ import ISDCodeDropdown, {
   ISDCodeDropdownOptions,
   getSelectedISDCode,
 } from "./ISDCodeDropdown";
-import BaseInputComponent, {
-  BaseInputComponentProps,
-} from "widgets/BaseInputWidget/component";
-import { CountryCode } from "libphonenumber-js";
+import type { BaseInputComponentProps } from "widgets/BaseInputWidget/component";
+import BaseInputComponent from "widgets/BaseInputWidget/component";
+import type { CountryCode } from "libphonenumber-js";
 import { InputTypes } from "widgets/BaseInputWidget/constants";
 
-class PhoneInputComponent extends React.PureComponent<
-  PhoneInputComponentProps
-> {
+class PhoneInputComponent extends React.PureComponent<PhoneInputComponentProps> {
   onTextChange = (
     event:
       | React.ChangeEvent<HTMLInputElement>
@@ -22,6 +19,7 @@ class PhoneInputComponent extends React.PureComponent<
 
   getLeftIcon = () => {
     const selectedISDCode = getSelectedISDCode(this.props.dialCode);
+
     return (
       <ISDCodeDropdown
         accentColor={this.props.accentColor}

@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
-import { WidgetProps } from "widgets/BaseWidget";
-import { PanelConfig } from "constants/PropertyControlConstants";
+import type { WidgetProps } from "widgets/BaseWidget";
+import type { PanelConfig } from "constants/PropertyControlConstants";
 import PropertyControlsGenerator from "./PropertyControlsGenerator";
-import { getWidgetPropsForPropertyPane } from "selectors/propertyPaneSelectors";
+import {
+  getSelectedPropertyPanel,
+  getWidgetPropsForPropertyPane,
+} from "selectors/propertyPaneSelectors";
 import { get, isNumber, isPlainObject, isString } from "lodash";
-import { IPanelProps } from "@blueprintjs/core";
-import { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
+import type { IPanelProps } from "@blueprintjs/core";
+import type { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
 import PropertyPaneTitle from "./PropertyPaneTitle";
 import { PropertyPaneTab } from "./PropertyPaneTab";
 import styled from "styled-components";
@@ -28,8 +31,11 @@ function PanelHeader(props: PanelHeaderProps) {
     dispatch(unsetSelectedPropertyPanel(props.parentPropertyPath));
     props.closePanel();
   };
+
   return (
     <div
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onClick={(e: any) => {
         e.stopPropagation();
       }}
@@ -50,7 +56,13 @@ export function PanelPropertiesEditor(
     PanelPropertiesEditorPanelProps &
     IPanelProps,
 ) {
-  const widgetProperties: any = useSelector(getWidgetPropsForPropertyPane);
+  const widgetProperties = useSelector(getWidgetPropsForPropertyPane);
+  const currentSelectedPanel = useSelector(getSelectedPropertyPanel);
+  const keepPaneOpen = useMemo(() => {
+    return Object.keys(currentSelectedPanel).some((path) => {
+      return path.split(".")[0] === widgetProperties?.widgetName;
+    });
+  }, [currentSelectedPanel, widgetProperties?.widgetName]);
 
   const {
     closePanel,
@@ -66,6 +78,7 @@ export function PanelPropertiesEditor(
   // For example: `someProperty.<thisValue>`
   const currentIndex = useMemo(() => {
     const parentProperty = get(widgetProperties, panelParentPropertyPath);
+
     if (parentProperty) {
       if (isPlainObject(parentProperty)) {
         return panelProps[panelConfig.panelIdPropertyName];
@@ -75,21 +88,26 @@ export function PanelPropertiesEditor(
             panelProps[panelConfig.panelIdPropertyName] ===
             entry[panelConfig.panelIdPropertyName],
         );
+
         return currentIndex;
       }
     }
+
     return;
   }, [widgetProperties, panelParentPropertyPath, panelProps, panelConfig]);
 
   const panelConfigs = useMemo(() => {
     if (currentIndex !== undefined && panelConfig.children) {
       let path: string | undefined = undefined;
+
       if (isString(currentIndex)) {
         path = `${panelParentPropertyPath}.${currentIndex}`;
       } else if (isNumber(currentIndex)) {
         path = `${panelParentPropertyPath}[${currentIndex}]`;
       }
+
       const configChildren = [...panelConfig.children];
+
       return path ? updateConfigPaths(configChildren, path) : configChildren;
     }
   }, [currentIndex, panelConfig, panelParentPropertyPath]);
@@ -101,14 +119,17 @@ export function PanelPropertiesEditor(
       panelConfig.styleChildren
     ) {
       let path: string | undefined = undefined;
+
       if (isString(currentIndex)) {
         path = `${panelParentPropertyPath}.${currentIndex}`;
       } else if (isNumber(currentIndex)) {
         path = `${panelParentPropertyPath}[${currentIndex}]`;
       }
+
       const contentChildren = [...panelConfig.contentChildren];
       const styleChildren = [...panelConfig.styleChildren];
       const searchConfig = [...(panelConfig.searchConfig || [])];
+
       return {
         content: path
           ? updateConfigPaths(contentChildren, path)
@@ -130,10 +151,10 @@ export function PanelPropertiesEditor(
   );
 
   useEffect(() => {
-    if (panelProps.propPaneId !== widgetProperties?.widgetId) {
+    if (panelProps.propPaneId !== widgetProperties?.widgetId || !keepPaneOpen) {
       props.closePanel();
     }
-  }, [widgetProperties?.widgetId]);
+  }, [widgetProperties?.widgetId, keepPaneOpen]);
 
   const { searchText, setSearchText } = useSearchText("");
 
@@ -144,38 +165,45 @@ export function PanelPropertiesEditor(
     const searchPath = `${panelParentPropertyPath}.${
       panelProps[panelConfig.panelIdPropertyName]
     }`;
+
     sendPropertyPaneSearchAnalytics({
-      widgetType: widgetProperties?.type,
+      widgetType: widgetProperties?.type ?? "",
       searchText,
-      widgetName: widgetProperties?.widgetName,
+      widgetName: widgetProperties?.widgetName ?? "",
       searchPath,
     });
   }, [searchText]);
 
   if (!widgetProperties) return null;
+
   const updatePropertyTitle = (title: string) => {
     if (panelConfig.titlePropertyName) {
       const propertiesToUpdate: Record<string, unknown> = {};
       let path: string | undefined = undefined;
+
       if (isString(currentIndex)) {
         path = `${panelParentPropertyPath}.${currentIndex}.${panelConfig.titlePropertyName}`;
       } else if (isNumber(currentIndex)) {
         path = `${panelParentPropertyPath}[${currentIndex}].${panelConfig.titlePropertyName}`;
       }
+
       if (path) {
         propertiesToUpdate[path] = title;
+
         if (panelConfig.updateHook) {
           const additionalPropertiesToUpdate = panelConfig.updateHook(
             widgetProperties,
             path,
             title,
           );
+
           additionalPropertiesToUpdate?.forEach(
             ({ propertyPath, propertyValue }) => {
               propertiesToUpdate[propertyPath] = propertyValue;
             },
           );
         }
+
         props.onPropertiesChange(propertiesToUpdate);
       }
     }
@@ -272,6 +300,8 @@ export function PanelPropertiesEditor(
 }
 
 interface PanelPropertiesEditorProps {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   panelProps: any;
   onPropertiesChange: (updates: Record<string, unknown>) => void;
   panelParentPropertyPath: string;

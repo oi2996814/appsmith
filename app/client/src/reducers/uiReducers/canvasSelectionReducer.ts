@@ -1,10 +1,8 @@
 import { createImmerReducer } from "utils/ReducerUtils";
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { MAIN_CONTAINER_WIDGET_ID } from "constants/WidgetConstants";
-import { XYCord } from "pages/common/CanvasArenas/hooks/useRenderBlocksOnCanvas";
+import type { XYCord } from "layoutSystems/common/canvasArenas/ArenaTypes";
 
 const initialState: CanvasSelectionState = {
   isDraggingForSelection: false,
@@ -59,11 +57,11 @@ export const canvasSelectionReducer = createImmerReducer(initialState, {
   },
 });
 
-export type CanvasSelectionState = {
+export interface CanvasSelectionState {
   isDraggingForSelection: boolean;
   widgetId?: string;
   outOfCanvasStartPositions?: XYCord;
   recentlyAddedWidget: Record<string, string>;
-};
+}
 
 export default canvasSelectionReducer;

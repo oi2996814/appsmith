@@ -1,21 +1,8 @@
-import { AxiosPromise } from "axios";
+import type { AxiosPromise } from "axios";
 import Api from "api/Api";
-import { ApiResponse } from "api/ApiResponses";
-
-export interface LoginUserRequest {
-  email: string;
-  password: string;
-}
-
-export interface CreateUserRequest {
-  email: string;
-  password: string;
-}
-
-export type CreateUserResponse = ApiResponse & {
-  email: string;
-  id: string;
-};
+import type { ApiResponse } from "api/ApiResponses";
+import type { FeatureFlags } from "ee/entities/FeatureFlag";
+import type { ProductAlert } from "../../reducers/uiReducers/usersReducer";
 
 export interface ForgotPasswordRequest {
   email: string;
@@ -32,14 +19,6 @@ export interface VerifyTokenRequest {
   token: string;
 }
 
-export type FetchUserResponse = ApiResponse & {
-  id: string;
-};
-
-export interface FetchUserRequest {
-  id: string;
-}
-
 export interface LeaveWorkspaceRequest {
   workspaceId: string;
 }
@@ -48,13 +27,15 @@ export interface InviteUserRequest {
   email: string;
   groupIds: string[];
   status?: string;
+  recaptchaToken?: string;
 }
 
 export interface UpdateUserRequest {
   name?: string;
   email?: string;
-  role?: string;
+  proficiency?: string;
   useCase?: string;
+  intercomConsentGiven?: boolean;
 }
 
 export interface SendTestEmailPayload {
@@ -65,104 +46,96 @@ export interface SendTestEmailPayload {
   password?: string;
 }
 
-export interface CreateSuperUserRequest {
-  email: string;
-  name: string;
-  source: "FORM";
-  state: "ACTIVATED";
-  isEnabled: boolean;
-  password: string;
-  role: "Developer";
-  companyName: string;
-  allowCollectingAnonymousData: boolean;
-  signupForNewsletter: boolean;
-}
-
 export class UserApi extends Api {
   static usersURL = "v1/users";
+  static productAlertURL = "v1/product-alert/alert";
   static forgotPasswordURL = `${UserApi.usersURL}/forgotPassword`;
   static verifyResetPasswordTokenURL = `${UserApi.usersURL}/verifyPasswordResetToken`;
   static resetPasswordURL = `${UserApi.usersURL}/resetPassword`;
+  static resendEmailVerificationURL = `${UserApi.usersURL}/resendEmailVerification`;
   static inviteUserURL = "v1/users/invite";
   static verifyInviteTokenURL = `${UserApi.inviteUserURL}/verify`;
   static confirmUserInviteURL = `${UserApi.inviteUserURL}/confirm`;
-  static addWorkspaceURL = `${UserApi.usersURL}/addWorkspace`;
   static leaveWorkspaceURL = `${UserApi.usersURL}/leaveWorkspace`;
   static logoutURL = "v1/logout";
   static currentUserURL = "v1/users/me";
   static photoURL = "v1/users/photo";
   static featureFlagsURL = "v1/users/features";
-  static superUserURL = "v1/users/super";
   static adminSettingsURL = "v1/admin/env";
   static restartServerURL = "v1/admin/restart";
-  static downloadConfigURL = "v1/admin/env/download";
   static sendTestEmailURL = "/v1/admin/send-test-email";
 
-  static createUser(
-    request: CreateUserRequest,
-  ): AxiosPromise<CreateUserResponse> {
-    return Api.post(UserApi.usersURL, request);
-  }
-
-  static updateUser(request: UpdateUserRequest): AxiosPromise<ApiResponse> {
+  static async updateUser(
+    request: UpdateUserRequest,
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.put(UserApi.usersURL, request);
   }
 
-  static fetchUser(request: FetchUserRequest): AxiosPromise<FetchUserResponse> {
-    return Api.get(UserApi.usersURL + "/" + request.id);
-  }
-
-  static getCurrentUser(): AxiosPromise<ApiResponse> {
+  static async getCurrentUser(): Promise<AxiosPromise<ApiResponse>> {
     return Api.get(UserApi.currentUserURL);
   }
 
-  static forgotPassword(
+  static async forgotPassword(
     request: ForgotPasswordRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.post(UserApi.forgotPasswordURL, request);
   }
 
-  static verifyResetPasswordToken(
+  static async verifyResetPasswordToken(
     request: VerifyTokenRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.get(UserApi.verifyResetPasswordTokenURL, request);
   }
 
-  static resetPassword(
+  static async resetPassword(
     request: TokenPasswordUpdateRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.put(UserApi.resetPasswordURL, request);
   }
 
-  static inviteUser(request: InviteUserRequest): AxiosPromise<ApiResponse> {
-    return Api.post(UserApi.inviteUserURL, request);
+  static async inviteUser(
+    request: InviteUserRequest,
+  ): Promise<AxiosPromise<ApiResponse>> {
+    const { recaptchaToken, ...requestPayload } = request;
+
+    return Api.post(
+      UserApi.inviteUserURL,
+      requestPayload,
+      undefined,
+      recaptchaToken
+        ? {
+            params: { recaptchaToken },
+          }
+        : {},
+    );
   }
 
-  static verifyUserInvite(
+  static async verifyUserInvite(
     request: VerifyTokenRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.get(UserApi.verifyInviteTokenURL, request);
   }
 
-  static confirmInvitedUserSignup(
+  static async confirmInvitedUserSignup(
     request: TokenPasswordUpdateRequest,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.put(UserApi.confirmUserInviteURL, request);
   }
 
-  static logoutUser(): AxiosPromise<ApiResponse> {
+  static async logoutUser(): Promise<AxiosPromise<ApiResponse>> {
     return Api.post(UserApi.logoutURL);
   }
 
-  static uploadPhoto(request: {
-    file: File;
-  }): AxiosPromise<{
-    id: string;
-    new: boolean;
-    profilePhotoAssetId: string;
-    recentlyUsedWorkspaceIds: string[];
-  }> {
+  static async uploadPhoto(request: { file: File }): Promise<
+    AxiosPromise<{
+      id: string;
+      new: boolean;
+      profilePhotoAssetId: string;
+      recentlyUsedWorkspaceIds: string[];
+    }>
+  > {
     const formData = new FormData();
+
     if (request.file) {
       formData.append("file", request.file);
     }
@@ -174,48 +147,54 @@ export class UserApi extends Api {
     });
   }
 
-  static deletePhoto(): AxiosPromise<ApiResponse> {
+  static async deletePhoto(): Promise<AxiosPromise<ApiResponse>> {
     return Api.delete(UserApi.photoURL);
   }
 
-  static leaveWorkspace(
+  static async leaveWorkspace(
     request: LeaveWorkspaceRequest,
-  ): AxiosPromise<LeaveWorkspaceRequest> {
+  ): Promise<AxiosPromise<LeaveWorkspaceRequest>> {
     return Api.put(UserApi.leaveWorkspaceURL + "/" + request.workspaceId);
   }
 
-  static fetchFeatureFlags(): AxiosPromise<ApiResponse> {
+  static async fetchFeatureFlags(): Promise<
+    AxiosPromise<ApiResponse<FeatureFlags>>
+  > {
     return Api.get(UserApi.featureFlagsURL);
-  }
-
-  static createSuperUser(
-    request: CreateSuperUserRequest,
-  ): AxiosPromise<CreateUserResponse> {
-    return Api.post(UserApi.superUserURL, request);
   }
 
   /*
    * Super user endpoints
    */
 
-  static fetchAdminSettings(): AxiosPromise<ApiResponse> {
+  static async fetchAdminSettings(): Promise<AxiosPromise<ApiResponse>> {
     return Api.get(UserApi.adminSettingsURL);
   }
 
-  static saveAdminSettings(
+  static async saveAdminSettings(
     request: Record<string, string>,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.put(UserApi.adminSettingsURL, request);
   }
 
-  static restartServer(): AxiosPromise<ApiResponse> {
+  static async restartServer(): Promise<AxiosPromise<ApiResponse>> {
     return Api.post(UserApi.restartServerURL);
   }
 
-  static sendTestEmail(
+  static async sendTestEmail(
     payload: SendTestEmailPayload,
-  ): AxiosPromise<ApiResponse> {
+  ): Promise<AxiosPromise<ApiResponse>> {
     return Api.post(UserApi.sendTestEmailURL, payload);
+  }
+
+  static async getProductAlert(): Promise<
+    AxiosPromise<ApiResponse<ProductAlert>>
+  > {
+    return Api.get(UserApi.productAlertURL);
+  }
+
+  static async resendEmailVerification(email: string) {
+    return Api.post(UserApi.resendEmailVerificationURL, { email });
   }
 }
 

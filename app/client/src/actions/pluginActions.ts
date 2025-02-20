@@ -1,30 +1,46 @@
-import {
+import type {
   ReduxAction,
+  ReduxActionWithoutPayload,
+} from "./ReduxActionTypes";
+import {
   ReduxActionTypes,
   ReduxActionErrorTypes,
-  ReduxActionWithoutPayload,
-} from "@appsmith/constants/ReduxActionConstants";
-import { PluginFormPayload } from "api/PluginApi";
-import { DependencyMap } from "utils/DynamicBindingUtils";
+} from "ee/constants/ReduxActionConstants";
+import type { ApiResponse } from "api/ApiResponses";
+import type { PluginFormPayload } from "api/PluginApi";
+import type { DependencyMap } from "utils/DynamicBindingUtils";
+import type { Plugin } from "entities/Plugin";
 
 export const fetchPlugins = (payload?: {
   workspaceId?: string;
+  plugins?: ApiResponse<Plugin[]>;
 }): ReduxAction<{ workspaceId?: string } | undefined> => ({
   type: ReduxActionTypes.FETCH_PLUGINS_REQUEST,
   payload,
 });
 
-export const fetchPluginFormConfigs = (): ReduxActionWithoutPayload => ({
+export const fetchPluginFormConfigs = (
+  pluginFormConfigs?: ApiResponse<PluginFormPayload>[],
+): ReduxAction<{
+  pluginFormConfigs?: ApiResponse<PluginFormPayload>[];
+}> => ({
   type: ReduxActionTypes.FETCH_PLUGIN_FORM_CONFIGS_REQUEST,
+  payload: { pluginFormConfigs },
 });
 
-export type PluginFormsPayload = {
+export interface PluginFormsPayload {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   formConfigs: Record<string, any[]>;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   editorConfigs: Record<string, any[]>;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   settingConfigs: Record<string, any[]>;
   dependencies: Record<string, DependencyMap>;
   datasourceFormButtonConfigs: Record<string, string[]>;
-};
+}
 
 export const fetchPluginFormConfigsSuccess = (
   payload: PluginFormsPayload,

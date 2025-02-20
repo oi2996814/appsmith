@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 
-import { ColumnAction } from "components/propertyControls/ColumnActionSelectorControl";
-import { IconName } from "@blueprintjs/icons";
-import { ButtonVariant } from "components/constants";
-import { BaseCellComponentProps } from "../Constants";
+import type { ColumnAction } from "components/propertyControls/ColumnActionSelectorControl";
+import type { IconName } from "@blueprintjs/icons";
+import type { ButtonVariant } from "components/constants";
+import type { BaseCellComponentProps } from "../Constants";
 import { CellWrapper, IconButtonWrapper } from "../TableStyledWrappers";
 import { StyledButton } from "widgets/IconButtonWidget/component";
 
@@ -44,11 +44,13 @@ function IconButton(props: {
   };
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
+
     if (props.action.dynamicTrigger) {
       setLoading(true);
       props.onCommandClick(props.action.dynamicTrigger, onComplete);
     }
   };
+
   return (
     <IconButtonWrapper disabled={props.disabled} onClick={handlePropagation}>
       <StyledButton
@@ -58,6 +60,12 @@ function IconButton(props: {
         buttonVariant={props.buttonVariant}
         compactMode={props.compactMode}
         disabled={props.disabled}
+        /**
+         * We pass hasOnClickAction as true because Icon buttons in tables are always used as button
+         * and not Icons (which do not have hover state).
+         * Hene we pass hasOnClickAction true to enable BG color change on hover.
+         **/
+        hasOnClickAction
         icon={props.iconName}
         loading={loading}
         onClick={handleClick}

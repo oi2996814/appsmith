@@ -2,54 +2,51 @@ import {
   createMessage,
   SIMILAR_TEMPLATES,
   VIEW_ALL_TEMPLATES,
-} from "@appsmith/constants/messages";
-import { Template as TemplateInterface } from "api/TemplatesApi";
-import { FontWeight, TextType, Text, Icon, IconSize } from "design-system";
-import React from "react";
-import Masonry, { MasonryProps } from "react-masonry-css";
+} from "ee/constants/messages";
+import type { Template as TemplateInterface } from "api/TemplatesApi";
+import { Text, Link } from "@appsmith/ads";
+import React, { useCallback } from "react";
 import styled from "styled-components";
-import Template from ".";
 import { Section } from "./TemplateDescription";
+import FixedHeightTemplate from "./FixedHeightTemplate";
+import BuildingBlock from "../BuildingBlock";
+import { TEMPLATE_BUILDING_BLOCKS_FILTER_FUNCTION_VALUE } from "../constants";
 
-export const SimilarTemplatesWrapper = styled.div`
+const SimilarTemplatesWrapper = styled.div`
   padding-right: 132px;
   padding-left: 132px;
-
-  .grid {
-    display: flex;
-    margin-left: ${(props) => -props.theme.spaces[9]}px;
-    margin-top: ${(props) => props.theme.spaces[12]}px;
-  }
-
-  .grid_column {
-    padding-left: ${(props) => props.theme.spaces[9]}px;
-  }
 `;
 
-export const SimilarTemplatesTitleWrapper = styled.div`
+const SimilarTemplatesTitleWrapper = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
 `;
 
-const BackButtonWrapper = styled.div<{ width?: number }>`
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: ${(props) => props.theme.spaces[2]}px;
-  ${(props) => props.width && `width: ${props.width};`}
+const TemplateGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-gap: 16px;
+  margin-top: ${(props) => props.theme.spaces[12]}px;
 `;
 
-type SimilarTemplatesProp = {
+interface SimilarTemplatesProp {
   similarTemplates: TemplateInterface[];
-  onBackPress: () => void;
-  breakpointCols: MasonryProps["breakpointCols"];
+  onBackPress: (e: React.MouseEvent) => void;
   onClick: (template: TemplateInterface) => void;
   onFork?: (template: TemplateInterface) => void;
   className?: string;
-};
+  isForkingEnabled: boolean;
+}
 
 function SimilarTemplates(props: SimilarTemplatesProp) {
+  const handleClick = useCallback(
+    (template: TemplateInterface) => {
+      props.onClick(template);
+    },
+    [props.onClick],
+  );
+
   if (!props.similarTemplates.length) {
     return null;
   }
@@ -58,28 +55,42 @@ function SimilarTemplates(props: SimilarTemplatesProp) {
     <SimilarTemplatesWrapper className={props.className}>
       <Section>
         <SimilarTemplatesTitleWrapper>
-          <Text type={TextType.H1} weight={FontWeight.BOLD}>
+          <Text kind="heading-m" renderAs="h4">
             {createMessage(SIMILAR_TEMPLATES)}
           </Text>
-          <BackButtonWrapper onClick={props.onBackPress}>
-            <Text type={TextType.P4}>{createMessage(VIEW_ALL_TEMPLATES)}</Text>
-            <Icon name="view-all" size={IconSize.XL} />
-          </BackButtonWrapper>
+          <Link endIcon="view-all" onClick={props.onBackPress}>
+            {createMessage(VIEW_ALL_TEMPLATES)}
+          </Link>
         </SimilarTemplatesTitleWrapper>
-        <Masonry
-          breakpointCols={props.breakpointCols}
-          className="grid"
-          columnClassName="grid_column"
-        >
-          {props.similarTemplates.map((template) => (
-            <Template
-              key={template.id}
-              onClick={() => props.onClick(template)}
-              onForkTemplateClick={props.onFork}
-              template={template}
-            />
-          ))}
-        </Masonry>
+        <TemplateGrid>
+          {props.similarTemplates.map((template) => {
+            if (
+              template.functions.includes(
+                TEMPLATE_BUILDING_BLOCKS_FILTER_FUNCTION_VALUE,
+              )
+            ) {
+              return (
+                <BuildingBlock
+                  buildingBlock={template}
+                  hideForkTemplateButton={props.isForkingEnabled}
+                  key={template.id}
+                  onClick={() => handleClick(template)}
+                  onForkTemplateClick={props.onFork}
+                />
+              );
+            }
+
+            return (
+              <FixedHeightTemplate
+                hideForkTemplateButton={props.isForkingEnabled}
+                key={template.id}
+                onClick={() => handleClick(template)}
+                onForkTemplateClick={props.onFork}
+                template={template}
+              />
+            );
+          })}
+        </TemplateGrid>
       </Section>
     </SimilarTemplatesWrapper>
   );

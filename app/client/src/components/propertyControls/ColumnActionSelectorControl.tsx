@@ -1,28 +1,24 @@
 import React from "react";
 import styled from "styled-components";
 
-import BaseControl, { ControlProps } from "./BaseControl";
-import { StyledPropertyPaneButton } from "./StyledControls";
+import type { ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 import { generateReactKey } from "utils/generators";
-import { FormIcons } from "icons/FormIcons";
 import { InputText } from "components/propertyControls/InputTextControl";
 import ActionCreator from "components/editorComponents/ActionCreator";
-import { Size, Category } from "design-system";
+import { Button } from "@appsmith/ads";
 
 export interface ColumnAction {
   label?: string;
   id: string;
   dynamicTrigger: string;
 }
-const StyledDeleteIcon = styled(FormIcons.DELETE_ICON)`
+const StyledDeleteButton = styled(Button)`
   padding: 5px 0px;
   position: absolute;
   right: 0px;
   cursor: pointer;
   top: 0px;
-  && svg path {
-    fill: ${(props) => props.theme.colors.propertyPane.deleteIconColor};
-  }
 `;
 
 const InputTextWrapper = styled.div`
@@ -34,10 +30,10 @@ const Wrapper = styled.div`
   margin-bottom: 8px;
 `;
 
-class ColumnActionSelectorControl extends BaseControl<
-  ColumnActionSelectorControlProps
-> {
+class ColumnActionSelectorControl extends BaseControl<ColumnActionSelectorControlProps> {
   render() {
+    const { propertyName, widgetProperties } = this.props;
+
     return (
       <>
         {this.props.propertyValue &&
@@ -63,31 +59,38 @@ class ColumnActionSelectorControl extends BaseControl<
                 </InputTextWrapper>
                 <Wrapper>
                   <ActionCreator
+                    action={this.props.label}
+                    additionalControlData={{}}
+                    dataTreePath=""
                     onValueChange={this.updateColumnActionFunction.bind(
                       this,
                       columnAction,
                     )}
+                    propertyName={propertyName}
                     value={columnAction.dynamicTrigger}
+                    widgetName={widgetProperties.widgetName}
+                    widgetType={widgetProperties.type}
                   />
                 </Wrapper>
-                <StyledDeleteIcon
-                  height={20}
+                <StyledDeleteButton
+                  isIconButton
+                  kind="tertiary"
                   onClick={this.removeColumnAction.bind(this, columnAction)}
-                  width={20}
+                  size="sm"
+                  startIcon="delete-bin-line"
                 />
               </div>
             );
           })}
 
-        <StyledPropertyPaneButton
-          category={Category.secondary}
-          icon="plus"
+        <Button
+          kind="secondary"
           onClick={this.addColumnAction}
-          size={Size.medium}
-          tag="button"
-          text="New Button"
-          type="button"
-        />
+          size="md"
+          startIcon="plus"
+        >
+          New Button
+        </Button>
       </>
     );
   }
@@ -97,13 +100,17 @@ class ColumnActionSelectorControl extends BaseControl<
     newValue: React.ChangeEvent<HTMLTextAreaElement> | string,
   ) => {
     let value = newValue;
+
     if (typeof newValue !== "string") {
       value = newValue.target.value;
     }
+
     const update = this.props.propertyValue.map((a: ColumnAction) => {
       if (a.id === columnAction.id) return { ...a, label: value };
+
       return a;
     });
+
     this.updateProperty(this.props.propertyName, update);
   };
 
@@ -113,8 +120,10 @@ class ColumnActionSelectorControl extends BaseControl<
   ) => {
     const update = this.props.propertyValue.map((a: ColumnAction) => {
       if (a.id === columnAction.id) return { ...a, dynamicTrigger: newValue };
+
       return a;
     });
+
     this.updateProperty(this.props.propertyName, update);
   };
 
@@ -122,6 +131,7 @@ class ColumnActionSelectorControl extends BaseControl<
     const update = this.props.propertyValue.filter(
       (a: ColumnAction) => a.id !== columnAction.id,
     );
+
     this.updateProperty(this.props.propertyName, update);
   };
   addColumnAction = () => {

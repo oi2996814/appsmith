@@ -1,37 +1,29 @@
 import React, { useRef, useState } from "react";
 import styled, { createGlobalStyle, css } from "styled-components";
 import Interweave from "interweave";
-import {
-  IButtonProps,
-  MaybeElement,
-  Button,
-  Alignment,
-  Position,
-  Classes,
-} from "@blueprintjs/core";
+import type { IButtonProps, MaybeElement } from "@blueprintjs/core";
+import { Button, Alignment, Position, Classes } from "@blueprintjs/core";
 import { Popover2 } from "@blueprintjs/popover2";
-import { IconName } from "@blueprintjs/icons";
+import type { IconName } from "@blueprintjs/icons";
 
-import { ComponentProps } from "widgets/BaseComponent";
+import type { ComponentProps } from "widgets/BaseComponent";
 
 import { useScript, ScriptStatus, AddScriptTo } from "utils/hooks/useScript";
 import {
   GOOGLE_RECAPTCHA_KEY_ERROR,
   GOOGLE_RECAPTCHA_DOMAIN_ERROR,
   createMessage,
-} from "@appsmith/constants/messages";
-import { Toaster, Variant } from "design-system";
+} from "ee/constants/messages";
 
 import ReCAPTCHA from "react-google-recaptcha";
 import { Colors } from "constants/Colors";
 import _ from "lodash";
-import {
+import type {
   ButtonPlacement,
   ButtonVariant,
-  ButtonVariantTypes,
   RecaptchaType,
-  RecaptchaTypes,
 } from "components/constants";
+import { ButtonVariantTypes, RecaptchaTypes } from "components/constants";
 import {
   getCustomBackgroundColor,
   getCustomBorderColor,
@@ -41,7 +33,8 @@ import {
 } from "widgets/WidgetUtils";
 import { DragContainer } from "./DragContainer";
 import { buttonHoverActiveStyles } from "./utils";
-import { ThemeProp } from "widgets/constants";
+import type { ThemeProp } from "WidgetProvider/constants";
+import { toast } from "@appsmith/ads";
 
 const RecaptchaWrapper = styled.div`
   position: relative;
@@ -72,51 +65,36 @@ const TooltipStyles = createGlobalStyle`
   }
 `;
 
-/*
-  Don't use buttonHoverActiveStyles in a nested function it won't work -
-
-  const buttonHoverActiveStyles = css ``
-
-  const Button = styled.button`
-  // won't work
-    ${({ buttonColor, theme }) => {
-      &:hover, &:active {
-        ${buttonHoverActiveStyles}
-      }
-    }}
-
-  // will work
-  &:hover, &:active {
-    ${buttonHoverActiveStyles}
-  }`
-*/
-
 const buttonBaseStyle = css<ThemeProp & ButtonStyleProps>`
-height: 100%;
-background-image: none !important;
-font-weight: ${(props) => props.theme.fontWeights[2]};
-outline: none;
-padding: 0px 10px;
-gap: 8px;
+  height: 100%;
+  background-image: none !important;
+  font-weight: ${(props) => props.theme.fontWeights[2]};
+  outline: none;
+  padding: 0px 10px;
+  gap: 8px;
 
-&:hover, &:active, &:focus {
-  ${buttonHoverActiveStyles}
- }
+  &:hover,
+  &:active,
+  &:focus {
+    ${buttonHoverActiveStyles}
+  }
 
-${({ buttonColor, buttonVariant, theme }) => `
+  ${({ buttonColor, buttonVariant, theme }) => `
     background: ${
       getCustomBackgroundColor(buttonVariant, buttonColor) !== "none"
         ? getCustomBackgroundColor(buttonVariant, buttonColor)
         : buttonVariant === ButtonVariantTypes.PRIMARY
-        ? theme.colors.button.primary.primary.bgColor
-        : "none"
+          ? theme.colors.button.primary.primary.bgColor
+          : "none"
     } !important;
 
 
     &:disabled, &.${Classes.DISABLED} {
     cursor: not-allowed;
-    background-color: ${buttonVariant !== ButtonVariantTypes.TERTIARY &&
-      "var(--wds-color-bg-disabled)"} !important;
+    background-color: ${
+      buttonVariant !== ButtonVariantTypes.TERTIARY &&
+      "var(--wds-color-bg-disabled)"
+    } !important;
     color: var(--wds-color-text-disabled) !important;
     box-shadow: none !important;
     pointer-events: none;
@@ -131,8 +109,8 @@ ${({ buttonColor, buttonVariant, theme }) => `
     getCustomBorderColor(buttonVariant, buttonColor) !== "none"
       ? `1px solid ${getCustomBorderColor(buttonVariant, buttonColor)}`
       : buttonVariant === ButtonVariantTypes.SECONDARY
-      ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
-      : "none"
+        ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
+        : "none"
   } !important;
 
   & > * {
@@ -140,13 +118,10 @@ ${({ buttonColor, buttonVariant, theme }) => `
   }
 
   & > span {
-    max-height: 100%;
-    max-width: 99%;
+    display: inline-block;
     text-overflow: ellipsis;
     overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
+    white-space: nowrap;
     line-height: normal;
 
     color: ${
@@ -157,18 +132,18 @@ ${({ buttonColor, buttonVariant, theme }) => `
   }
 `}
 
-border-radius: ${({ borderRadius }) => borderRadius};
-box-shadow: ${({ boxShadow }) => `${boxShadow ?? "none"}`} !important;
+  border-radius: ${({ borderRadius }) => borderRadius};
+  box-shadow: ${({ boxShadow }) => `${boxShadow ?? "none"}`} !important;
 
-${({ placement }) =>
-  placement
-    ? `
+  ${({ placement }) =>
+    placement
+      ? `
     justify-content: ${getCustomJustifyContent(placement)};
     & > span.bp3-button-text {
       flex: unset !important;
     }
   `
-    : ""}
+      : ""}
 `;
 
 export const StyledButton = styled((props) => (
@@ -179,13 +154,18 @@ export const StyledButton = styled((props) => (
       "boxShadowColor",
       "buttonColor",
       "buttonVariant",
+      "primaryColor",
+      "navColorStyle",
+      "variant",
+      "insideSidebar",
+      "isMinimal",
     ])}
   />
 ))<ThemeProp & ButtonStyleProps>`
   ${buttonBaseStyle}
 `;
 
-export type ButtonStyleProps = {
+export interface ButtonStyleProps {
   buttonColor?: string;
   buttonVariant?: ButtonVariant;
   boxShadow?: string;
@@ -193,8 +173,12 @@ export type ButtonStyleProps = {
   borderRadius?: string;
   iconName?: IconName;
   iconAlign?: Alignment;
+  shouldFitContent?: boolean;
   placement?: ButtonPlacement;
-};
+  maxWidth?: number;
+  minWidth?: number;
+  minHeight?: number;
+}
 
 // To be used in any other part of the app
 export function BaseButton(props: IButtonProps & ButtonStyleProps) {
@@ -210,6 +194,9 @@ export function BaseButton(props: IButtonProps & ButtonStyleProps) {
     iconAlign,
     iconName,
     loading,
+    maxWidth,
+    minHeight,
+    minWidth,
     onClick,
     placement,
     rightIcon,
@@ -224,7 +211,11 @@ export function BaseButton(props: IButtonProps & ButtonStyleProps) {
       buttonVariant={buttonVariant}
       disabled={disabled}
       loading={loading}
+      maxWidth={maxWidth}
+      minHeight={minHeight}
+      minWidth={minWidth}
       onClick={onClick}
+      shouldFitContent={props.shouldFitContent}
       showInAllModes
     >
       <StyledButton
@@ -277,6 +268,7 @@ interface ButtonComponentProps extends ComponentProps {
   onClick?: (event: React.MouseEvent<HTMLElement>) => void;
   isDisabled?: boolean;
   isLoading: boolean;
+  shouldFitContent: boolean;
   rightIcon?: IconName | MaybeElement;
   type: ButtonType;
   buttonColor?: string;
@@ -288,16 +280,21 @@ interface ButtonComponentProps extends ComponentProps {
   iconAlign?: Alignment;
   placement?: ButtonPlacement;
   className?: string;
+  minWidth?: number;
+  minHeight?: number;
+  maxWidth?: number;
 }
 
-type RecaptchaV2ComponentPropType = {
+interface RecaptchaV2ComponentPropType {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   children: any;
   className?: string;
   isDisabled?: boolean;
   recaptchaType?: RecaptchaType;
   isLoading: boolean;
   handleError: (event: React.MouseEvent<HTMLElement>, error: string) => void;
-};
+}
 
 function RecaptchaV2Component(
   props: RecaptchaV2ComponentPropType & RecaptchaProps,
@@ -309,7 +306,9 @@ function RecaptchaV2Component(
   };
   const handleBtnClick = async (event: React.MouseEvent<HTMLElement>) => {
     if (props.isDisabled) return;
+
     if (props.isLoading) return;
+
     if (isInvalidKey) {
       // Handle incorrent google recaptcha site key
       props.handleError(event, createMessage(GOOGLE_RECAPTCHA_KEY_ERROR));
@@ -318,12 +317,14 @@ function RecaptchaV2Component(
       try {
         await recaptchaRef?.current?.reset();
         const token = await recaptchaRef?.current?.executeAsync();
+
         if (token) {
           props.clickWithRecaptcha(token);
         } else {
           // Handle incorrent google recaptcha site key
           props.handleError(event, createMessage(GOOGLE_RECAPTCHA_KEY_ERROR));
         }
+
         handleRecaptchaLoading(false);
       } catch (err) {
         handleRecaptchaLoading(false);
@@ -332,6 +333,7 @@ function RecaptchaV2Component(
       }
     }
   };
+
   return (
     <RecaptchaWrapper className={props.className} onClick={handleBtnClick}>
       {props.children}
@@ -345,14 +347,16 @@ function RecaptchaV2Component(
   );
 }
 
-type RecaptchaV3ComponentPropType = {
+interface RecaptchaV3ComponentPropType {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   children: any;
   className?: string;
   isDisabled?: boolean;
   recaptchaType?: RecaptchaType;
   isLoading: boolean;
   handleError: (event: React.MouseEvent<HTMLElement>, error: string) => void;
-};
+}
 
 function RecaptchaV3Component(
   props: RecaptchaV3ComponentPropType & RecaptchaProps,
@@ -364,14 +368,21 @@ function RecaptchaV3Component(
 
   const handleBtnClick = (event: React.MouseEvent<HTMLElement>) => {
     if (props.isDisabled) return;
+
     if (props.isLoading) return;
+
     if (status === ScriptStatus.READY) {
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).grecaptcha.ready(() => {
         try {
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (window as any).grecaptcha
             .execute(props.googleRecaptchaKey, {
               action: "submit",
-            })
+            }) // TODO: Fix this the next time the file is edited
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .then((token: any) => {
               props.clickWithRecaptcha(token);
             })
@@ -394,13 +405,16 @@ function RecaptchaV3Component(
   };
 
   let validGoogleRecaptchaKey = props.googleRecaptchaKey;
+
   if (validGoogleRecaptchaKey && !checkValidJson(validGoogleRecaptchaKey)) {
     validGoogleRecaptchaKey = undefined;
   }
+
   const status = useScript(
     `https://www.google.com/recaptcha/api.js?render=${validGoogleRecaptchaKey}`,
     AddScriptTo.HEAD,
   );
+
   return (
     <div className={props.className} onClick={handleBtnClick}>
       {props.children}
@@ -408,8 +422,14 @@ function RecaptchaV3Component(
   );
 }
 
+const Wrapper = styled.div`
+  height: 100%;
+`;
+
 function BtnWrapper(
   props: {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     children: any;
     className?: string;
     isDisabled?: boolean;
@@ -417,28 +437,30 @@ function BtnWrapper(
     onClick?: (event: React.MouseEvent<HTMLElement>) => void;
   } & RecaptchaProps,
 ) {
+  const hasOnClick = Boolean(
+    props.onClick && !props.isLoading && !props.isDisabled,
+  );
+
   if (!props.googleRecaptchaKey) {
     return (
-      <div
+      <Wrapper
         className={props.className}
-        onClick={(e: React.MouseEvent<HTMLElement>) =>
-          props.onClick && !props.isLoading && props.onClick(e)
-        }
+        onClick={hasOnClick ? props.onClick : undefined}
       >
         {props.children}
-      </div>
+      </Wrapper>
     );
   } else {
     const handleError = (
       event: React.MouseEvent<HTMLElement>,
       error: string,
     ) => {
-      Toaster.show({
-        text: error,
-        variant: Variant.danger,
+      toast.show(error, {
+        kind: "error",
       });
       props.onClick && !props.isLoading && props.onClick(event);
     };
+
     if (props.recaptchaType === RecaptchaTypes.V2) {
       return <RecaptchaV2Component {...props} handleError={handleError} />;
     } else {
@@ -471,13 +493,18 @@ function ButtonComponent(props: ButtonComponentProps & RecaptchaProps) {
         iconAlign={props.iconAlign}
         iconName={props.iconName}
         loading={props.isLoading}
+        maxWidth={props.maxWidth}
+        minHeight={props.minHeight}
+        minWidth={props.minWidth}
         placement={props.placement}
         rightIcon={props.rightIcon}
+        shouldFitContent={props.shouldFitContent}
         text={props.text}
         type={props.type}
       />
     </BtnWrapper>
   );
+
   if (props.tooltip) {
     return (
       <ToolTipWrapper>

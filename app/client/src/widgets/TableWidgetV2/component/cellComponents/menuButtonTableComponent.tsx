@@ -10,7 +10,7 @@ import {
   Classes as BlueprintClasses,
 } from "@blueprintjs/core";
 import { Classes, Popover2 } from "@blueprintjs/popover2";
-import { IconName } from "@blueprintjs/icons";
+import type { IconName } from "@blueprintjs/icons";
 import {
   getCustomBackgroundColor,
   getCustomBorderColor,
@@ -19,15 +19,16 @@ import {
   getComplementaryGrayscaleColor,
 } from "widgets/WidgetUtils";
 import { darkenActive, darkenHover } from "constants/DefaultTheme";
-import { ButtonVariant, ButtonVariantTypes } from "components/constants";
+import type { ButtonVariant } from "components/constants";
+import { ButtonVariantTypes } from "components/constants";
 import tinycolor from "tinycolor2";
 import { Colors } from "constants/Colors";
 import {
   getBooleanPropertyValue,
   getPropertyValue,
 } from "widgets/TableWidgetV2/widget/utilities";
-import { ThemeProp } from "widgets/constants";
-import {
+import type { ThemeProp } from "WidgetProvider/constants";
+import type {
   ConfigureMenuItems,
   MenuItem,
   MenuItems,
@@ -56,8 +57,11 @@ const PopoverStyles = createGlobalStyle<{
       margin-top: 8px !important;
       border-radius: ${({ borderRadius }) =>
         borderRadius >= `1.5rem` ? `0.375rem` : borderRadius};
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
+      max-height: 400px;
     }
+
     & .${BlueprintClasses.MENU_ITEM} {
       padding: 9px 12px;
       border-radius: 0;
@@ -106,8 +110,8 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
         getCustomBackgroundColor(buttonVariant, buttonColor) !== "none"
           ? getCustomBackgroundColor(buttonVariant, buttonColor)
           : buttonVariant === ButtonVariantTypes.PRIMARY
-          ? theme.colors.button.primary.primary.bgColor
-          : "none"
+            ? theme.colors.button.primary.primary.bgColor
+            : "none"
       } !important;
     }
 
@@ -116,10 +120,10 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
         getCustomHoverColor(theme, buttonVariant, buttonColor) !== "none"
           ? getCustomHoverColor(theme, buttonVariant, buttonColor)
           : buttonVariant === ButtonVariantTypes.SECONDARY
-          ? theme.colors.button.primary.secondary.hoverColor
-          : buttonVariant === ButtonVariantTypes.TERTIARY
-          ? theme.colors.button.primary.tertiary.hoverColor
-          : theme.colors.button.primary.primary.hoverColor
+            ? theme.colors.button.primary.secondary.hoverColor
+            : buttonVariant === ButtonVariantTypes.TERTIARY
+              ? theme.colors.button.primary.tertiary.hoverColor
+              : theme.colors.button.primary.primary.hoverColor
       } !important;
     }
 
@@ -132,8 +136,8 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
       getCustomBorderColor(buttonVariant, buttonColor) !== "none"
         ? `1px solid ${getCustomBorderColor(buttonVariant, buttonColor)}`
         : buttonVariant === ButtonVariantTypes.SECONDARY
-        ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
-        : "none"
+          ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
+          : "none"
     } !important;
 
     & > span {
@@ -253,18 +257,14 @@ function PopoverContent(props: PopoverContentProps) {
           icon={
             iconAlign !== Alignment.RIGHT && iconName ? (
               <Icon color={iconColor} icon={iconName} />
-            ) : (
-              undefined
-            )
+            ) : undefined
           }
           isCompact={isCompact}
           key={id}
           labelElement={
             iconAlign === Alignment.RIGHT && iconName ? (
               <Icon color={iconColor} icon={iconName} />
-            ) : (
-              undefined
-            )
+            ) : undefined
           }
           onClick={() => onItemClicked(onClick, index)}
           text={label}

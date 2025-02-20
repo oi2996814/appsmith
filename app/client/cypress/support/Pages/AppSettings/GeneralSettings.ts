@@ -1,8 +1,17 @@
 import { ObjectsRegistry } from "../../Objects/Registry";
 
+interface UpdateNameAndVerifyUrlObj {
+  reset: boolean;
+  newAppName: string;
+  verifyAppNameAs?: string;
+  pageName?: string;
+  restOfUrl?: string;
+}
+
 export class GeneralSettings {
   private agHelper = ObjectsRegistry.AggregateHelper;
   private appSettings = ObjectsRegistry.AppSettings;
+  private assertHelper = ObjectsRegistry.AssertHelper;
 
   private locators = {
     _appNameField: "#t--general-settings-app-name",
@@ -10,12 +19,13 @@ export class GeneralSettings {
     _appIconSelector: "#t--general-settings-app-icon",
   };
 
-  UpdateAppNameAndVerifyUrl(
-    reset: boolean,
-    newAppName: string,
-    verifyAppNameAs?: string,
+  UpdateAppNameAndVerifyUrl({
+    newAppName,
     pageName = "page1",
-  ) {
+    reset,
+    restOfUrl = "",
+    verifyAppNameAs,
+  }: UpdateNameAndVerifyUrlObj) {
     const appNameToBeVerified = verifyAppNameAs ?? newAppName;
     this.agHelper
       .GetText(this.locators._appNameField, "val")
@@ -25,19 +35,30 @@ export class GeneralSettings {
           (currentAppName as string).length,
           newAppName,
         );
-        this.agHelper.PressEnter();
-        this.agHelper.Sleep();
-        this.agHelper.ValidateNetworkStatus("@updateApplication", 200);
-        this.appSettings.CheckUrl(appNameToBeVerified, pageName);
+        this.agHelper.PressEnter(1000);
+        this.assertHelper.AssertNetworkStatus("@updateApplication", 200);
+        this.appSettings.CheckUrl(
+          appNameToBeVerified,
+          pageName,
+          undefined,
+          true,
+          restOfUrl,
+        );
         if (reset) {
           this.agHelper.RemoveCharsNType(
             this.locators._appNameField,
             newAppName.length,
             currentAppName as string,
           );
-          this.agHelper.PressEnter();
-          this.agHelper.ValidateNetworkStatus("@updateApplication", 200);
-          this.appSettings.CheckUrl(currentAppName as string, pageName);
+          this.agHelper.PressEnter(1000);
+          this.assertHelper.AssertNetworkStatus("@updateApplication", 200);
+          this.appSettings.CheckUrl(
+            currentAppName as string,
+            pageName,
+            undefined,
+            true,
+            restOfUrl,
+          );
         }
       });
   }
@@ -53,6 +74,6 @@ export class GeneralSettings {
 
   UpdateAppIcon() {
     this.agHelper.GetNClick(this.locators._appNonSelectedIcon, 0);
-    this.agHelper.ValidateNetworkStatus("@updateApplication", 200);
+    this.assertHelper.AssertNetworkStatus("@updateApplication", 200);
   }
 }

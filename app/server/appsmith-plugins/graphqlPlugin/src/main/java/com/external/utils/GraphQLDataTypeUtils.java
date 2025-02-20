@@ -2,6 +2,7 @@ package com.external.utils;
 
 import com.appsmith.external.exceptions.pluginExceptions.AppsmithPluginError;
 import com.appsmith.external.exceptions.pluginExceptions.AppsmithPluginException;
+import com.appsmith.util.SerializationUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import graphql.parser.InvalidSyntaxException;
@@ -19,10 +20,10 @@ import static com.appsmith.external.helpers.SmartSubstitutionHelper.APPSMITH_SUB
 public class GraphQLDataTypeUtils {
     public static final String GRAPHQL_BODY_ENDS_WITH_PARAM_REGEX = "[\\w\\W]+:$";
 
-    public static final ObjectMapper objectMapper = new ObjectMapper();
+    public static final ObjectMapper objectMapper = SerializationUtils.getObjectMapperWithSourceInLocationEnabled();
 
-    public static String smartlyReplaceGraphQLQueryBodyPlaceholderWithValue(String queryBody, String replacement,
-                                                                            List<Map.Entry<String, String>> insertedParams) {
+    public static String smartlyReplaceGraphQLQueryBodyPlaceholderWithValue(
+            String queryBody, String replacement, List<Map.Entry<String, String>> insertedParams) {
         final GraphQLBodyDataType dataType = stringToKnownGraphQLDataTypeConverter(queryBody, replacement);
         Map.Entry<String, String> parameter = new AbstractMap.SimpleEntry<>(replacement, dataType.toString());
         insertedParams.add(parameter);
@@ -34,13 +35,8 @@ public class GraphQLDataTypeUtils {
                     String valueAsString = objectMapper.writeValueAsString(replacement);
                     updatedReplacement = Matcher.quoteReplacement(valueAsString);
                 } catch (JsonProcessingException e) {
-                    throw Exceptions.propagate(
-                            new AppsmithPluginException(
-                                    AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
-                                    replacement,
-                                    e.getMessage()
-                            )
-                    );
+                    throw Exceptions.propagate(new AppsmithPluginException(
+                            AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR, replacement, e.getMessage()));
                 }
                 break;
             case GRAPHQL_BODY_FULL:
@@ -65,7 +61,7 @@ public class GraphQLDataTypeUtils {
             graphqlParser.parseDocument(replacement);
             return GraphQLBodyDataType.GRAPHQL_BODY_FULL;
         } catch (InvalidSyntaxException e) {
-           // do nothing
+            // do nothing
         }
 
         try {

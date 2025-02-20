@@ -5,18 +5,19 @@ import FormContext from "../FormContext";
 import Field from "widgets/JSONFormWidget/component/Field";
 import useEvents from "./useBlurAndFocusEvents";
 import useRegisterFieldValidity from "./useRegisterFieldValidity";
-import { AlignWidget, AlignWidgetTypes } from "widgets/constants";
-import {
-  ActionUpdateDependency,
+import type { AlignWidget, AlignWidgetTypes } from "WidgetProvider/constants";
+import type {
   BaseFieldComponentProps,
   FieldComponentBaseProps,
   FieldEventProps,
 } from "../constants";
+import { ActionUpdateDependency } from "../constants";
 import SwitchComponent from "widgets/SwitchWidget/component";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import { Colors } from "constants/Colors";
 import { BASE_LABEL_TEXT_SIZE } from "../component/FieldLabel";
 import { LabelPosition } from "components/constants";
+import useUnmountFieldValidation from "./useUnmountFieldValidation";
 
 type SwitchComponentOwnProps = FieldComponentBaseProps &
   FieldEventProps & {
@@ -47,10 +48,8 @@ function SwitchField({
   passedDefaultValue,
   schemaItem,
 }: SwitchFieldProps) {
-  const {
-    onBlur: onBlurDynamicString,
-    onFocus: onFocusDynamicString,
-  } = schemaItem;
+  const { onBlur: onBlurDynamicString, onFocus: onFocusDynamicString } =
+    schemaItem;
   const { executeAction } = useContext(FormContext);
 
   const {
@@ -72,6 +71,7 @@ function SwitchField({
     fieldType: schemaItem.fieldType,
     isValid: isValueValid,
   });
+  useUnmountFieldValidation({ fieldName: name });
 
   const onSwitchChange = useCallback(
     (value: boolean) => {

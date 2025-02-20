@@ -6,10 +6,13 @@ import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.PropertyAccessorFactory;
 
 import java.beans.PropertyDescriptor;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 public final class AppsmithBeanUtils {
 
@@ -30,24 +33,9 @@ public final class AppsmithBeanUtils {
         return emptyNames.toArray(result);
     }
 
-    //Use Spring BeanUtils to copy and ignore null
+    // Use Spring BeanUtils to copy and ignore null
     public static void copyNewFieldValuesIntoOldObject(Object src, Object target) {
         BeanUtils.copyProperties(src, target, getNullPropertyNames(src));
-    }
-
-    public static int countOfNonNullFields(Object source) {
-        int count = 0;
-        final BeanWrapper src = new BeanWrapperImpl(source);
-        java.beans.PropertyDescriptor[] pds = src.getPropertyDescriptors();
-
-        for (java.beans.PropertyDescriptor pd : pds) {
-            Object srcValue = src.getPropertyValue(pd.getName());
-            if (srcValue != null) {
-                count++;
-            }
-        }
-
-        return count++;
     }
 
     public static void copyNestedNonNullProperties(Object source, Object target) {
@@ -67,6 +55,10 @@ public final class AppsmithBeanUtils {
                 continue;
             }
 
+            // Please check if the getter function is overloaded in the domain
+            // for example, if a Boolean field's getter method is overloaded, to return false instead of a null
+            // the copyNestedNonNullProperties method will result in updating the target object with
+            // false even when the source field was null originally.
             Object sourceValue = sourceBeanWrapper.getPropertyValue(name);
 
             // If sourceValue is null, don't copy it over to target and just move on to the next property.
@@ -98,7 +90,6 @@ public final class AppsmithBeanUtils {
         BeanWrapper trgWrap = PropertyAccessorFactory.forBeanPropertyAccess(trg);
 
         props.forEach(p -> trgWrap.setPropertyValue(p, srcWrap.getPropertyValue(p)));
-
     }
 
     public static List<Object> getBeanPropertyValues(Object object) {
@@ -120,5 +111,17 @@ public final class AppsmithBeanUtils {
         }
 
         return values;
+    }
+
+    public static Stream<Field> getAllFields(Class<?> currentType) {
+
+        Set<Class<?>> classes = new HashSet<>();
+
+        while (currentType != null) {
+            classes.add(currentType);
+            currentType = currentType.getSuperclass();
+        }
+
+        return classes.stream().flatMap(currentClass -> Arrays.stream(currentClass.getDeclaredFields()));
     }
 }

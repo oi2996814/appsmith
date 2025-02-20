@@ -1,6 +1,6 @@
 import { getType, Types } from "utils/TypeHelpers";
 import _ from "lodash";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
 import { isDynamicValue } from "utils/DynamicBindingUtils";
 import { QUOTED_BINDING_REGEX } from "constants/BindingsConstants";
 
@@ -17,12 +17,14 @@ const filterBindingSegmentsAndRemoveQuotes = (
   );
   const subBindings: string[] = [];
   const subValues: unknown[] = [];
+
   subSegments.forEach((segment, i) => {
     if (isDynamicValue(segment)) {
       subBindings.push(segment);
       subValues.push(subSegmentValues[i]);
     }
   });
+
   return { binding: bindingStrippedQuotes, subBindings, subValues };
 };
 
@@ -31,18 +33,17 @@ export const smartSubstituteDynamicValues = (
   subSegments: string[],
   subSegmentValues: unknown[],
 ): string => {
-  const {
-    binding,
-    subBindings,
-    subValues,
-  } = filterBindingSegmentsAndRemoveQuotes(
-    originalBinding,
-    subSegments,
-    subSegmentValues,
-  );
+  const { binding, subBindings, subValues } =
+    filterBindingSegmentsAndRemoveQuotes(
+      originalBinding,
+      subSegments,
+      subSegmentValues,
+    );
   let finalBinding = binding;
+
   subBindings.forEach((b, i) => {
     const value = subValues[i];
+
     switch (getType(value)) {
       case Types.NUMBER:
       case Types.BOOLEAN:
@@ -63,6 +64,7 @@ export const smartSubstituteDynamicValues = (
         break;
     }
   });
+
   return finalBinding;
 };
 
@@ -71,15 +73,13 @@ export const parameterSubstituteDynamicValues = (
   subSegments: string[],
   subSegmentValues: unknown[],
 ) => {
-  const {
-    binding,
-    subBindings,
-    subValues,
-  } = filterBindingSegmentsAndRemoveQuotes(
-    originalBinding,
-    subSegments,
-    subSegmentValues,
-  );
+  const { binding, subBindings, subValues } =
+    filterBindingSegmentsAndRemoveQuotes(
+      originalBinding,
+      subSegments,
+      subSegmentValues,
+    );
+
   // if only one binding is provided in the whole string, we need to throw an error
   if (subSegments.length === 1 && subBindings.length === 1) {
     throw Error(
@@ -89,15 +89,18 @@ export const parameterSubstituteDynamicValues = (
 
   let finalBinding = binding;
   const parameters: Record<string, unknown> = {};
+
   subBindings.forEach((b, i) => {
     // Replace binding with $1, $2;
     const key = `$${i + 1}`;
+
     finalBinding = finalBinding.replace(b, key);
     parameters[key] =
       typeof subValues[i] === "object"
         ? JSON.stringify(subValues[i], null, 2)
         : subValues[i];
   });
+
   return { value: finalBinding, parameters };
 };
 // For creating a final value where bindings could be in a template format
@@ -108,11 +111,14 @@ export const templateSubstituteDynamicValues = (
 ): string => {
   // Replace the string with the data tree values
   let finalValue = binding;
+
   subBindings.forEach((b, i) => {
     let value = subValues[i];
+
     if (Array.isArray(value) || _.isObject(value)) {
       value = JSON.stringify(value);
     }
+
     try {
       if (typeof value === "string" && JSON.parse(value)) {
         value = value.replace(/\\([\s\S])|(")/g, "\\$1$2");
@@ -122,6 +128,7 @@ export const templateSubstituteDynamicValues = (
     }
     finalValue = finalValue.replace(b, `${value}`);
   });
+
   return finalValue;
 };
 

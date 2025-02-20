@@ -1,45 +1,19 @@
 import React, { useCallback } from "react";
-import styled from "styled-components";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  Button,
-  Category,
-  IconPositions,
-  Size,
-  TooltipComponent,
-} from "design-system";
+import { Tooltip, ToggleButton } from "@appsmith/ads";
 
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { APP_MODE } from "entities/App";
 
-import { getAppMode } from "selectors/applicationSelectors";
+import { getAppMode } from "ee/selectors/applicationSelectors";
 import { setPreviewModeInitAction } from "actions/editorActions";
 import { previewModeSelector } from "selectors/editorSelectors";
 
-import { isExploringSelector } from "selectors/onboardingSelectors";
-import { Colors } from "constants/Colors";
-import { createMessage, EDITOR_HEADER } from "ce/constants/messages";
-
-const StyledButton = styled(Button)<{ active: boolean }>`
-  ${(props) =>
-    props.active &&
-    `
-  background-color: ${Colors.GREY_200};
-  border: 1.2px solid transparent;
-  `}
-  padding: 0 ${(props) => props.theme.spaces[2]}px;
-  color: ${Colors.GREY_900};
-  height: ${(props) => props.theme.smallHeaderHeight};
-
-  svg {
-    height: 18px;
-    width: 18px;
-  }
-`;
+import { createMessage, EDITOR_HEADER } from "ee/constants/messages";
+import { altText } from "../../utils/helpers";
 
 function ToggleModeButton() {
   const dispatch = useDispatch();
-  const isExploring = useSelector(isExploringSelector);
   const isPreviewMode = useSelector(previewModeSelector);
   const appMode = useSelector(getAppMode);
 
@@ -50,34 +24,31 @@ function ToggleModeButton() {
     dispatch(setPreviewModeInitAction(!isPreviewMode));
   }, [dispatch, setPreviewModeInitAction, isPreviewMode]);
 
-  if (isExploring || isViewMode) return null;
+  if (isViewMode) return null;
 
   return (
-    <TooltipComponent
+    <Tooltip
       content={
         <>
           {createMessage(EDITOR_HEADER.previewTooltip.text)}
-          <span style={{ color: "#fff", marginLeft: 20 }}>
-            {createMessage(EDITOR_HEADER.previewTooltip.shortcut)}
+          <span style={{ marginLeft: 20 }}>
+            {`${altText()} ${createMessage(
+              EDITOR_HEADER.previewTooltip.shortcut,
+            )}`}
           </span>
         </>
       }
-      disabled={appMode !== APP_MODE.EDIT}
-      hoverOpenDelay={1000}
-      position="bottom"
+      isDisabled={appMode !== APP_MODE.EDIT}
+      placement="bottom"
     >
-      <StyledButton
-        active={isPreviewMode}
-        category={Category.tertiary}
-        data-cy={`${isPreviewMode ? "preview" : "edit"}-mode`}
-        icon={"play-circle-line"}
-        iconPosition={IconPositions.left}
+      <ToggleButton
+        data-testid={`${isPreviewMode ? "preview" : "edit"}-mode`}
+        icon="play-line"
+        isSelected={isPreviewMode}
         onClick={onClickPreviewModeButton}
-        size={Size.medium}
-        tag={"button"}
-        text={createMessage(EDITOR_HEADER.previewTooltip.text).toUpperCase()}
+        size="md"
       />
-    </TooltipComponent>
+    </Tooltip>
   );
 }
 

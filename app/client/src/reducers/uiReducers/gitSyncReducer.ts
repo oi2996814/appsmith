@@ -1,12 +1,19 @@
 import { createReducer } from "utils/ReducerUtils";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
-  ReduxAction,
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { GitConfig, GitSyncModalTab, MergeStatus } from "entities/GitSync";
-import { GetSSHKeyResponseData, SSHKeyType } from "actions/gitSyncActions";
-import { PageDefaultMeta } from "api/ApplicationApi";
+} from "ee/constants/ReduxActionConstants";
+import type { GitConfig, MergeStatus } from "entities/GitSync";
+import { GitSyncModalTab } from "entities/GitSync";
+import type { GetSSHKeyResponseData, SSHKeyType } from "actions/gitSyncActions";
+import type { PageDefaultMeta } from "ee/api/ApplicationApi";
+
+export enum GitSettingsTab {
+  GENERAL = "GENERAL",
+  BRANCH = "BRANCH",
+  CD = "CD",
+}
 
 const initialState: GitSyncReducerState = {
   isGitSyncModalOpen: false,
@@ -20,9 +27,12 @@ const initialState: GitSyncReducerState = {
   branches: [],
   fetchingBranches: false,
   localGitConfig: { authorEmail: "", authorName: "" },
+  showBranchPopup: false,
+
+  isDiscarding: false,
 
   isFetchingLocalGitConfig: false,
-  isFetchingGitConfig: false,
+  isFetchingGlobalGitConfig: false,
 
   isMerging: false,
   tempRemoteUrl: "",
@@ -33,6 +43,26 @@ const initialState: GitSyncReducerState = {
     id: "",
     name: "",
   },
+
+  isSwitchingBranch: false,
+  switchingToBranch: null,
+  isDeploying: false,
+
+  protectedBranchesLoading: false,
+  protectedBranches: [],
+
+  isUpdateProtectedBranchesLoading: false,
+
+  isAutocommitModalOpen: false,
+  togglingAutocommit: false,
+  triggeringAutocommit: false,
+  pollingAutocommitStatus: false,
+
+  gitMetadata: null,
+  gitMetadataLoading: false,
+
+  isGitSettingsModalOpen: false,
+  activeGitSettingsModalTab: GitSettingsTab.GENERAL,
 };
 
 const gitSyncReducer = createReducer(initialState, {
@@ -41,9 +71,11 @@ const gitSyncReducer = createReducer(initialState, {
     action: ReduxAction<{
       isOpen: boolean;
       tab: GitSyncModalTab;
+      isDeploying: boolean;
     }>,
   ) => {
     const activeGitSyncModalTab = action.payload.tab;
+    const isDeploying = action.payload.isDeploying || false;
 
     return {
       ...state,
@@ -51,10 +83,12 @@ const gitSyncReducer = createReducer(initialState, {
       activeGitSyncModalTab,
       connectError: null,
       commitAndPushError: null,
+      discardError: null,
       pullError: null,
       mergeError: null,
       pullFailed: false, // reset conflicts when the modal is opened
       gitImportError: null,
+      isDeploying,
     };
   },
   [ReduxActionTypes.COMMIT_TO_GIT_REPO_INIT]: (state: GitSyncReducerState) => ({
@@ -72,6 +106,7 @@ const gitSyncReducer = createReducer(initialState, {
     commitAndPushError: null,
     pullError: null,
     mergeError: null,
+    discardError: null,
   }),
   [ReduxActionErrorTypes.COMMIT_TO_GIT_REPO_ERROR]: (
     state: GitSyncReducerState,
@@ -117,21 +152,23 @@ const gitSyncReducer = createReducer(initialState, {
     state: GitSyncReducerState,
   ) => ({
     ...state,
-    isFetchingGitConfig: true,
+    isFetchingGlobalGitConfig: true,
     connectError: null,
     commitAndPushError: null,
     pullError: null,
     mergeError: null,
+    discardError: null,
   }),
   [ReduxActionTypes.UPDATE_GLOBAL_GIT_CONFIG_INIT]: (
     state: GitSyncReducerState,
   ) => ({
     ...state,
-    isFetchingGitConfig: true,
+    isFetchingGlobalGitConfig: true,
     connectError: null,
     commitAndPushError: null,
     pullError: null,
     mergeError: null,
+    discardError: null,
   }),
   [ReduxActionTypes.FETCH_GLOBAL_GIT_CONFIG_SUCCESS]: (
     state: GitSyncReducerState,
@@ -139,7 +176,7 @@ const gitSyncReducer = createReducer(initialState, {
   ) => ({
     ...state,
     globalGitConfig: action.payload,
-    isFetchingGitConfig: false,
+    isFetchingGlobalGitConfig: false,
   }),
   [ReduxActionTypes.UPDATE_GLOBAL_GIT_CONFIG_SUCCESS]: (
     state: GitSyncReducerState,
@@ -147,19 +184,19 @@ const gitSyncReducer = createReducer(initialState, {
   ) => ({
     ...state,
     globalGitConfig: action.payload,
-    isFetchingGitConfig: false,
+    isFetchingGlobalGitConfig: false,
   }),
   [ReduxActionErrorTypes.UPDATE_GLOBAL_GIT_CONFIG_ERROR]: (
     state: GitSyncReducerState,
   ) => ({
     ...state,
-    isFetchingGitConfig: false,
+    isFetchingGlobalGitConfig: false,
   }),
   [ReduxActionErrorTypes.FETCH_GLOBAL_GIT_CONFIG_ERROR]: (
     state: GitSyncReducerState,
   ) => ({
     ...state,
-    isFetchingGitConfig: false,
+    isFetchingGlobalGitConfig: false,
   }),
   [ReduxActionTypes.FETCH_BRANCHES_INIT]: (state: GitSyncReducerState) => ({
     ...state,
@@ -168,9 +205,12 @@ const gitSyncReducer = createReducer(initialState, {
     commitAndPushError: null,
     pullError: null,
     mergeError: null,
+    discardError: null,
   }),
   [ReduxActionTypes.FETCH_BRANCHES_SUCCESS]: (
     state: GitSyncReducerState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     action: ReduxAction<any[]>,
   ) => ({
     ...state,
@@ -192,6 +232,7 @@ const gitSyncReducer = createReducer(initialState, {
     commitAndPushError: null,
     pullError: null,
     mergeError: null,
+    discardError: null,
   }),
   [ReduxActionTypes.UPDATE_LOCAL_GIT_CONFIG_INIT]: (
     state: GitSyncReducerState,
@@ -202,6 +243,7 @@ const gitSyncReducer = createReducer(initialState, {
     commitAndPushError: null,
     pullError: null,
     mergeError: null,
+    discardError: null,
   }),
   [ReduxActionTypes.FETCH_LOCAL_GIT_CONFIG_SUCCESS]: (
     state: GitSyncReducerState,
@@ -275,6 +317,7 @@ const gitSyncReducer = createReducer(initialState, {
     mergeStatus: null,
     pullError: null,
     mergeError: null,
+    discardError: null,
   }),
   [ReduxActionTypes.FETCH_MERGE_STATUS_SUCCESS]: (
     state: GitSyncReducerState,
@@ -441,6 +484,8 @@ const gitSyncReducer = createReducer(initialState, {
   }),
   [ReduxActionTypes.IMPORT_APPLICATION_FROM_GIT_ERROR]: (
     state: GitSyncReducerState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     action: ReduxAction<any>,
   ) => ({
     ...state,
@@ -457,6 +502,8 @@ const gitSyncReducer = createReducer(initialState, {
   }),
   [ReduxActionTypes.DELETE_BRANCH_SUCCESS]: (
     state: GitSyncReducerState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     action: ReduxAction<any>,
   ) => ({
     ...state,
@@ -464,6 +511,8 @@ const gitSyncReducer = createReducer(initialState, {
   }),
   [ReduxActionErrorTypes.DELETE_BRANCH_ERROR]: (
     state: GitSyncReducerState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     action: ReduxAction<any>,
   ) => ({
     ...state,
@@ -478,58 +527,265 @@ const gitSyncReducer = createReducer(initialState, {
   }),
   [ReduxActionTypes.DELETING_BRANCH]: (
     state: GitSyncReducerState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     action: ReduxAction<any>,
   ) => ({
     ...state,
     deletingBranch: action.payload,
   }),
+  [ReduxActionTypes.GIT_DISCARD_CHANGES]: (state: GitSyncReducerState) => ({
+    ...state,
+    isDiscarding: true,
+    discardError: null,
+  }),
   [ReduxActionTypes.GIT_DISCARD_CHANGES_SUCCESS]: (
     state: GitSyncReducerState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     action: ReduxAction<any>,
   ) => ({
     ...state,
     isDiscarding: false,
     discard: action.payload,
   }),
+  [ReduxActionErrorTypes.GIT_DISCARD_CHANGES_ERROR]: (
+    state: GitSyncReducerState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    action: ReduxAction<any>,
+  ) => ({
+    ...state,
+    isDiscarding: false,
+    discardError: action.payload,
+  }),
+  [ReduxActionTypes.CLEAR_DISCARD_ERROR_STATE]: (
+    state: GitSyncReducerState,
+  ) => ({
+    ...state,
+    discardError: null,
+  }),
+  [ReduxActionTypes.SWITCH_GIT_BRANCH_INIT]: (
+    state: GitSyncReducerState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    action: ReduxAction<any>,
+  ) => ({
+    ...state,
+    switchingToBranch: action.payload,
+    isSwitchingBranch: true,
+  }),
+  [ReduxActionTypes.SWITCH_GIT_BRANCH_SUCCESS]: (
+    state: GitSyncReducerState,
+  ) => ({
+    ...state,
+    switchingToBranch: null,
+    isSwitchingBranch: false,
+  }),
+  [ReduxActionTypes.SWITCH_GIT_BRANCH_ERROR]: (state: GitSyncReducerState) => ({
+    ...state,
+    switchingToBranch: null,
+    isSwitchingBranch: false,
+  }),
+  [ReduxActionTypes.GIT_FETCH_PROTECTED_BRANCHES_INIT]: (
+    state: GitSyncReducerState,
+  ) => ({
+    ...state,
+    protectedBranchesLoading: true,
+  }),
+  [ReduxActionTypes.GIT_FETCH_PROTECTED_BRANCHES_SUCCESS]: (
+    state: GitSyncReducerState,
+    action: ReduxAction<{ protectedBranches: string[] }>,
+  ) => ({
+    ...state,
+    protectedBranchesLoading: false,
+    protectedBranches: action.payload.protectedBranches,
+  }),
+  [ReduxActionTypes.GIT_FETCH_PROTECTED_BRANCHES_ERROR]: (state) => ({
+    ...state,
+    protectedBranchesLoading: false,
+  }),
+  [ReduxActionTypes.GIT_UPDATE_PROTECTED_BRANCHES_INIT]: (state) => ({
+    ...state,
+    isUpdateProtectedBranchesLoading: true,
+  }),
+  [ReduxActionTypes.GIT_UPDATE_PROTECTED_BRANCHES_SUCCESS]: (state) => ({
+    ...state,
+    isUpdateProtectedBranchesLoading: false,
+  }),
+  [ReduxActionTypes.GIT_UPDATE_PROTECTED_BRANCHES_ERROR]: (state) => ({
+    ...state,
+    isUpdateProtectedBranchesLoading: false,
+  }),
+  [ReduxActionTypes.GIT_SET_IS_AUTOCOMMIT_MODAL_OPEN]: (
+    state,
+    action: ReduxAction<{ isAutocommitModalOpen: boolean }>,
+  ) => ({
+    ...state,
+    isAutocommitModalOpen: action.payload.isAutocommitModalOpen,
+  }),
+  [ReduxActionTypes.GIT_TOGGLE_AUTOCOMMIT_ENABLED_INIT]: (state) => ({
+    ...state,
+    togglingAutocommit: true,
+  }),
+  [ReduxActionTypes.GIT_TOGGLE_AUTOCOMMIT_ENABLED_SUCCESS]: (state) => ({
+    ...state,
+    togglingAutocommit: false,
+  }),
+  [ReduxActionErrorTypes.GIT_TOGGLE_AUTOCOMMIT_ENABLED_ERROR]: (state) => ({
+    ...state,
+    togglingAutocommit: false,
+  }),
+  [ReduxActionTypes.GIT_AUTOCOMMIT_TRIGGER_INIT]: (state) => ({
+    ...state,
+    triggeringAutocommit: true,
+  }),
+  [ReduxActionTypes.GIT_AUTOCOMMIT_TRIGGER_SUCCESS]: (state) => ({
+    ...state,
+    triggeringAutocommit: false,
+  }),
+  [ReduxActionErrorTypes.GIT_AUTOCOMMIT_TRIGGER_ERROR]: (state) => ({
+    ...state,
+    triggeringAutocommit: false,
+  }),
+  [ReduxActionTypes.GIT_AUTOCOMMIT_START_PROGRESS_POLLING]: (state) => ({
+    ...state,
+    pollingAutocommitStatus: true,
+  }),
+  [ReduxActionTypes.GIT_AUTOCOMMIT_STOP_PROGRESS_POLLING]: (state) => ({
+    ...state,
+    pollingAutocommitStatus: false,
+  }),
+  [ReduxActionErrorTypes.GIT_AUTOCOMMIT_PROGRESS_POLLING_ERROR]: (state) => ({
+    ...state,
+    pollingAutocommitStatus: false,
+  }),
+  [ReduxActionTypes.GIT_GET_METADATA_INIT]: (state) => ({
+    ...state,
+    gitMetadataLoading: true,
+  }),
+  [ReduxActionTypes.GIT_GET_METADATA_SUCCESS]: (
+    state,
+    action: ReduxAction<{ gitMetadata: GitMetadata }>,
+  ) => ({
+    ...state,
+    gitMetadataLoading: false,
+    gitMetadata: action.payload.gitMetadata,
+  }),
+  [ReduxActionErrorTypes.GIT_GET_METADATA_ERROR]: (state) => ({
+    ...state,
+    gitMetadataLoading: false,
+  }),
+  [ReduxActionTypes.GIT_SET_SETTINGS_MODAL_OPEN]: (
+    state,
+    action: ReduxAction<{ open: boolean; tab?: GitSettingsTab }>,
+  ) => ({
+    ...state,
+    isGitSettingsModalOpen: action.payload.open,
+    activeGitSettingsModalTab: action.payload.tab || GitSettingsTab.GENERAL,
+  }),
+  [ReduxActionTypes.GIT_SHOW_BRANCH_POPUP]: (
+    state,
+    action: ReduxAction<{ show: boolean }>,
+  ) => ({
+    ...state,
+    showBranchPopup: action.payload.show,
+  }),
 });
 
-export type GitStatusData = {
+export interface GitStatusData {
+  modified: string[];
+  added: string[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  removed: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pagesModified: any[];
+  pagesAdded: string[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pagesRemoved: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queriesModified: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queriesAdded: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queriesRemoved: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  jsObjectsModified: any[];
+  jsObjectsAdded: string[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  jsObjectsRemoved: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  datasourcesModified: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  datasourcesAdded: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  datasourcesRemoved: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  jsLibsModified: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  jsLibsAdded: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  jsLibsRemoved: any[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  conflicting: any[];
+  isClean: boolean;
   aheadCount: number;
   behindCount: number;
-  conflicting: Array<string>;
-  isClean: boolean;
-  modified: Array<string>;
-  modifiedPages: number;
-  modifiedQueries: number;
   remoteBranch: string;
-  modifiedJSObjects: number;
+  discardDocUrl: string;
+  migrationMessage: string;
+  modifiedPages: number;
   modifiedDatasources: number;
+  modifiedJSObjects: number;
+  modifiedQueries: number;
   modifiedJSLibs: number;
-  discardDocUrl?: string;
-};
+  modifiedSourceModules?: number;
+  modifiedModuleInstances?: number;
+}
 
-type GitErrorPayloadType = {
-  code: number;
+interface GitErrorPayloadType {
+  code: number | string;
   errorType?: string;
   message: string;
   referenceDoc?: string;
-};
+}
 
-export type GitErrorType = {
+export interface GitErrorType {
   error: GitErrorPayloadType;
   show?: boolean;
   crash?: boolean;
   logToSentry?: boolean;
-};
+}
 
-export type GitBranchDeleteState = {
+export interface GitBranchDeleteState {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deleteBranch?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deleteBranchError?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deleteBranchWarning?: any;
   deletingBranch?: boolean;
-};
+}
 
-export type GitDiscardResponse = {
+export interface GitDiscardResponse {
   id: string;
   modifiedBy: string;
   userPermissions: string[];
@@ -561,7 +817,23 @@ export type GitDiscardResponse = {
   };
   new: boolean;
   modifiedAt: string;
-};
+}
+
+export type GitMetadata = {
+  branchName: string;
+  defaultBranchName: string;
+  remoteUrl: string;
+  repoName: string;
+  browserSupportedUrl?: string;
+  isRepoPrivate?: boolean;
+  browserSupportedRemoteUrl: string;
+  defaultApplicationId: string;
+  isProtectedBranch: boolean;
+  autoCommitConfig: {
+    enabled: boolean;
+  };
+  isAutoDeploymentEnabled?: boolean;
+} | null;
 
 export type GitSyncReducerState = GitBranchDeleteState & {
   isGitSyncModalOpen: boolean;
@@ -569,7 +841,7 @@ export type GitSyncReducerState = GitBranchDeleteState & {
   isCommitSuccessful: boolean;
 
   fetchingBranches: boolean;
-  isFetchingGitConfig: boolean;
+  isFetchingGlobalGitConfig: boolean;
   isFetchingLocalGitConfig: boolean;
 
   isFetchingGitStatus: boolean;
@@ -580,6 +852,7 @@ export type GitSyncReducerState = GitBranchDeleteState & {
   globalGitConfig: GitConfig;
 
   branches: Array<{ branchName: string; default: boolean }>;
+  showBranchPopup: boolean;
 
   localGitConfig: GitConfig;
   gitStatus?: GitStatusData;
@@ -608,10 +881,32 @@ export type GitSyncReducerState = GitBranchDeleteState & {
 
   isImportingApplicationViaGit?: boolean;
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   gitImportError?: any;
 
-  isDiscarding?: boolean;
+  isDiscarding: boolean;
   discard?: GitDiscardResponse;
+  discardError?: GitErrorType;
+
+  isSwitchingBranch: boolean;
+  switchingToBranch: string | null;
+  isDeploying: boolean;
+
+  protectedBranches: string[];
+  protectedBranchesLoading: boolean;
+  isUpdateProtectedBranchesLoading: boolean;
+
+  isAutocommitModalOpen: boolean;
+  togglingAutocommit: boolean;
+  triggeringAutocommit: boolean;
+  pollingAutocommitStatus: boolean;
+
+  gitMetadata: GitMetadata | null;
+  gitMetadataLoading: boolean;
+
+  isGitSettingsModalOpen: boolean;
+  activeGitSettingsModalTab: GitSettingsTab;
 };
 
 export default gitSyncReducer;

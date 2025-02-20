@@ -1,54 +1,102 @@
 import {
-  BUILDER_VIEWER_PATH_PREFIX,
-  VIEWER_PATH_DEPRECATED_REGEX,
-} from "constants/routes";
-import { noop } from "lodash";
-import history from "utils/history";
+  getAppViewerPageIdFromPath,
+  isEditorPath,
+  isViewerPath,
+} from "ee/pages/Editor/Explorer/helpers";
+import { fetchWithRetry, getUsagePulsePayload } from "./utils";
+import {
+  PULSE_API_ENDPOINT,
+  PULSE_API_MAX_RETRY_COUNT,
+  PULSE_API_RETRY_TIMEOUT,
+  USER_ACTIVITY_LISTENER_EVENTS,
+} from "ee/constants/UsagePulse";
+import PageApi from "api/PageApi";
+import { APP_MODE } from "entities/App";
+import { getFirstTimeUserOnboardingIntroModalVisibility } from "utils/storage";
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports
+import { PULSE_INTERVAL as PULSE_INTERVAL_CE } from "ce/constants/UsagePulse";
+import { PULSE_INTERVAL as PULSE_INTERVAL_EE } from "ee/constants/UsagePulse";
+import store from "store";
+import type { PageListReduxState } from "reducers/entityReducers/pageListReducer";
+import { isAirgapped } from "ee/utils/airgapHelpers";
 
-const PULSE_API_ENDPOINT = "/api/v1/usage-pulse";
-const PULSE_INTERVAL = 3600; /* 1 hour in seconds */
-const USER_ACTIVITY_LISTENER_EVENTS = ["pointerdown", "keydown"];
 class UsagePulse {
   static userAnonymousId: string | undefined;
   static Timer: ReturnType<typeof setTimeout>;
   static unlistenRouteChange: () => void;
+  static isTelemetryEnabled: boolean;
+  static isAnonymousUser: boolean;
+  static isFreePlan: boolean;
+  static isAirgapped = isAirgapped();
 
   /*
    * Function to check if the given URL is trakable or not.
    * app builder and viewer urls are trackable
    */
-  static isTrackableUrl(url: string) {
-    return (
-      url.includes(BUILDER_VIEWER_PATH_PREFIX) ||
-      VIEWER_PATH_DEPRECATED_REGEX.test(url)
-    );
+  static async isTrackableUrl(path: string) {
+    if (isViewerPath(path)) {
+      if (UsagePulse.isAnonymousUser) {
+        /*
+          In App view mode for non-logged in user, first we must have to check if the app is public or not.
+          If it is private app with non-logged in user, we do not send pulse at this point instead we redirect to the login page.
+          And for login page no usage pulse is required.
+        */
+        const basePageId = getAppViewerPageIdFromPath(path);
+        const { pages } = store.getState().entities
+          .pageList as PageListReduxState;
+        const pageId = pages?.find(
+          (page) => page.basePageId === basePageId,
+        )?.pageId;
+
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const response: any = await PageApi.fetchAppAndPages({
+          pageId,
+          mode: APP_MODE.PUBLISHED,
+        });
+        const { data } = response ?? {};
+
+        if (data?.application && !data.application.isPublic) {
+          return false;
+        }
+      }
+
+      return true;
+    } else if (isEditorPath(path)) {
+      /*
+        During onboarding we show the Intro Modal and let user use the app for the first time.
+        During this exploration period, we do no send usage pulse.
+      */
+      const isFirstTimeOnboarding =
+        await getFirstTimeUserOnboardingIntroModalVisibility();
+
+      if (!isFirstTimeOnboarding) return true;
+    }
+
+    return false;
   }
 
   static sendPulse() {
-    const data: Record<string, unknown> = {
-      viewMode: !window.location.href.endsWith("/edit"),
+    const payload = getUsagePulsePayload(
+      UsagePulse.isTelemetryEnabled,
+      UsagePulse.isAnonymousUser,
+    );
+
+    const fetchWithRetryConfig = {
+      url: PULSE_API_ENDPOINT,
+      payload,
+      retries: PULSE_API_MAX_RETRY_COUNT,
+      retryTimeout: PULSE_API_RETRY_TIMEOUT,
     };
 
-    if (UsagePulse.userAnonymousId) {
-      data["anonymousUserId"] = UsagePulse.userAnonymousId;
-    }
-
-    fetch(PULSE_API_ENDPOINT, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-      keepalive: true,
-    }).catch(noop);
+    fetchWithRetry(fetchWithRetryConfig);
   }
 
   static registerActivityListener() {
     USER_ACTIVITY_LISTENER_EVENTS.forEach((event) => {
       window.document.body.addEventListener(
         event,
-        UsagePulse.startTrackingActivity,
+        UsagePulse.sendPulseAndScheduleNext,
       );
     });
   }
@@ -57,24 +105,9 @@ class UsagePulse {
     USER_ACTIVITY_LISTENER_EVENTS.forEach((event) => {
       window.document.body.removeEventListener(
         event,
-        UsagePulse.startTrackingActivity,
+        UsagePulse.sendPulseAndScheduleNext,
       );
     });
-  }
-
-  /*
-   * Function to register a history change event and trigger
-   * a callback and unlisten when the user goes to a trackable URL
-   */
-  static watchForTrackableUrl(callback: () => void) {
-    UsagePulse.unlistenRouteChange = history.listen(() => {
-      if (UsagePulse.isTrackableUrl(window.location.href)) {
-        UsagePulse.unlistenRouteChange();
-        setTimeout(callback, 0);
-      }
-    });
-
-    UsagePulse.deregisterActivityListener();
   }
 
   /*
@@ -86,22 +119,38 @@ class UsagePulse {
 
     UsagePulse.Timer = setTimeout(
       UsagePulse.registerActivityListener,
-      PULSE_INTERVAL * 1000,
+      UsagePulse.isFreePlan ? PULSE_INTERVAL_CE : PULSE_INTERVAL_EE,
     );
   }
 
   /*
    * Point of entry for the user tracking
+   */
+  static async startTrackingActivity(
+    isTelemetryEnabled: boolean,
+    isAnonymousUser: boolean,
+    isFree: boolean,
+  ) {
+    UsagePulse.isTelemetryEnabled = isTelemetryEnabled;
+    UsagePulse.isAnonymousUser = isAnonymousUser;
+    UsagePulse.isFreePlan = isFree;
+
+    if (await UsagePulse.isTrackableUrl(window.location.pathname)) {
+      await UsagePulse.sendPulseAndScheduleNext();
+    }
+  }
+
+  /*
    * triggers a pulse and schedules the pulse , if user is on a trackable url, otherwise
    * registers listeners to wait for the user to go to a trackable url
    */
-  static startTrackingActivity() {
-    if (UsagePulse.isTrackableUrl(window.location.href)) {
-      UsagePulse.sendPulse();
-      UsagePulse.scheduleNextActivityListeners();
-    } else {
-      UsagePulse.watchForTrackableUrl(UsagePulse.startTrackingActivity);
+  static async sendPulseAndScheduleNext() {
+    if (UsagePulse.isAirgapped) {
+      return;
     }
+
+    UsagePulse.sendPulse();
+    UsagePulse.scheduleNextActivityListeners();
   }
 
   /*

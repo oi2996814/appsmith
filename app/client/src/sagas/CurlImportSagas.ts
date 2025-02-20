@@ -1,34 +1,39 @@
 import { takeLatest, put, all, select } from "redux-saga/effects";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionTypes,
   ReduxActionErrorTypes,
-  ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 import { validateResponse } from "sagas/ErrorSagas";
-import CurlImportApi, { CurlImportRequest } from "api/ImportApi";
-import { ApiResponse } from "api/ApiResponses";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { getCurrentWorkspaceId } from "@appsmith/selectors/workspaceSelectors";
-import transformCurlImport from "transformers/CurlImportTransformer";
+import type { CurlImportRequest } from "api/ImportApi";
+import CurlImportApi from "api/ImportApi";
+import type { ApiResponse } from "api/ApiResponses";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { getCurrentWorkspaceId } from "ee/selectors/selectedWorkspaceSelectors";
+import transformCurlImport from "PluginActionEditor/transformers/CurlImportTransformer";
 import history from "utils/history";
 import { CURL } from "constants/AppsmithActionConstants/ActionConstants";
-import { apiEditorIdURL } from "RouteBuilder";
+import { apiEditorIdURL } from "ee/RouteBuilder";
+import { convertToBaseParentEntityIdSelector } from "selectors/pageListSelectors";
 
 export function* curlImportSaga(action: ReduxAction<CurlImportRequest>) {
-  const { name, pageId, type } = action.payload;
+  const { contextId, contextType, name, type } = action.payload;
   let { curl } = action.payload;
+
   try {
     curl = transformCurlImport(curl);
     const workspaceId: string = yield select(getCurrentWorkspaceId);
     const request: CurlImportRequest = {
       type,
-      pageId,
+      contextId,
       name,
       curl,
       workspaceId,
+      contextType,
     };
 
-    const response: ApiResponse = yield CurlImportApi.curlImport(request);
+    const response: ApiResponse<{ id: string; baseId: string }> =
+      yield CurlImportApi.curlImport(request);
     const isValidResponse: boolean = yield validateResponse(response);
 
     if (isValidResponse) {
@@ -40,9 +45,17 @@ export function* curlImportSaga(action: ReduxAction<CurlImportRequest>) {
         type: ReduxActionTypes.SUBMIT_CURL_FORM_SUCCESS,
         payload: response.data,
       });
+      const baseParentEntityId: string = yield select(
+        convertToBaseParentEntityIdSelector,
+        contextId,
+      );
 
-      // @ts-expect-error: response.data is of type unknown
-      history.push(apiEditorIdURL({ pageId, apiId: response.data.id }));
+      history.push(
+        apiEditorIdURL({
+          baseParentEntityId: baseParentEntityId,
+          baseApiId: response.data.baseId,
+        }),
+      );
     }
   } catch (error) {
     yield put({

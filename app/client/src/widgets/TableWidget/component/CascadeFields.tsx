@@ -9,14 +9,9 @@ import { Colors } from "constants/Colors";
 import { ControlIcons } from "icons/ControlIcons";
 import { Skin } from "constants/DefaultTheme";
 import AutoToolTipComponent from "widgets/TableWidget/component/AutoToolTipComponent";
-import {
-  OperatorTypes,
-  Condition,
-  ColumnTypes,
-  Operator,
-  ReactTableFilter,
-} from "./Constants";
-import { DropdownOption } from "./TableFilters";
+import type { Condition, Operator, ReactTableFilter } from "./Constants";
+import { OperatorTypes, ColumnTypes } from "./Constants";
+import type { DropdownOption } from "./TableFilters";
 import { RenderOptionWrapper } from "./TableStyledWrappers";
 
 //TODO(abhinav): Fix this cross import between widgets
@@ -191,6 +186,7 @@ function RenderOptions(props: {
       {
         options: props.columns.map((column: DropdownOption) => {
           const isActive = column.value === props.value;
+
           return {
             content: props.showType ? (
               <RenderOption
@@ -224,11 +220,13 @@ function RenderOptions(props: {
     },
     skin: Skin.LIGHT,
   };
+
   useEffect(() => {
     if (props.value && props.columns) {
       const selectedOptions = props.columns.filter(
         (i) => i.value === props.value,
       );
+
       if (selectedOptions && selectedOptions.length) {
         selectValue(selectedOptions[0].label);
       } else {
@@ -238,6 +236,7 @@ function RenderOptions(props: {
       selectValue(props.placeholder);
     }
   }, [props.value, props.placeholder, props.columns]);
+
   return <CustomizedDropdown {...configs} />;
 }
 
@@ -250,12 +249,15 @@ function RenderInput(props: {
   const [value, setValue] = useState(props.value);
   const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
+
     setValue(value);
     debouncedOnChange(value);
   };
+
   useEffect(() => {
     setValue(props.value);
   }, [props.value]);
+
   return (
     <StyledInputGroup
       className={props.className}
@@ -267,10 +269,12 @@ function RenderInput(props: {
   );
 }
 
-type CascadeFieldProps = {
+interface CascadeFieldProps {
   columns: DropdownOption[];
   column: string;
   condition: Condition;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any;
   operator: Operator;
   index: number;
@@ -279,11 +283,13 @@ type CascadeFieldProps = {
   removeFilter: (index: number) => void;
   accentColor: string;
   borderRadius: string;
-};
+}
 
-type CascadeFieldState = {
+interface CascadeFieldState {
   column: string;
   condition: Condition;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any;
   operator: Operator;
   conditions: DropdownOption[];
@@ -292,15 +298,17 @@ type CascadeFieldState = {
   showDateInput: boolean;
   isDeleted: boolean;
   isUpdate: boolean;
-};
+}
 
 const getConditions = (props: CascadeFieldProps) => {
   const columnValue = props.column || "";
   const filteredColumn = props.columns.filter((column: DropdownOption) => {
     return columnValue === column.value;
   });
+
   if (filteredColumn.length) {
     const type: ColumnTypes = filteredColumn[0].type as ColumnTypes;
+
     return typeOperatorsMap[type];
   } else {
     return new Array<DropdownOption>(0);
@@ -312,6 +320,7 @@ const showConditionsField = (props: CascadeFieldProps) => {
   const filteredColumn = props.columns.filter((column: DropdownOption) => {
     return columnValue === column.value;
   });
+
   return !!filteredColumn.length;
 };
 
@@ -325,6 +334,7 @@ const showInputField = (
     conditions.filter((condition: DropdownOption) => {
       return condition.value === conditionValue;
     });
+
   return !!filteredConditions.length && filteredConditions[0].type === "input";
 };
 
@@ -338,6 +348,7 @@ const showDateInputField = (
     conditions.filter((condition: DropdownOption) => {
       return condition.value === conditionValue;
     });
+
   return !!filteredConditions.length && filteredConditions[0].type === "date";
 };
 
@@ -346,6 +357,7 @@ function calculateInitialState(props: CascadeFieldProps) {
   const conditions = getConditions(props);
   const showInput = showInputField(props, conditions);
   const showDateInput = showDateInputField(props, conditions);
+
   return {
     operator: props.operator,
     column: props.column,
@@ -375,12 +387,15 @@ function CaseCaseFieldReducer(
   state: CascadeFieldState,
   action: {
     type: CascadeFieldAction;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     payload?: any;
   },
 ) {
   switch (action.type) {
     case CascadeFieldActionTypes.SELECT_COLUMN:
       const type: ColumnTypes = action.payload.type;
+
       return {
         ...state,
         column: action.payload.value,
@@ -412,6 +427,7 @@ function CaseCaseFieldReducer(
       };
     case CascadeFieldActionTypes.UPDATE_FILTER:
       const calculatedState = calculateInitialState(action.payload);
+
       return {
         ...calculatedState,
         isUpdate: false,
@@ -427,9 +443,11 @@ function CaseCaseFieldReducer(
 }
 
 function CascadeField(props: CascadeFieldProps) {
-  const memoizedState = React.useMemo(() => calculateInitialState(props), [
-    props,
-  ]);
+  const memoizedState = React.useMemo(
+    () => calculateInitialState(props),
+    [props],
+  );
+
   return <Fields state={memoizedState} {...props} />;
 }
 
@@ -482,6 +500,7 @@ function Fields(props: CascadeFieldProps & { state: CascadeFieldState }) {
     showInput,
     value,
   } = state;
+
   useEffect(() => {
     if (!isDeleted && isUpdate) {
       applyFilter({ operator, column, condition, value }, index);
@@ -506,6 +525,7 @@ function Fields(props: CascadeFieldProps & { state: CascadeFieldState }) {
       payload: props,
     });
   }, [props]);
+
   return (
     <FieldWrapper className="t--table-filter">
       <StyledRemoveIcon

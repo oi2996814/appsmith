@@ -1,71 +1,94 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import { connect, useSelector } from "react-redux";
-import { PopoverPosition } from "@blueprintjs/core";
-import { AppState } from "@appsmith/reducers";
-import { getCurrentWorkspaceId } from "@appsmith/selectors/workspaceSelectors";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import { Case, Icon, IconSize, TooltipComponent } from "design-system";
-import {
-  isPermitted,
-  PERMISSION_TYPE,
-} from "@appsmith/utils/permissionHelpers";
-import WorkspaceInviteUsersForm from "@appsmith/pages/workspace/WorkspaceInviteUsersForm";
+import type { AppState } from "ee/reducers";
+import { getCurrentAppWorkspace } from "ee/selectors/selectedWorkspaceSelectors";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import { isPermitted, PERMISSION_TYPE } from "ee/utils/permissionHelpers";
+import WorkspaceInviteUsersForm from "pages/workspace/WorkspaceInviteUsersForm";
 import { getCurrentUser } from "selectors/usersSelectors";
-import { Text, TextType, Toggle } from "design-system";
 import { ANONYMOUS_USERNAME } from "constants/userConstants";
-import { Colors } from "constants/Colors";
-import { viewerURL } from "RouteBuilder";
-import { fetchWorkspace } from "@appsmith/actions/workspaceActions";
-import useWorkspace from "utils/hooks/useWorkspace";
-import TooltipWrapper from "pages/Applications/EmbedSnippet/TooltipWrapper";
+import { viewerURL } from "ee/RouteBuilder";
+import { fetchWorkspace } from "ee/actions/workspaceActions";
 import {
   createMessage,
   INVITE_USERS_PLACEHOLDER,
   IN_APP_EMBED_SETTING,
   MAKE_APPLICATION_PUBLIC,
   MAKE_APPLICATION_PUBLIC_TOOLTIP,
-} from "@appsmith/constants/messages";
-import { getAppsmithConfigs } from "@appsmith/configs";
+} from "ee/constants/messages";
+import { hasInviteUserToApplicationPermission } from "ee/utils/permissionHelpers";
+import { Button, Icon, Switch, Tooltip } from "@appsmith/ads";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { useFeatureFlag } from "utils/hooks/useFeatureFlag";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
 
-const { cloudHosting } = getAppsmithConfigs();
-
-const ShareToggle = styled.div`
-  flex-basis: 46px;
-  height: 23px;
+const SwitchContainer = styled.div`
+  flex-basis: 220px;
 `;
 
-const BottomContainer = styled.div<{ canInviteToWorkspace?: boolean }>`
-  ${({ canInviteToWorkspace }) =>
-    canInviteToWorkspace ? `border-top: 1px solid ${Colors.GREY_200}` : ``};
+const BottomContainer = styled.div<{ canInviteToApplication?: boolean }>`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  ${({ canInviteToApplication }) =>
+    canInviteToApplication
+      ? `border-top: 1px solid var(--ads-v2-color-border);`
+      : `none`};
+
+  .self-center {
+    line-height: normal;
+  }
 `;
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function AppInviteUsersForm(props: any) {
   const {
     applicationId,
     changeAppViewAccess,
     currentApplicationDetails,
     currentUser,
-    defaultPageId,
+    defaultBasePageId,
     fetchCurrentWorkspace,
     isChangingViewAccess,
     isFetchingApplication,
   } = props;
   const [isCopied, setIsCopied] = useState(false);
-  const currentWorkspaceId = useSelector(getCurrentWorkspaceId);
-  const currentWorkspace = useWorkspace(currentWorkspaceId);
-  const userWorkspacePermissions = currentWorkspace.userPermissions ?? [];
+  const currentWorkspace = useSelector(getCurrentAppWorkspace);
+  const userWorkspacePermissions = currentWorkspace?.userPermissions ?? [];
   const userAppPermissions = currentApplicationDetails?.userPermissions ?? [];
-  const canInviteToWorkspace = isPermitted(
-    userWorkspacePermissions,
-    PERMISSION_TYPE.INVITE_USER_TO_WORKSPACE,
-  );
+  const canInviteToApplication = hasInviteUserToApplicationPermission([
+    ...userWorkspacePermissions,
+    ...userAppPermissions,
+  ]);
   const canShareWithPublic = isPermitted(
     userAppPermissions,
     PERMISSION_TYPE.MAKE_PUBLIC_APPLICATION,
   );
+
+  const isGACEnabled = useFeatureFlag(FEATURE_FLAG.license_gac_enabled);
+
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(appViewEndPoint);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(appViewEndPoint);
+    } else {
+      // text area method for http urls where navigator.clipboard doesn't work
+      const textArea = document.createElement("textarea");
+
+      textArea.value = appViewEndPoint;
+      // make the textarea out of viewport
+      textArea.style.position = "absolute";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.select();
+      new Promise((res, rej) => {
+        // here the magic happens
+        document.execCommand("copy") ? res(appViewEndPoint) : rej();
+        textArea.remove();
+      });
+    }
+
     setIsCopied(true);
     setTimeout(() => {
       setIsCopied(false);
@@ -74,89 +97,80 @@ function AppInviteUsersForm(props: any) {
 
   const appViewEndPoint = React.useMemo(() => {
     const url = viewerURL({
-      pageId: defaultPageId,
+      basePageId: defaultBasePageId,
     });
+
     return window.location.origin.toString() + url;
-  }, [defaultPageId]);
+  }, [defaultBasePageId]);
 
   useEffect(() => {
-    if (currentUser?.name !== ANONYMOUS_USERNAME && canInviteToWorkspace) {
+    if (currentUser?.name !== ANONYMOUS_USERNAME) {
       fetchCurrentWorkspace(props.workspaceId);
     }
   }, [props.workspaceId, fetchCurrentWorkspace, currentUser?.name]);
 
   return (
     <>
-      {canInviteToWorkspace && (
+      {canInviteToApplication && (
         <WorkspaceInviteUsersForm
-          isApplicationInvite
-          placeholder={createMessage(INVITE_USERS_PLACEHOLDER, cloudHosting)}
+          applicationId={applicationId}
+          isApplicationPage
+          placeholder={createMessage(INVITE_USERS_PLACEHOLDER, !isGACEnabled)}
           workspaceId={props.workspaceId}
         />
       )}
       <BottomContainer
-        canInviteToWorkspace={canInviteToWorkspace}
-        className={`flex space-between ${
-          canInviteToWorkspace ? "mt-6 pt-5" : ""
-        }`}
+        canInviteToApplication={canInviteToApplication}
+        className={`${canInviteToApplication ? "pt-3" : ""}`}
       >
-        <div
+        <Button
           className="flex gap-1.5 cursor-pointer"
-          data-cy={"copy-application-url"}
+          data-testid={"copy-application-url"}
+          endIcon="links-line"
+          kind="tertiary"
           onClick={copyToClipboard}
+          size="md"
         >
-          <Icon
-            fillColor={Colors.GRAY_700}
-            name="links-line"
-            size={IconSize.XL}
-          />
-          <Text
-            case={Case.UPPERCASE}
-            className="self-center"
-            color={Colors.GRAY_700}
-            type={TextType.P4}
-          >{`${
+          {`${
             isCopied
               ? createMessage(IN_APP_EMBED_SETTING.copied)
               : createMessage(IN_APP_EMBED_SETTING.copy)
-          } ${createMessage(IN_APP_EMBED_SETTING.applicationUrl)}`}</Text>
-        </div>
+          } ${createMessage(IN_APP_EMBED_SETTING.applicationUrl)}`}
+        </Button>
         {canShareWithPublic && (
-          <div className="flex flex-1 items-center justify-end">
-            <Text color={Colors.GRAY_800} type={TextType.P1}>
-              {createMessage(MAKE_APPLICATION_PUBLIC)}
-            </Text>
-            <TooltipComponent
-              content={
-                <TooltipWrapper className="text-center">
-                  {createMessage(MAKE_APPLICATION_PUBLIC_TOOLTIP)}
-                </TooltipWrapper>
-              }
-              position={PopoverPosition.TOP_RIGHT}
-            >
-              <Icon
-                className="pl-1"
-                fillColor={Colors.GRAY2}
-                name="question-fill"
-                size={IconSize.XL}
-              />
-            </TooltipComponent>
-            <ShareToggle className="ml-4 t--share-public-toggle">
-              {currentApplicationDetails && (
-                <Toggle
-                  disabled={isChangingViewAccess || isFetchingApplication}
-                  isLoading={isChangingViewAccess || isFetchingApplication}
-                  onToggle={() => {
-                    changeAppViewAccess(
-                      applicationId,
-                      !currentApplicationDetails.isPublic,
-                    );
-                  }}
-                  value={currentApplicationDetails.isPublic}
-                />
-              )}
-            </ShareToggle>
-          </div>
+          <SwitchContainer className="t--share-public-toggle">
+            {currentApplicationDetails && (
+              <Switch
+                isDisabled={isChangingViewAccess || isFetchingApplication}
+                isSelected={currentApplicationDetails.isPublic}
+                onChange={() => {
+                  AnalyticsUtil.logEvent("MAKE_APPLICATION_PUBLIC", {
+                    isPublic: !currentApplicationDetails.isPublic,
+                  });
+                  changeAppViewAccess(
+                    applicationId,
+                    !currentApplicationDetails.isPublic,
+                  );
+                }}
+              >
+                {createMessage(MAKE_APPLICATION_PUBLIC)}
+                {/* TODO: Fix this the next time the file is edited */}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <div onClick={(e: any) => e.preventDefault()}>
+                  <Tooltip
+                    content={createMessage(MAKE_APPLICATION_PUBLIC_TOOLTIP)}
+                    placement="top"
+                  >
+                    <Icon
+                      className="-ml-2 cursor-pointer"
+                      name="question-line"
+                      size="md"
+                    />
+                  </Tooltip>
+                </div>
+              </Switch>
+            )}
+          </SwitchContainer>
         )}
       </BottomContainer>
     </>
@@ -168,11 +182,13 @@ export default connect(
     return {
       currentUser: getCurrentUser(state),
       currentApplicationDetails: state.ui.applications.currentApplication,
-      defaultPageId: state.entities.pageList.defaultPageId,
+      defaultPageId: state.entities.pageList.defaultBasePageId,
       isFetchingApplication: state.ui.applications.isFetchingApplication,
       isChangingViewAccess: state.ui.applications.isChangingViewAccess,
     };
   },
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (dispatch: any) => ({
     changeAppViewAccess: (applicationId: string, publicAccess: boolean) =>
       dispatch({
@@ -183,6 +199,6 @@ export default connect(
         },
       }),
     fetchCurrentWorkspace: (workspaceId: string) =>
-      dispatch(fetchWorkspace(workspaceId)),
+      dispatch(fetchWorkspace(workspaceId, true)),
   }),
 )(AppInviteUsersForm);

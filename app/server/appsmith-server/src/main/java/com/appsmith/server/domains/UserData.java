@@ -1,13 +1,15 @@
 package com.appsmith.server.domains;
 
 import com.appsmith.external.models.BaseDomain;
+import com.appsmith.external.views.Views;
+import com.appsmith.server.dtos.RecentlyUsedEntityDTO;
 import com.appsmith.server.helpers.CollectionUtils;
-import com.appsmith.server.constants.CommentOnboardingState;
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonView;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.FieldNameConstants;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.util.StringUtils;
 
@@ -24,51 +26,56 @@ import static com.appsmith.server.constants.FieldName.DEFAULT;
 @Setter
 @ToString
 @Document
+@FieldNameConstants
 @NoArgsConstructor
 public class UserData extends BaseDomain {
 
-    @JsonIgnore
+    @JsonView(Views.Internal.class)
     String userId;
 
-    // Role of the user in their workspace, example, Designer, Developer, Product Lead etc.
-    private String role;
+    // The development proficiency of the user for example, Beginner, Novice, Intermediate, Advanced.
+    @JsonView(Views.Public.class)
+    private String proficiency;
 
     // The goal the user is trying to solve with Appsmith.
+    @JsonView(Views.Public.class)
     private String useCase;
 
     // The ID of the asset which has the profile photo of this user.
+    @JsonView(Views.Public.class)
     private String profilePhotoAssetId;
 
     // The version where this user has last viewed the release notes.
+    @JsonView(Views.Public.class)
     private String releaseNotesViewedVersion;
 
-    //Organizations migrated to workspaces, kept the field as deprecated to support the old migration
-    @Deprecated
-    private List<String> recentlyUsedOrgIds;
-
     // list of workspace ids that were recently accessed by the user
+    @Deprecated(forRemoval = true)
+    @JsonView(Views.Public.class)
     private List<String> recentlyUsedWorkspaceIds;
 
     // list of application ids that were recently accessed by the user
+    @Deprecated(forRemoval = true)
+    @JsonView(Views.Public.class)
     private List<String> recentlyUsedAppIds;
 
-    // last state related to comment feature on-boarding
-    private CommentOnboardingState commentOnboardingState;
+    // Map of workspaceId to list of recently used applicationIds. This field should be used to add entities
+    @JsonView(Views.Public.class)
+    private List<RecentlyUsedEntityDTO> recentlyUsedEntityIds;
 
     // Map of defaultApplicationIds with the GitProfiles. For fallback/default git profile per user default will be the
     // the key for the map
-    @JsonIgnore
+    @JsonView(Views.Internal.class)
     Map<String, GitProfile> gitProfiles;
 
-    // JWT tokens
-    @JsonIgnore
-    String accessToken;
-
+    @JsonView(Views.Public.class)
     Map<String, Object> userClaims;
 
-    // list of template ids that were recently forked by the user
-    private List<String> recentlyUsedTemplateIds;
+    // Status of user's consent on sharing email for Intercom communications
+    @JsonView(Views.Internal.class)
+    private boolean isIntercomConsentGiven;
 
+    @JsonView(Views.Public.class)
     public GitProfile getGitProfileByKey(String key) {
         // Always use DEFAULT_GIT_PROFILE as fallback
         if (CollectionUtils.isNullOrEmpty(this.getGitProfiles())) {
@@ -79,7 +86,8 @@ public class UserData extends BaseDomain {
         return this.getGitProfiles().get(DEFAULT);
     }
 
-    public Map<String, GitProfile> setGitProfileByKey(String key, GitProfile gitProfile){
+    @JsonView(Views.Public.class)
+    public Map<String, GitProfile> setGitProfileByKey(String key, GitProfile gitProfile) {
         if (CollectionUtils.isNullOrEmpty(this.getGitProfiles())) {
             return Map.of(key, gitProfile);
         }
@@ -92,4 +100,5 @@ public class UserData extends BaseDomain {
         this.userId = userId;
     }
 
+    public static class Fields extends BaseDomain.Fields {}
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import styled, { useTheme } from "styled-components";
+import styled from "styled-components";
 import { Overlay, Classes } from "@blueprintjs/core";
 import { useDispatch, useSelector } from "react-redux";
 import { setIsGitErrorPopupVisible } from "actions/gitSyncActions";
@@ -7,19 +7,17 @@ import {
   getConflictFoundDocUrlDeploy,
   getIsGitErrorPopupVisible,
 } from "selectors/gitSyncSelectors";
-import { Icon, IconSize } from "design-system";
-
 import {
   createMessage,
   CONFLICTS_FOUND_WHILE_PULLING_CHANGES,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import { Space } from "./StyledComponents";
 import { Colors } from "constants/Colors";
-import { get } from "lodash";
 
 import ConflictInfo from "../components/ConflictInfo";
-import { getCurrentAppGitMetaData } from "selectors/applicationSelectors";
-import { Theme } from "constants/DefaultTheme";
+import { getCurrentAppGitMetaData } from "ee/selectors/applicationSelectors";
+import { Button } from "@appsmith/ads";
+import { BOTTOM_BAR_HEIGHT } from "../../../../components/BottomBar/constants";
 
 const StyledGitErrorPopup = styled.div`
   & {
@@ -34,7 +32,7 @@ const StyledGitErrorPopup = styled.div`
       .${Classes.OVERLAY_CONTENT} {
         overflow: hidden;
         bottom: ${(props) =>
-          `calc(${props.theme.bottomBarHeight} + ${props.theme.spaces[3]}px)`};
+          `calc(${BOTTOM_BAR_HEIGHT}px + ${props.theme.spaces[3]}px)`};
         left: ${(props) => props.theme.spaces[3]}px;
         background-color: ${Colors.WHITE};
       }
@@ -52,7 +50,6 @@ const StyledGitErrorPopup = styled.div`
 
 function Header({ closePopup }: { closePopup: () => void }) {
   const title = createMessage(CONFLICTS_FOUND_WHILE_PULLING_CHANGES);
-  const theme = useTheme() as Theme;
 
   return (
     <div
@@ -64,12 +61,12 @@ function Header({ closePopup }: { closePopup: () => void }) {
       <div style={{ display: "flex", alignItems: "center" }}>
         <span className="title">{title}</span>
       </div>
-      <Icon
-        fillColor={get(theme, "colors.gitSyncModal.closeIcon")}
-        hoverFillColor={Colors.BLACK}
-        name="close-modal"
+      <Button
+        isIconButton
+        kind="tertiary"
         onClick={closePopup}
-        size={IconSize.XXXXL}
+        size="sm"
+        startIcon="close-modal"
       />
     </div>
   );

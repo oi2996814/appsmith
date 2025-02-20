@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import styled, { DefaultTheme, useTheme } from "styled-components";
+import type { DefaultTheme } from "styled-components";
+import styled, { useTheme } from "styled-components";
 import { get, isUndefined } from "lodash";
 import { LOG_CATEGORY, Severity } from "entities/AppsmithConsole";
 import FilterHeader from "./FilterHeader";
 import { BlankState } from "./helpers";
-import LogItem, { getLogItemProps } from "./LogItem";
+import { LogItem, getLogItemProps } from "./LogItem";
 import { usePagination, useFilteredLogs } from "./hooks/debuggerHooks";
 import {
   createMessage,
@@ -13,32 +14,38 @@ import {
   LOGS_FILTER_OPTION_ERROR,
   LOGS_FILTER_OPTION_SYSTEM,
   NO_LOGS,
-} from "@appsmith/constants/messages";
-import { useSelector } from "react-redux";
+} from "ee/constants/messages";
+import { useDispatch, useSelector } from "react-redux";
 import { getCurrentUser } from "selectors/usersSelectors";
 import bootIntercom from "utils/bootIntercom";
-import { Theme, thinScrollbar } from "constants/DefaultTheme";
-import { IconName } from "@blueprintjs/core";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import type { Theme } from "constants/DefaultTheme";
+import { thinScrollbar } from "constants/DefaultTheme";
+import type { IconName } from "@blueprintjs/core";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { getDebuggerSelectedFilter } from "selectors/debuggerSelectors";
+import { setDebuggerSelectedFilter } from "actions/debuggerActions";
+import { BOTTOM_BAR_HEIGHT } from "components/BottomBar/constants";
 
-const LIST_HEADER_HEIGHT = "38px";
+export const LIST_HEADER_HEIGHT = "53px";
+export const FOOTER_MARGIN = "40px";
 
 const ContainerWrapper = styled.div`
   overflow: hidden;
-  height: 100%;
+  height: calc(100% - ${BOTTOM_BAR_HEIGHT}px);
 `;
 
 export const ListWrapper = styled.div`
+  overflow-wrap: anywhere;
   overflow: auto;
   height: calc(100% - ${LIST_HEADER_HEIGHT});
   ${thinScrollbar};
-  padding-bottom: 25px;
+  padding-bottom: 37px;
 `;
 
-type Props = {
+interface Props {
   searchQuery: string;
   hasShortCut?: boolean;
-};
+}
 
 const LOGS_FILTER_OPTIONS = (theme: DefaultTheme) => [
   {
@@ -63,9 +70,10 @@ const LOGS_FILTER_OPTIONS = (theme: DefaultTheme) => [
   },
 ];
 
-function DebbuggerLogs(props: Props) {
-  const [filter, setFilter] = useState("");
+function DebuggerLogs(props: Props) {
   const [searchQuery, setSearchQuery] = useState(props.searchQuery);
+  const filter = useSelector(getDebuggerSelectedFilter);
+  const dispatch = useDispatch();
   const filteredLogs = useFilteredLogs(searchQuery, filter);
   const { next, paginatedData } = usePagination(filteredLogs);
   const listRef = useRef<HTMLDivElement>(null);
@@ -88,13 +96,17 @@ function DebbuggerLogs(props: Props) {
 
   useEffect(() => {
     const list = listRef.current;
+
     if (!list) return;
+
     list.addEventListener("scroll", handleScroll);
+
     return () => list.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
     const list = listRef.current;
+
     if (list) {
       setTimeout(() => {
         list.scrollTop = list.scrollHeight - list.clientHeight;
@@ -108,7 +120,7 @@ function DebbuggerLogs(props: Props) {
 
   const handleFilterChange = (filter: string | undefined) => {
     if (!isUndefined(filter)) {
-      setFilter(filter);
+      dispatch(setDebuggerSelectedFilter(filter));
 
       AnalyticsUtil.logEvent("DEBUGGER_FILTER_CHANGED", {
         filter: filter.length > 0 ? filter : "ALL",
@@ -153,8 +165,8 @@ function DebbuggerLogs(props: Props) {
 }
 
 // Set default props
-DebbuggerLogs.defaultProps = {
+DebuggerLogs.defaultProps = {
   searchQuery: "",
 };
 
-export default DebbuggerLogs;
+export default DebuggerLogs;

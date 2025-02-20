@@ -4,6 +4,9 @@ export default {
   editableTitle: true,
   titlePropertyName: "label",
   panelIdPropertyName: "id",
+
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateHook: (props: any, propertyPath: string, propertyValue: string) => {
     return [
       {
@@ -12,6 +15,7 @@ export default {
       },
     ];
   },
+
   contentChildren: [
     {
       sectionName: "Basic",
@@ -27,7 +31,7 @@ export default {
           validation: { type: ValidationTypes.TEXT },
         },
         {
-          helpText: "Triggers an action when the menu item is clicked",
+          helpText: "when the menu item is clicked",
           propertyName: "onClick",
           label: "onClick",
           controlType: "ACTION_SELECTOR",
@@ -63,6 +67,7 @@ export default {
       ],
     },
   ],
+
   styleChildren: [
     {
       sectionName: "Icon",
@@ -81,13 +86,15 @@ export default {
           label: "Position",
           helpText: "Sets the icon alignment of a menu item",
           controlType: "ICON_TABS",
+          defaultValue: "left",
+          fullWidth: false,
           options: [
             {
-              icon: "VERTICAL_LEFT",
+              startIcon: "skip-left-line",
               value: "left",
             },
             {
-              icon: "VERTICAL_RIGHT",
+              startIcon: "skip-right-line",
               value: "right",
             },
           ],

@@ -1,18 +1,20 @@
 import React from "react";
 import styled from "styled-components";
-import { ComponentProps } from "widgets/BaseComponent";
+import type { ComponentProps } from "widgets/BaseComponent";
+import { AlignWidgetTypes } from "WidgetProvider/constants";
 import { Classes } from "@blueprintjs/core";
-import { AlignWidgetTypes } from "widgets/constants";
 import { Colors } from "constants/Colors";
 import { LabelPosition } from "components/constants";
 import { FontStyleTypes } from "constants/WidgetConstants";
-import { Checkbox } from "components/wds/Checkbox";
+import { Checkbox } from "components/wds";
 
-type StyledCheckboxContainerProps = {
+interface StyledCheckboxContainerProps {
   isValid: boolean;
   noContainerPadding?: boolean;
   labelPosition?: LabelPosition;
-};
+  minHeight?: number;
+  $isFullWidth?: boolean;
+}
 
 const DEFAULT_BORDER_RADIUS = "0";
 const DEFAULT_BACKGROUND_COLOR = Colors.GREEN_SOLID;
@@ -23,7 +25,10 @@ const CheckboxContainer = styled.div<StyledCheckboxContainerProps>`
     display: flex;
     height: 100%;
     justify-content: start;
-    width: 100%;
+    width: ${({ $isFullWidth }) => ($isFullWidth ? "100%" : "auto")};
+
+    ${({ minHeight }) => `
+    ${minHeight ? `min-height: ${minHeight}px;` : ""}`};
 
     .${Classes.CHECKBOX} {
       width: 100%;
@@ -38,6 +43,7 @@ export const CheckboxLabel = styled.div<{
   labelTextSize?: string;
   labelStyle?: string;
   isDynamicHeightEnabled?: boolean;
+  isLabelInline?: boolean;
 }>`
   width: 100%;
   display: inline-block;
@@ -56,6 +62,15 @@ export const CheckboxLabel = styled.div<{
 
   ${({ isDynamicHeightEnabled }) =>
     isDynamicHeightEnabled ? "&& { word-break: break-all; }" : ""};
+
+  ${({ isLabelInline }) =>
+    isLabelInline &&
+    `
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-wrap: normal;
+  `}
 `;
 
 export const StyledCheckbox = styled(Checkbox)`
@@ -65,6 +80,9 @@ export const StyledCheckbox = styled(Checkbox)`
 `;
 
 class CheckboxComponent extends React.Component<CheckboxComponentProps> {
+  static readonly defaultProps = {
+    isFullWidth: true,
+  };
   render() {
     /**
      * When the label position is left align checkbox to the right
@@ -85,7 +103,9 @@ class CheckboxComponent extends React.Component<CheckboxComponentProps> {
 
     return (
       <CheckboxContainer
+        $isFullWidth={this.props.isFullWidth}
         isValid={isValid}
+        minHeight={this.props.minHeight}
         noContainerPadding={this.props.noContainerPadding}
       >
         <StyledCheckbox
@@ -105,6 +125,7 @@ class CheckboxComponent extends React.Component<CheckboxComponentProps> {
               className="t--checkbox-widget-label"
               disabled={this.props.isDisabled}
               isDynamicHeightEnabled={this.props.isDynamicHeightEnabled}
+              isLabelInline={this.props.isLabelInline}
               labelStyle={this.props.labelStyle}
               labelTextColor={this.props.labelTextColor}
               labelTextSize={this.props.labelTextSize}
@@ -132,6 +153,8 @@ export interface CheckboxComponentProps extends ComponentProps {
   isValid?: boolean;
   label: string;
   onCheckChange: (isChecked: boolean) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   inputRef?: (el: HTMLInputElement | null) => any;
   accentColor: string;
   borderRadius: string;
@@ -140,6 +163,9 @@ export interface CheckboxComponentProps extends ComponentProps {
   labelTextColor?: string;
   labelTextSize?: string;
   labelStyle?: string;
+  isLabelInline?: boolean;
+  minHeight?: number;
+  isFullWidth?: boolean;
 }
 
 export default CheckboxComponent;

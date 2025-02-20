@@ -1,38 +1,167 @@
-import React, { ReactNode } from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import { TextSize, WidgetType } from "constants/WidgetConstants";
-import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import { isArray } from "lodash";
-import {
-  ValidationResponse,
-  ValidationTypes,
-} from "constants/WidgetValidation";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
-import { DefaultValueType } from "rc-tree-select/lib/interface";
-import { Layers } from "constants/Layers";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
-import { GRID_DENSITY_MIGRATION_V1, MinimumPopupRows } from "widgets/constants";
-import SingleSelectTreeComponent from "../component";
-import { LabelPosition } from "components/constants";
 import { Alignment } from "@blueprintjs/core";
-import { isAutoHeightEnabledForWidget } from "widgets/WidgetUtils";
+import { LabelPosition } from "components/constants";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import { Layers } from "constants/Layers";
+import type { TextSize } from "constants/WidgetConstants";
+import type { ValidationResponse } from "constants/WidgetValidation";
+import { ValidationTypes } from "constants/WidgetValidation";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
+import { isArray } from "lodash";
+import type { DefaultValueType } from "rc-tree-select/lib/interface";
+import type { ReactNode } from "react";
+import React from "react";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
+import { isAutoLayout } from "layoutSystems/autolayout/utils/flexWidgetUtils";
+import { MinimumPopupWidthInPercentage } from "WidgetProvider/constants";
+import {
+  isAutoHeightEnabledForWidget,
+  DefaultAutocompleteDefinitions,
+  isCompactMode,
+} from "widgets/WidgetUtils";
+import SingleSelectTreeComponent from "../component";
 import derivedProperties from "./parseDerivedProperties";
-import { Stylesheet } from "entities/AppTheming";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import { DynamicHeight } from "utils/WidgetFeatures";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+
+import { WIDGET_TAGS, layoutConfigurations } from "constants/WidgetConstants";
 
 function defaultOptionValueValidation(value: unknown): ValidationResponse {
   if (typeof value === "string") return { isValid: true, parsed: value.trim() };
+
   if (value === undefined || value === null)
     return {
       isValid: false,
       parsed: "",
-      messages: ["This value does not evaluate to type: string"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value does not evaluate to type: string",
+        },
+      ],
     };
+
   return { isValid: true, parsed: value };
 }
+
 class SingleSelectTreeWidget extends BaseWidget<
   SingleSelectTreeWidgetProps,
   WidgetState
 > {
+  static type = "SINGLE_SELECT_TREE_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "TreeSelect",
+      searchTags: ["dropdown", "singleselecttree"],
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.SELECT],
+      needsMeta: true,
+    };
+  }
+
+  static getFeatures() {
+    return {
+      dynamicHeight: {
+        sectionIndex: 3,
+        defaultValue: DynamicHeight.FIXED,
+        active: true,
+      },
+    };
+  }
+
+  static getDefaults() {
+    return {
+      rows: 7,
+      columns: 20,
+      animateLoading: true,
+      options: [
+        {
+          label: "Blue",
+          value: "BLUE",
+          children: [
+            {
+              label: "Dark Blue",
+              value: "DARK BLUE",
+            },
+            {
+              label: "Light Blue",
+              value: "LIGHT BLUE",
+            },
+          ],
+        },
+        { label: "Green", value: "GREEN" },
+        { label: "Red", value: "RED" },
+      ],
+      widgetName: "TreeSelect",
+      defaultOptionValue: "BLUE",
+      version: 1,
+      isVisible: true,
+      isRequired: false,
+      isDisabled: false,
+      allowClear: false,
+      expandAll: false,
+      placeholderText: "Select option",
+      labelText: "Label",
+      labelPosition: LabelPosition.Top,
+      labelAlignment: Alignment.LEFT,
+      labelWidth: 5,
+      labelTextSize: "0.875rem",
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      disabledPropsDefaults: {
+        labelPosition: LabelPosition.Top,
+        labelTextSize: "0.875rem",
+      },
+      defaults: {
+        rows: 6.6,
+      },
+      autoDimension: {
+        height: true,
+      },
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "160px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        vertical: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: {},
+        minWidth: { base: "160px" },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return [
       {
@@ -112,7 +241,7 @@ class SingleSelectTreeWidget extends BaseWidget<
           {
             helpText: "Selects the option with value by default",
             propertyName: "defaultOptionValue",
-            label: "Default Selected Value",
+            label: "Default selected value",
             controlType: "INPUT_TEXT",
             placeholderText: "Enter option value",
             isBindProperty: true,
@@ -150,6 +279,7 @@ class SingleSelectTreeWidget extends BaseWidget<
             label: "Position",
             controlType: "ICON_TABS",
             fullWidth: true,
+            hidden: isAutoLayout,
             options: [
               { label: "Auto", value: LabelPosition.Auto },
               { label: "Left", value: LabelPosition.Left },
@@ -165,13 +295,14 @@ class SingleSelectTreeWidget extends BaseWidget<
             propertyName: "labelAlignment",
             label: "Alignment",
             controlType: "LABEL_ALIGNMENT_OPTIONS",
+            fullWidth: false,
             options: [
               {
-                icon: "LEFT_ALIGN",
+                startIcon: "align-left",
                 value: Alignment.LEFT,
               },
               {
-                icon: "RIGHT_ALIGN",
+                startIcon: "align-right",
                 value: Alignment.RIGHT,
               },
             ],
@@ -264,7 +395,7 @@ class SingleSelectTreeWidget extends BaseWidget<
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -275,7 +406,7 @@ class SingleSelectTreeWidget extends BaseWidget<
           },
           {
             propertyName: "allowClear",
-            label: "Allow Clearing Value",
+            label: "Allow clearing value",
             helpText: "Enables Icon to clear all Selections",
             controlType: "SWITCH",
             isJSConvertible: true,
@@ -285,7 +416,7 @@ class SingleSelectTreeWidget extends BaseWidget<
           },
           {
             propertyName: "expandAll",
-            label: "Expand all by Default",
+            label: "Expand all by default",
             helpText: "Expand All nested options",
             controlType: "SWITCH",
             isJSConvertible: true,
@@ -299,7 +430,7 @@ class SingleSelectTreeWidget extends BaseWidget<
         sectionName: "Events",
         children: [
           {
-            helpText: "Triggers an action when a user selects an option",
+            helpText: "when a user selects an option",
             propertyName: "onOptionChange",
             label: "onOptionChange",
             controlType: "ACTION_SELECTOR",
@@ -308,7 +439,7 @@ class SingleSelectTreeWidget extends BaseWidget<
             isTriggerProperty: true,
           },
           {
-            helpText: "Triggers an action when the dropdown opens",
+            helpText: "when the dropdown opens",
             propertyName: "onDropdownOpen",
             label: "onDropdownOpen",
             controlType: "ACTION_SELECTOR",
@@ -317,7 +448,7 @@ class SingleSelectTreeWidget extends BaseWidget<
             isTriggerProperty: true,
           },
           {
-            helpText: "Triggers an action when the dropdown closes",
+            helpText: "when the dropdown closes",
             propertyName: "onDropdownClose",
             label: "onDropdownClose",
             controlType: "ACTION_SELECTOR",
@@ -338,14 +469,29 @@ class SingleSelectTreeWidget extends BaseWidget<
     };
   }
 
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+        setRequired: {
+          path: "isRequired",
+          type: "boolean",
+        },
+      },
+    };
+  }
+
   static getPropertyPaneStyleConfig() {
     return [
       {
-        sectionName: "Label Styles",
+        sectionName: "Label styles",
         children: [
           {
             propertyName: "labelTextColor",
-            label: "Font Color",
+            label: "Font color",
             helpText: "Control the color of the label associated",
             controlType: "COLOR_PICKER",
             isJSConvertible: true,
@@ -355,10 +501,11 @@ class SingleSelectTreeWidget extends BaseWidget<
           },
           {
             propertyName: "labelTextSize",
-            label: "Font Size",
+            label: "Font size",
             helpText: "Control the font size of the label associated",
             controlType: "DROP_DOWN",
             defaultValue: "0.875rem",
+            hidden: isAutoLayout,
             options: [
               {
                 label: "S",
@@ -403,11 +550,11 @@ class SingleSelectTreeWidget extends BaseWidget<
             controlType: "BUTTON_GROUP",
             options: [
               {
-                icon: "BOLD_FONT",
+                icon: "text-bold",
                 value: "BOLD",
               },
               {
-                icon: "ITALICS_FONT",
+                icon: "text-italic",
                 value: "ITALIC",
               },
             ],
@@ -419,11 +566,11 @@ class SingleSelectTreeWidget extends BaseWidget<
         ],
       },
       {
-        sectionName: "Border and Shadow",
+        sectionName: "Border and shadow",
         children: [
           {
             propertyName: "accentColor",
-            label: "Accent Color",
+            label: "Accent color",
             controlType: "COLOR_PICKER",
             isJSConvertible: true,
             isBindProperty: true,
@@ -433,7 +580,7 @@ class SingleSelectTreeWidget extends BaseWidget<
           },
           {
             propertyName: "borderRadius",
-            label: "Border Radius",
+            label: "Border radius",
             helpText:
               "Rounds the corners of the icon button's outer border edge",
             controlType: "BORDER_RADIUS_OPTIONS",
@@ -445,7 +592,7 @@ class SingleSelectTreeWidget extends BaseWidget<
           },
           {
             propertyName: "boxShadow",
-            label: "Box Shadow",
+            label: "Box shadow",
             helpText:
               "Enables you to cast a drop shadow from the frame of the widget",
             controlType: "BOX_SHADOW_OPTIONS",
@@ -457,6 +604,28 @@ class SingleSelectTreeWidget extends BaseWidget<
         ],
       },
     ];
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "TreeSelect is used to capture user input from a specified list of permitted inputs/Nested Inputs.",
+      "!url": "https://docs.appsmith.com/widget-reference/treeselect",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      selectedOptionValue: {
+        "!type": "string",
+        "!doc": "The value selected in a treeselect dropdown",
+        "!url": "https://docs.appsmith.com/widget-reference/treeselect",
+      },
+      selectedOptionLabel: {
+        "!type": "string",
+        "!doc": "The selected option label in a treeselect dropdown",
+        "!url": "https://docs.appsmith.com/widget-reference/treeselect",
+      },
+      isDisabled: "bool",
+      isValid: "bool",
+      options: "[$__dropdrowOptionWithChildren__$]",
+    };
   }
 
   static getDerivedPropertiesMap() {
@@ -476,6 +645,8 @@ class SingleSelectTreeWidget extends BaseWidget<
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       selectedOption: undefined,
@@ -493,25 +664,22 @@ class SingleSelectTreeWidget extends BaseWidget<
     }
   }
 
-  getPageView() {
+  getWidgetView() {
     const options = isArray(this.props.options) ? this.props.options : [];
     const isInvalid =
       "isValid" in this.props && !this.props.isValid && !!this.props.isDirty;
-    const dropDownWidth = MinimumPopupRows * this.props.parentColumnSpace;
-    const { componentWidth } = this.getComponentDimensions();
+    const dropDownWidth =
+      (MinimumPopupWidthInPercentage / 100) *
+      (this.props.mainCanvasWidth ?? layoutConfigurations.MOBILE.maxWidth);
+    const { componentHeight, componentWidth } = this.props;
+
     return (
       <SingleSelectTreeComponent
         accentColor={this.props.accentColor}
         allowClear={this.props.allowClear}
         borderRadius={this.props.borderRadius}
         boxShadow={this.props.boxShadow}
-        compactMode={
-          !(
-            (this.props.bottomRow - this.props.topRow) /
-              GRID_DENSITY_MIGRATION_V1 >
-            1
-          )
-        }
+        compactMode={isCompactMode(componentHeight)}
         disabled={this.props.isDisabled ?? false}
         dropDownWidth={dropDownWidth}
         dropdownStyle={{
@@ -528,7 +696,7 @@ class SingleSelectTreeWidget extends BaseWidget<
         labelTextColor={this.props.labelTextColor}
         labelTextSize={this.props.labelTextSize}
         labelTooltip={this.props.labelTooltip}
-        labelWidth={this.getLabelWidth()}
+        labelWidth={this.props.labelComponentWidth}
         loading={this.props.isLoading}
         onChange={this.onOptionChange}
         onDropdownClose={this.onDropdownClose}
@@ -544,18 +712,24 @@ class SingleSelectTreeWidget extends BaseWidget<
   }
 
   onOptionChange = (value?: DefaultValueType, labelList?: ReactNode[]) => {
-    if (!this.props.isDirty) {
-      this.props.updateWidgetMetaProperty("isDirty", true);
-    }
+    if (this.props.selectedOptionValue !== value) {
+      if (!this.props.isDirty) {
+        this.props.updateWidgetMetaProperty("isDirty", true);
+      }
 
-    this.props.updateWidgetMetaProperty("selectedOption", value);
-    this.props.updateWidgetMetaProperty("selectedLabel", labelList?.[0] ?? "", {
-      triggerPropertyName: "onOptionChange",
-      dynamicString: this.props.onOptionChange,
-      event: {
-        type: EventType.ON_OPTION_CHANGE,
-      },
-    });
+      this.props.updateWidgetMetaProperty("selectedOption", value);
+      this.props.updateWidgetMetaProperty(
+        "selectedLabel",
+        labelList?.[0] ?? "",
+        {
+          triggerPropertyName: "onOptionChange",
+          dynamicString: this.props.onOptionChange,
+          event: {
+            type: EventType.ON_OPTION_CHANGE,
+          },
+        },
+      );
+    }
   };
 
   onDropdownOpen = () => {
@@ -581,10 +755,6 @@ class SingleSelectTreeWidget extends BaseWidget<
       });
     }
   };
-
-  static getWidgetType(): WidgetType {
-    return "SINGLE_SELECT_TREE_WIDGET";
-  }
 }
 
 export interface DropdownOption {
@@ -622,6 +792,7 @@ export interface SingleSelectTreeWidgetProps extends WidgetProps {
   boxShadow?: string;
   accentColor: string;
   isDirty?: boolean;
+  labelComponentWidth?: number;
 }
 
 export default SingleSelectTreeWidget;

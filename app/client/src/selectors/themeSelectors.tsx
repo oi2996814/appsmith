@@ -1,5 +1,6 @@
-import { AppState } from "@appsmith/reducers";
-import { dark, light, Theme, theme } from "constants/DefaultTheme";
+import type { AppState } from "ee/reducers";
+import type { Theme } from "constants/DefaultTheme";
+import { dark, light, theme } from "constants/DefaultTheme";
 
 export enum ThemeMode {
   LIGHT = "LIGHT",
@@ -11,11 +12,14 @@ export const lightTheme = { ...theme, colors: { ...theme.colors, ...light } };
 const darkTheme = { ...theme, colors: { ...theme.colors, ...dark } };
 
 // Only for usage with ThemeProvider
-export const getThemeDetails = (state: AppState, themeMode: ThemeMode): Theme =>
-  themeMode === ThemeMode.LIGHT ? lightTheme : darkTheme;
+export const getThemeDetails = (
+  state: AppState,
+  themeMode: ThemeMode,
+): Theme => (themeMode === ThemeMode.LIGHT ? lightTheme : darkTheme);
 
 export const getTheme = (themeMode: ThemeMode) => {
   const colors = themeMode === ThemeMode.LIGHT ? light : dark;
+
   return { ...theme, colors: { ...theme.colors, ...colors } };
 };
 

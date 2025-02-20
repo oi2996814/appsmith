@@ -1,4 +1,4 @@
-import { TreeNode } from "./constants";
+import type { TreeNode } from "./constants";
 import { getNearestAbove } from "./helpers";
 
 function getAllEffectedBoxes(
@@ -8,6 +8,7 @@ function getAllEffectedBoxes(
   _processed: { [key: string]: boolean } = {},
 ): string[] {
   const belows = tree[effectorBoxId].belows;
+
   belows.forEach((belowId) => {
     if (!_processed[belowId]) {
       getAllEffectedBoxes(belowId, tree, effectedBoxes, _processed);
@@ -15,6 +16,7 @@ function getAllEffectedBoxes(
       _processed[belowId] = true;
     }
   });
+
   return effectedBoxes;
 }
 
@@ -53,9 +55,16 @@ export function computeChangeInPositionBasedOnDelta(
   }
 
   // Sort the effected box ids, this is to make sure we compute from top to bottom.
-  const sortedEffectedBoxIds = effectedBoxes.sort(
-    (a, b) => tree[a].topRow - tree[b].topRow,
-  );
+  const sortedEffectedBoxIds = effectedBoxes.sort((a, b) => {
+    const A = tree[a].topRow;
+    const B = tree[b].topRow;
+
+    if (A === B) {
+      return tree[a].originalTopRow - tree[b].originalTopRow;
+    }
+
+    return tree[a].topRow - tree[b].topRow;
+  });
 
   // For each of the boxes which have been effected
   for (const effectedBoxId of sortedEffectedBoxIds) {
@@ -78,6 +87,7 @@ export function computeChangeInPositionBasedOnDelta(
           const newTopRow =
             repositionedBoxes[aboveId].bottomRow +
             tree[effectedBoxId].distanceToNearestAbove;
+
           // Get the offset this effectedBox needs to consider moving
           _offset = newTopRow - tree[effectedBoxId].topRow;
         } else {
@@ -88,6 +98,7 @@ export function computeChangeInPositionBasedOnDelta(
         // Maintain distance from the bottom most above.
         const newTopRow =
           tree[aboveId].bottomRow + tree[effectedBoxId].distanceToNearestAbove;
+
         _offset = newTopRow - tree[effectedBoxId].topRow;
       }
     }

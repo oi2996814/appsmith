@@ -1,24 +1,50 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { SubmissionError } from "redux-form";
-import { RouteChildrenProps, RouteComponentProps } from "react-router-dom";
-export type InviteUsersToWorkspaceByRoleValues = {
+import type { RouteChildrenProps, RouteComponentProps } from "react-router-dom";
+import type { DefaultOptionType } from "rc-select/lib/Select";
+export interface InviteUsersToWorkspaceByRoleValues {
   id: string;
   users?: string;
   permissionGroupId?: string;
   permissionGroupName?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   roles?: any[];
-};
-export type InviteUsersToWorkspaceFormValues = {
+}
+export interface InviteUsersToWorkspaceFormValues {
   usersByRole: InviteUsersToWorkspaceByRoleValues[];
-};
+}
 
-export type CreateWorkspaceFormValues = {
+export interface InviteUsersProps {
+  roles?: DefaultOptionType[];
+  applicationId?: string;
+  workspaceId?: string;
+  isApplicationPage?: boolean;
+  placeholder?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  customProps?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  selected?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  options?: any;
+  isMultiSelectDropdown?: boolean;
+  checkIfInvitedUsersFromDifferentDomain?: () => void;
+}
+
+export interface CreateWorkspaceFormValues {
   name: string;
-};
+}
 
-export const createWorkspaceSubmitHandler = (
+export const createWorkspaceSubmitHandler = async (
   values: CreateWorkspaceFormValues,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dispatch: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> => {
   return new Promise((resolve, reject) => {
     dispatch({
@@ -34,14 +60,18 @@ export const createWorkspaceSubmitHandler = (
   });
 };
 
-export const inviteUsersToWorkspaceSubmitHandler = (
+export const inviteUsersToWorkspaceSubmitHandler = async (
   values: InviteUsersToWorkspaceFormValues,
-  dispatch: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dispatch: any, // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> => {
   const data = values.usersByRole.map((value) => ({
     permissionGroupId: value.permissionGroupId,
     emails: value.users ? value.users.split(",") : [],
   }));
+
   return new Promise((resolve, reject) => {
     dispatch({
       type: ReduxActionTypes.INVITE_USERS_TO_WORKSPACE_INIT,
@@ -56,15 +86,25 @@ export const inviteUsersToWorkspaceSubmitHandler = (
   });
 };
 
-export const inviteUsersToWorkspace = (
+export const inviteUsersToWorkspace = async (
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   values: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dispatch: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> => {
   const data = {
     permissionGroupId: values.permissionGroupId,
     usernames: values.users ? values.users.split(",") : [],
     workspaceId: values.workspaceId,
+    ...("recaptchaToken" in values && {
+      recaptchaToken: values.recaptchaToken,
+    }),
   };
+
   return new Promise((resolve, reject) => {
     dispatch({
       type: ReduxActionTypes.INVITE_USERS_TO_WORKSPACE_INIT,
@@ -94,5 +134,6 @@ export function navigateToTab(
   } else {
     newUrl = `${location.pathname}/${tabKey}`;
   }
+
   history.push(newUrl);
 }

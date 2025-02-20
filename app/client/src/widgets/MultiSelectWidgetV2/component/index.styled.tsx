@@ -11,7 +11,7 @@ import {
   labelLayoutStyles,
   LABEL_CONTAINER_CLASS,
   multiSelectInputContainerStyles,
-} from "design-system";
+} from "@design-system/widgets-old";
 import { lightenColor } from "widgets/WidgetUtils";
 import CheckIcon from "assets/icons/widget/checkbox/check-icon.svg";
 
@@ -197,6 +197,8 @@ ${({ dropDownWidth, id }) => `
 	.rc-select-item-option-state {
 		pointer-events: all;
 		margin-right: 0px;
+    position: inherit;
+    top: 2px;
 	}
 }
 .rc-select-item-option-grouped {
@@ -389,12 +391,13 @@ export const MultiSelectContainer = styled.div<{
   borderRadius: string;
   boxShadow?: string;
   accentColor?: string;
+  rtl?: boolean;
 }>`
   ${labelLayoutStyles}
 
   /**
     When the label is on the left it is not center aligned
-    here set height to auto and not 100% because the input 
+    here set height to auto and not 100% because the input
     has fixed height and stretch the container.
   */
   ${({ labelPosition }) => {
@@ -627,10 +630,10 @@ export const MultiSelectContainer = styled.div<{
             : "var(--wds-color-border-danger)"};
       &:hover {
         border: 1px solid
-        ${(props) =>
-          props.isValid
-            ? "var(--wds-color-border-hover)"
-            : "var(--wds-color-border-danger-hover)"};
+          ${(props) =>
+            props.isValid
+              ? "var(--wds-color-border-hover)"
+              : "var(--wds-color-border-danger-hover)"};
       }
     }
   }
@@ -672,7 +675,60 @@ export const MultiSelectContainer = styled.div<{
           : `border: 1px solid var(--wds-color-border-danger); box-shadow: 0px 0px 0px 2px var(--wds-color-border-danger-focus-light) !important;`}
     }
   }
+
+  ${(props) =>
+    props.rtl &&
+    `
+  &&& {
+    direction: rtl;
+
+    .rc-select .rc-select-selector {
+      padding-right: 10px;
+      padding-left: 36px;
+    }
+
+    .rc-select-arrow {
+      right: auto;
+      left: 0;
+    }
+  }
+  `}
 `;
+
+export const RTLStyles = createGlobalStyle<{ dropdownContainer: string }>`
+  ${(props) => `
+    .${props.dropdownContainer} {
+      &&& {
+        .rc-select-item {
+          .rc-select-item-option-state {
+            .bp3-checkbox {
+              right: -13px;
+              padding-left: 24px;
+            }
+          }
+        }
+  
+        label.all-options .bp3-control-indicator {
+          margin-left: 12px;
+          margin-right: 13px !important;
+        }
+  
+        .bp3-input-group {
+          .bp3-icon-search {
+            left: auto;
+            right: 0px;
+          }
+  
+          input {
+            padding-right: 34px;
+            padding-left: 8px !important;
+          }
+        }
+      }
+    }
+  `}
+`;
+
 export const StyledCheckbox = styled(Checkbox)<{
   accentColor?: string;
 }>`

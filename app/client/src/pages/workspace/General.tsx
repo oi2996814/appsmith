@@ -4,45 +4,86 @@ import {
   deleteWorkspaceLogo,
   saveWorkspace,
   uploadWorkspaceLogo,
-} from "@appsmith/actions/workspaceActions";
-import { SaveWorkspaceRequest } from "@appsmith/api/WorkspaceApi";
+} from "ee/actions/workspaceActions";
+import type { SaveWorkspaceRequest } from "ee/api/WorkspaceApi";
 import { debounce } from "lodash";
-import { TextInput, emailValidator, notEmptyValidator } from "design-system";
+import { Input } from "@appsmith/ads";
 import { useSelector, useDispatch } from "react-redux";
 import {
   getCurrentError,
-  getCurrentWorkspace,
-  getWorkspaceLoadingStates,
-} from "@appsmith/selectors/workspaceSelectors";
+  getFetchedWorkspaces,
+} from "ee/selectors/workspaceSelectors";
 import { useParams } from "react-router-dom";
 import styled from "styled-components";
-import {
-  FilePickerV2,
-  FileType,
-  SetProgress,
-  Text,
-  TextType,
-  UploadCallback,
-} from "design-system";
+import type { SetProgress, UploadCallback } from "@appsmith/ads-old";
+import { FilePickerV2, FileType, Text, TextType } from "@appsmith/ads-old";
 import { Classes } from "@blueprintjs/core";
-import { getIsFetchingApplications } from "selectors/applicationSelectors";
 import { useMediaQuery } from "react-responsive";
+import {
+  getIsFetchingApplications,
+  selectedWorkspaceLoadingStates,
+} from "ee/selectors/selectedWorkspaceSelectors";
+import type { AxiosProgressEvent } from "axios";
+
+// This wrapper ensures that the scroll behaviour is consistent with the other tabs
+const ScrollWrapper = styled.div`
+  overflow: auto;
+  height: 100%;
+  width: 100%;
+`;
 
 // trigger tests
 const GeneralWrapper = styled.div<{
   isMobile?: boolean;
   isPortrait?: boolean;
 }>`
-  width: ${(props) => (props.isPortrait ? "336px" : "383px")};
-  margin: ${(props) =>
-    props.isMobile ? (props.isPortrait ? "auto" : "120px") : null};
-  padding: 0 20px;
+  width: 320px;
+  /* padding: 20px 0px; */
+  /* margin: 0 auto; */
+  .upload-form-container {
+    .button-wrapper {
+      svg {
+        width: 40px;
+        height: 40px;
+        path {
+          fill: var(--ads-v2-color-fg);
+        }
+      }
+    }
+  }
+  .drag-drop-text {
+    color: var(--ads-v2-color-fg);
+    + form a {
+      --button-padding: var(--ads-v2-spaces-3) var(--ads-v2-spaces-4);
+      background-color: var(--ads-v2-color-bg);
+      border: 1px solid var(--ads-v2-color-border);
+      width: 100%;
+      height: 100%;
+      padding: var(--button-padding);
+      border-radius: var(--ads-v2-border-radius);
+      text-transform: capitalize;
+      &:hover {
+        background-color: var(--ads-v2-color-bg-subtle);
+        color: var(--ads-v2-color-fg);
+        border-color: var(--ads-v2-color-border);
+      }
+    }
+  }
+  .remove-button {
+    a {
+      border-radius: var(--ads-v2-border-radius);
+      text-transform: capitalize !important;
+    }
+  }
 `;
 
 const InputLabelWrapper = styled.div`
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  span {
+    color: var(--ads-v2-color-fg);
+  }
 `;
 
 const SettingWrapper = styled.div`
@@ -51,45 +92,30 @@ const SettingWrapper = styled.div`
   margin-bottom: 15px;
 `;
 
-export const SettingsHeading = styled(Text)`
-  color: ${(props) => props.theme.colors.settingHeading};
-  display: inline-block;
-  margin-top: 25px;
-  margin-bottom: 10px;
-`;
-
 const Loader = styled.div`
   height: 38px;
   width: 320px;
-  border-radius: 0;
+  border-radius: var(--ads-v2-border-radius);
 `;
 
 const FilePickerLoader = styled.div`
   height: 190px;
   width: 333px;
-  border-radius: 0;
+  border-radius: var(--ads-v2-border-radius);
 `;
 
 // testing
 export const Row = styled.div`
   width: 100%;
-  margin: 0;
-  padding: 0;
-  display: flex;
-`;
-
-export const Col = styled.div`
-  width: 100%;
-  margin: 0;
-  padding: 0;
 `;
 
 export function GeneralSettings() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const dispatch = useDispatch();
-  const currentWorkspace = useSelector(getCurrentWorkspace).filter(
+  const currentWorkspace = useSelector(getFetchedWorkspaces).filter(
     (el) => el.id === workspaceId,
   )[0];
+
   function saveChanges(settings: SaveWorkspaceRequest) {
     dispatch(saveWorkspace(settings));
   }
@@ -117,7 +143,9 @@ export function GeneralSettings() {
     });
   }, timeout);
 
-  const { isFetchingWorkspace } = useSelector(getWorkspaceLoadingStates);
+  const { isFetchingCurrentWorkspace } = useSelector(
+    selectedWorkspaceLoadingStates,
+  );
   const logoUploadError = useSelector(getCurrentError);
 
   const FileUploader = (
@@ -125,14 +153,18 @@ export function GeneralSettings() {
     setProgress: SetProgress,
     onUpload: UploadCallback,
   ) => {
-    const progress = (progressEvent: ProgressEvent) => {
-      const uploadPercentage = Math.round(
-        (progressEvent.loaded / progressEvent.total) * 100,
-      );
-      if (uploadPercentage === 100) {
-        onUpload(currentWorkspace.logoUrl || "");
+    const progress = (progressEvent: AxiosProgressEvent) => {
+      if (progressEvent.total) {
+        const uploadPercentage = Math.round(
+          (progressEvent.loaded / progressEvent.total) * 100,
+        );
+
+        if (uploadPercentage === 100) {
+          onUpload(currentWorkspace.logoUrl || "");
+        }
+
+        setProgress(uploadPercentage);
       }
-      setProgress(uploadPercentage);
     };
 
     dispatch(
@@ -155,43 +187,37 @@ export function GeneralSettings() {
   });
 
   return (
-    <GeneralWrapper isMobile={isMobile} isPortrait={isPortrait}>
-      <SettingsHeading type={TextType.H1}>
-        <Row>
-          <Col>General Settings</Col>
-        </Row>
-      </SettingsHeading>
-      <SettingWrapper>
-        <Row>
-          <Col>
-            <InputLabelWrapper>
-              <Text type={TextType.P1}>Workspace Name</Text>
-            </InputLabelWrapper>
+    <ScrollWrapper>
+      <GeneralWrapper isMobile={isMobile} isPortrait={isPortrait}>
+        <SettingWrapper>
+          <Row>
             {isFetchingApplications && <Loader className={Classes.SKELETON} />}
             {!isFetchingApplications && (
-              <TextInput
-                cypressSelector="t--workspace-name-input"
+              <Input
+                data-testid="t--workspace-name-input"
                 defaultValue={currentWorkspace && currentWorkspace.name}
-                fill
+                isRequired
+                label="Workspace name"
+                labelPosition="top"
                 onChange={onWorkspaceNameChange}
-                placeholder="Workspace Name"
-                validator={notEmptyValidator}
+                placeholder="Workspace name"
+                renderAs="input"
+                size="md"
+                type="text"
               />
             )}
-          </Col>
-        </Row>
-      </SettingWrapper>
+          </Row>
+        </SettingWrapper>
 
-      <SettingWrapper>
-        <Row className="t--workspace-settings-filepicker">
-          <Col>
+        <SettingWrapper>
+          <Row className="t--workspace-settings-filepicker">
             <InputLabelWrapper>
-              <Text type={TextType.P1}>Upload Logo</Text>
+              <Text type={TextType.P1}>Upload logo</Text>
             </InputLabelWrapper>
-            {isFetchingWorkspace && (
+            {isFetchingCurrentWorkspace && (
               <FilePickerLoader className={Classes.SKELETON} />
             )}
-            {!isFetchingWorkspace && (
+            {!isFetchingCurrentWorkspace && (
               <FilePickerV2
                 fileType={FileType.IMAGE}
                 fileUploader={FileUploader}
@@ -200,54 +226,51 @@ export function GeneralSettings() {
                 url={currentWorkspace && currentWorkspace.logoUrl}
               />
             )}
-          </Col>
-        </Row>
-      </SettingWrapper>
+          </Row>
+        </SettingWrapper>
 
-      <SettingWrapper>
-        <Row>
-          <Col>
-            <InputLabelWrapper>
-              <Text type={TextType.P1}>Website</Text>
-            </InputLabelWrapper>
+        <SettingWrapper>
+          <Row>
             {isFetchingApplications && <Loader className={Classes.SKELETON} />}
             {!isFetchingApplications && (
-              <TextInput
-                cypressSelector="t--workspace-website-input"
+              <Input
+                data-testid="t--workspace-website-input"
                 defaultValue={
                   (currentWorkspace && currentWorkspace.website) || ""
                 }
-                fill
+                label="Website"
+                labelPosition="top"
                 onChange={onWebsiteChange}
                 placeholder="Your website"
+                renderAs="input"
+                size="md"
+                type="text"
               />
             )}
-          </Col>
-        </Row>
-      </SettingWrapper>
+          </Row>
+        </SettingWrapper>
 
-      <SettingWrapper>
-        <Row>
-          <Col>
-            <InputLabelWrapper>
-              <Text type={TextType.P1}>Email</Text>
-            </InputLabelWrapper>
+        <SettingWrapper>
+          <Row>
             {isFetchingApplications && <Loader className={Classes.SKELETON} />}
             {!isFetchingApplications && (
-              <TextInput
-                cypressSelector="t--workspace-email-input"
+              <Input
+                data-testid="t--workspace-email-input"
                 defaultValue={
                   (currentWorkspace && currentWorkspace.email) || ""
                 }
-                fill
+                label="Email"
+                labelPosition="top"
                 onChange={onEmailChange}
                 placeholder="Email"
-                validator={emailValidator}
+                renderAs="input"
+                size="md"
+                type="text"
               />
             )}
-          </Col>
-        </Row>
-      </SettingWrapper>
-    </GeneralWrapper>
+          </Row>
+        </SettingWrapper>
+      </GeneralWrapper>
+    </ScrollWrapper>
   );
 }

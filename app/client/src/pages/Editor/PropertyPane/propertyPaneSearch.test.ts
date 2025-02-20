@@ -1,4 +1,4 @@
-import { PropertyPaneSectionConfig } from "constants/PropertyControlConstants";
+import type { PropertyPaneSectionConfig } from "constants/PropertyControlConstants";
 import { searchPropertyPaneConfig } from "./propertyPaneSearch";
 
 describe("Property configuration search", () => {
@@ -17,12 +17,12 @@ describe("Property configuration search", () => {
           ...commonProperties,
         },
         {
-          label: "Scroll Contents",
+          label: "Scroll contents",
           propertyName: "scrollContents",
           ...commonProperties,
         },
         {
-          label: "Show Reset",
+          label: "Show reset",
           propertyName: "showReset",
           ...commonProperties,
         },
@@ -32,17 +32,17 @@ describe("Property configuration search", () => {
           ...commonProperties,
         },
         {
-          label: "Animate Loading",
+          label: "Animate loading",
           propertyName: "animateLoading",
           ...commonProperties,
         },
         {
-          label: "Submit Button Label",
+          label: "Submit button label",
           propertyName: "submitButtonLabel",
           ...commonProperties,
         },
         {
-          label: "Reset Button Label",
+          label: "Reset button label",
           invisible: true,
           propertyName: "resetButtonLabel",
           ...commonProperties,
@@ -53,12 +53,12 @@ describe("Property configuration search", () => {
       sectionName: "Section Two",
       children: [
         {
-          label: "Button Color",
+          label: "Button color",
           propertyName: "buttonColor",
           ...commonProperties,
         },
         {
-          label: "Button Variant",
+          label: "Button variant",
           propertyName: "buttonVariant",
           ...commonProperties,
         },
@@ -88,7 +88,7 @@ describe("Property configuration search", () => {
       sectionName: "Another Button Section",
       children: [
         {
-          label: "Google reCAPTCHA Key",
+          label: "Google reCAPTCHA key",
           propertyName: "recaptchaKey",
           ...commonProperties,
         },
@@ -133,22 +133,25 @@ describe("Property configuration search", () => {
 
   it("Should return configuration as it is for empty searchQuery", () => {
     const result = searchPropertyPaneConfig(config, "");
+
     expect(result).toEqual(config);
   });
 
   it("Should return empty array if the searchQuery didn't match any property or section", () => {
     const result = searchPropertyPaneConfig(config, "blablabla");
+
     expect(result).toEqual([]);
   });
 
   it("Validates search for a property", () => {
     const result = searchPropertyPaneConfig(config, "animate");
+
     expect(result).toEqual([
       {
         sectionName: "Section One",
         children: [
           {
-            label: "Animate Loading",
+            label: "Animate loading",
             propertyName: "animateLoading",
             ...commonProperties,
           },
@@ -159,11 +162,13 @@ describe("Property configuration search", () => {
 
   it("Validates search for a section", () => {
     const result = searchPropertyPaneConfig(config, "Section One");
+
     expect(result).toEqual(config.slice(0, 1));
   });
 
   it("Validates search order for multiple matching items from multiple sections", () => {
     const result = searchPropertyPaneConfig(config, "button");
+
     expect(result).toEqual([
       {
         sectionName: "Button Section",
@@ -179,12 +184,12 @@ describe("Property configuration search", () => {
         sectionName: "Section Two",
         children: [
           {
-            label: "Button Color",
+            label: "Button color",
             propertyName: "buttonColor",
             ...commonProperties,
           },
           {
-            label: "Button Variant",
+            label: "Button variant",
             propertyName: "buttonVariant",
             ...commonProperties,
           },
@@ -194,7 +199,7 @@ describe("Property configuration search", () => {
         sectionName: "Another Button Section",
         children: [
           {
-            label: "Google reCAPTCHA Key",
+            label: "Google reCAPTCHA key",
             propertyName: "recaptchaKey",
             ...commonProperties,
           },
@@ -204,7 +209,7 @@ describe("Property configuration search", () => {
         sectionName: "Section One",
         children: [
           {
-            label: "Submit Button Label",
+            label: "Submit button label",
             propertyName: "submitButtonLabel",
             ...commonProperties,
           },
@@ -215,6 +220,7 @@ describe("Property configuration search", () => {
 
   it("Validates search for a nested property", () => {
     const result = searchPropertyPaneConfig(config, "placement");
+
     expect(result).toEqual([
       {
         sectionName: "Section Two",
@@ -236,6 +242,7 @@ describe("Property configuration search", () => {
 
   it("Validates search for a nested section", () => {
     const result = searchPropertyPaneConfig(config, "Icon");
+
     expect(result).toEqual([
       {
         sectionName: "Section Two",
@@ -279,6 +286,7 @@ describe("Property configuration search", () => {
       },
     ];
     let actualResult = searchPropertyPaneConfig(config, "click");
+
     expect(actualResult).toEqual(expectedResult);
 
     actualResult = searchPropertyPaneConfig(config, "onClick");
@@ -294,7 +302,7 @@ describe("Property configuration search", () => {
         sectionName: "Another Button Section",
         children: [
           {
-            label: "Google reCAPTCHA Key",
+            label: "Google reCAPTCHA key",
             propertyName: "recaptchaKey",
             ...commonProperties,
           },
@@ -302,6 +310,7 @@ describe("Property configuration search", () => {
       },
     ];
     let actualResult = searchPropertyPaneConfig(config, "captcha");
+
     expect(actualResult).toEqual(expectedResult);
 
     actualResult = searchPropertyPaneConfig(config, "reCaptcha");
@@ -309,13 +318,15 @@ describe("Property configuration search", () => {
   });
 
   it("Shouldn't search for properties with invisible flag set", () => {
-    const result = searchPropertyPaneConfig(config, "Reset Button Label");
+    const result = searchPropertyPaneConfig(config, "Reset button label");
+
     expect(result).toEqual([]);
   });
 
   it("Validates token based match and not substring match", () => {
     // If it was string match, "valid" should've matched "Disable Invalid Forms"
     let result = searchPropertyPaneConfig(config, "valid");
+
     expect(result).toEqual([]);
 
     // If it was string match, "able" should've matched "Disable Invalid Forms"

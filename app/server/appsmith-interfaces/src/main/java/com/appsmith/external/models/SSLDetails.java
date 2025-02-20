@@ -6,7 +6,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-import org.springframework.data.mongodb.core.mapping.Document;
 
 @Getter
 @Setter
@@ -14,24 +13,35 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @EqualsAndHashCode
 @AllArgsConstructor
 @NoArgsConstructor
-@Document
 public class SSLDetails implements AppsmithDomain {
 
     public enum AuthType {
         // Default driver configurations
-        DEFAULT, NO_SSL,
+        DEFAULT,
+        NO_SSL,
 
-        //For those drivers that don't have any specific options
+        // For those drivers that don't have any specific options
         ENABLED,
 
         // Following for Mysql/Postgres Connections.
-        ALLOW, PREFER, REQUIRE, DISABLE, VERIFY_CA, VERIFY_FULL,
+        ALLOW,
+        PREFER,
+        REQUIRE,
+        DISABLE,
+        VERIFY_CA,
+        VERIFY_FULL,
 
         // For MySql Connections
-        PREFERRED, REQUIRED, DISABLED,
+        PREFERRED,
+        REQUIRED,
+        DISABLED,
 
         // Following for MongoDB Connections.
-        CA_CERTIFICATE, SELF_SIGNED_CERTIFICATE
+        CA_CERTIFICATE,
+        SELF_SIGNED_CERTIFICATE,
+
+        // For MsSQL, Oracle DB Connections
+        NO_VERIFY
     }
 
     public enum CACertificateType {
@@ -47,6 +57,7 @@ public class SSLDetails implements AppsmithDomain {
 
     AuthType authType;
 
+    // For Mutual TLS of datasource integration
     CACertificateType caCertificateType;
 
     UploadedFile keyFile;
@@ -55,8 +66,9 @@ public class SSLDetails implements AppsmithDomain {
 
     UploadedFile caCertificateFile;
 
-    Boolean usePemCertificate;
+    UploadedFile clientCACertificateFile;
 
-    PEMCertificate pemCertificate;
+    UploadedFile clientKeyCertificateFile;
 
+    UploadedFile serverCACertificateFile;
 }

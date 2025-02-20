@@ -1,13 +1,12 @@
-import {
-  MAIN_CONTAINER_WIDGET_ID,
-  WidgetType,
-} from "constants/WidgetConstants";
+import type { AppState } from "ee/reducers";
+import type { WidgetType } from "constants/WidgetConstants";
+import { MAIN_CONTAINER_WIDGET_ID } from "constants/WidgetConstants";
 import { get, set } from "lodash";
 import { useSelector } from "react-redux";
-import { AppState } from "@appsmith/reducers";
-import { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
+import type { CanvasWidgetsReduxState } from "ee/reducers/entityReducers/canvasWidgetsReducer";
+import { LayoutSystemTypes } from "layoutSystems/types";
 import { select } from "redux-saga/effects";
-import WidgetFactory from "utils/WidgetFactory";
+import WidgetFactory from "WidgetProvider/factory";
 import { getWidgets } from "./selectors";
 
 /*
@@ -54,6 +53,7 @@ export function getParentWithEnhancementFn(
     if (parent && parent.enhancements) {
       return parent;
     }
+
     // If we didn't find any enhancements
     // keep walking up the tree to find the parent which does
     // if the parent doesn't have a parent stop walking the tree.
@@ -68,6 +68,20 @@ export function getParentWithEnhancementFn(
   }
 }
 
+const fixedLayoutOnlyProperties = ["dynamicHeight"];
+
+export function layoutSystemBasedPropertyFilter(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parentProps: any,
+  propertyName: string,
+) {
+  return (
+    parentProps.layoutSystemType !== LayoutSystemTypes.FIXED &&
+    fixedLayoutOnlyProperties.includes(propertyName)
+  );
+}
+
 export function getWidgetEnhancementFn(
   type: WidgetType,
   enhancementType: WidgetEnhancementType,
@@ -77,6 +91,7 @@ export function getWidgetEnhancementFn(
   // configs
 
   const config = { ...WidgetFactory.widgetConfigMap.get(type) };
+
   if (config?.enhancements)
     return get(config.enhancements, enhancementType, undefined);
 }
@@ -101,6 +116,7 @@ export function* getChildWidgetEnhancementFn(
   const widgets: CanvasWidgetsReduxState = yield select(getWidgets);
   // Get the parent which wants to enhance this widget
   const parentWithEnhancementFn = getParentWithEnhancementFn(widgetId, widgets);
+
   // If such a parent is found
   if (parentWithEnhancementFn) {
     // Get the enhancement function based on the enhancementType
@@ -114,6 +130,7 @@ export function* getChildWidgetEnhancementFn(
       getPropsFromTree,
       parentWithEnhancementFn.widgetName,
     );
+
     if (parentDataFromDataTree) {
       // Update the enhancement function by passing the widget data as the first parameter
       return (...args: unknown[]) =>
@@ -130,6 +147,7 @@ export function* getChildWidgetEnhancementFn(
  */
 export function useParentWithEnhancementFn(widgetId: string) {
   const widgets: CanvasWidgetsReduxState = useSelector(getWidgets);
+
   return getParentWithEnhancementFn(widgetId, widgets);
 }
 
@@ -164,16 +182,20 @@ export function useChildWidgetEnhancementFn(
 }
 
 // Todo (abhinav): Specify styles here
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EnhancementFn = (parentProps: any, ...rest: any) => unknown;
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BoundEnhancementFn = (...rest: any) => unknown;
 
-type EnhancementFns = {
+interface EnhancementFns {
   updateDataTreePathFn?: BoundEnhancementFn;
   propertyPaneEnhancementFn?: BoundEnhancementFn;
   autoCompleteEnhancementFn?: BoundEnhancementFn;
   customJSControlEnhancementFn?: BoundEnhancementFn;
   hideEvaluatedValueEnhancementFn?: BoundEnhancementFn;
-};
+}
 
 export function useChildWidgetEnhancementFns(widgetId: string): EnhancementFns {
   const enhancementFns = {

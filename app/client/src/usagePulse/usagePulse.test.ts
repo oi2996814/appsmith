@@ -6,12 +6,12 @@ describe("Usage pulse", () => {
       // All application URLS are trackable.
 
       [
-        "https://dev.appsmith.com/app/test/mypage-123123/edit",
-        "https://dev.appsmith.com/app/test/mypage-123123",
-        "https://dev.appsmith.com/app/test-123123/edit",
-        "https://dev.appsmith.com/app/test-123123",
-        "https://dev.appsmith.com/applications/123123test/pages/123123test/edit",
-        "https://dev.appsmith.com/applications/123123test/pages/123123test",
+        "/app/test/mypage-123123/edit",
+        "/app/test/mypage-123123",
+        "/app/test-123123/edit",
+        "/app/test-123123",
+        "/applications/123123test/pages/123123test/edit",
+        "/applications/123123test/pages/123123test",
       ].forEach((url) => {
         expect(UsagePulse.isTrackableUrl(url)).toBeTruthy();
       });
@@ -19,14 +19,44 @@ describe("Usage pulse", () => {
 
     it("should return false when called with untrackable URL", () => {
       [
-        "https://dev.appsmith.com/applications",
-        "https://dev.appsmith.com/login",
-        "https://dev.appsmith.com/signup",
-        "https://dev.appsmith.com/settings",
-        "https://dev.appsmith.com/generate-page",
-      ].forEach((url) => {
-        expect(UsagePulse.isTrackableUrl(url)).toBeFalsy();
+        "/applications",
+        "/login",
+        "/signup",
+        "/settings",
+        "/generate-page",
+      ].forEach(async (url) => {
+        expect(await UsagePulse.isTrackableUrl(url)).toBeFalsy();
       });
+    });
+  });
+
+  describe("sendPulseAndScheduleNext", () => {
+    let sendPulseSpy: jest.SpyInstance;
+    let scheduleNextActivityListenersSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      sendPulseSpy = jest
+        .spyOn(UsagePulse, "sendPulse")
+        .mockImplementation(() => {});
+      scheduleNextActivityListenersSpy = jest
+        .spyOn(UsagePulse, "scheduleNextActivityListeners")
+        .mockImplementation(() => {});
+      UsagePulse.isAirgapped = false;
+    });
+
+    it("should not send pulse or schedule next when airgapped", () => {
+      UsagePulse.isAirgapped = true;
+      UsagePulse.sendPulseAndScheduleNext();
+
+      expect(sendPulseSpy).not.toHaveBeenCalled();
+      expect(scheduleNextActivityListenersSpy).not.toHaveBeenCalled();
+    });
+
+    it("should send pulse and schedule next activity listeners when not airgapped", () => {
+      UsagePulse.sendPulseAndScheduleNext();
+
+      expect(sendPulseSpy).toHaveBeenCalledTimes(1);
+      expect(scheduleNextActivityListenersSpy).toHaveBeenCalledTimes(1);
     });
   });
 });

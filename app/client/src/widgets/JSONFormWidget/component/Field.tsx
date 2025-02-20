@@ -1,12 +1,14 @@
 import equal from "fast-deep-equal/es6";
 import React, { useEffect, useRef } from "react";
 import styled from "styled-components";
-import { ControllerProps, useFormContext } from "react-hook-form";
-import { klona } from "klona";
+import type { ControllerProps } from "react-hook-form";
+import { useFormContext } from "react-hook-form";
 
-import FieldLabel, { FieldLabelProps } from "./FieldLabel";
+import type { FieldLabelProps } from "./FieldLabel";
+import FieldLabel from "./FieldLabel";
 import useUpdateAccessor from "../fields/useObserveAccessor";
 import { FIELD_MARGIN_BOTTOM } from "./styleConstants";
+import { klonaRegularWithTelemetry } from "utils/helpers";
 
 type FieldProps<TValue> = React.PropsWithChildren<
   {
@@ -20,9 +22,9 @@ type FieldProps<TValue> = React.PropsWithChildren<
   } & FieldLabelProps
 >;
 
-type StyledWrapperProps = {
+interface StyledWrapperProps {
   direction: "row" | "column";
-};
+}
 
 const StyledWrapper = styled.div<StyledWrapperProps>`
   margin-bottom: ${FIELD_MARGIN_BOTTOM}px;
@@ -59,7 +61,7 @@ function Field<TValue>({
 
       // Follow the comment in Form component above reset(convertedFormData);
       setTimeout(() => {
-        setValue(name, klona(defaultValue));
+        setValue(name, klonaRegularWithTelemetry(defaultValue, "Field"));
       }, 0);
     }
   }, [defaultValue, setValue]);

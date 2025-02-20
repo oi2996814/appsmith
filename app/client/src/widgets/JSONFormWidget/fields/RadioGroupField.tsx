@@ -7,15 +7,16 @@ import FormContext from "../FormContext";
 import Field from "widgets/JSONFormWidget/component/Field";
 import RadioGroupComponent from "widgets/RadioGroupWidget/component";
 import useRegisterFieldValidity from "./useRegisterFieldValidity";
-import { RadioOption } from "widgets/RadioGroupWidget/constants";
-import {
-  ActionUpdateDependency,
+import type { RadioOption } from "widgets/RadioGroupWidget/constants";
+import type {
   BaseFieldComponentProps,
   FieldComponentBaseProps,
 } from "../constants";
+import { ActionUpdateDependency } from "../constants";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import { Colors } from "constants/Colors";
 import { BASE_LABEL_TEXT_SIZE } from "../component/FieldLabel";
+import useUnmountFieldValidation from "./useUnmountFieldValidation";
 
 type RadioGroupComponentProps = FieldComponentBaseProps & {
   options: RadioOption[];
@@ -23,9 +24,8 @@ type RadioGroupComponentProps = FieldComponentBaseProps & {
   accentColor?: string;
 };
 
-export type RadioGroupFieldProps = BaseFieldComponentProps<
-  RadioGroupComponentProps
->;
+export type RadioGroupFieldProps =
+  BaseFieldComponentProps<RadioGroupComponentProps>;
 
 const DEFAULT_BG_COLOR = Colors.GREEN;
 
@@ -67,6 +67,7 @@ function RadioGroupField({
     fieldName: name,
     fieldType: schemaItem.fieldType,
   });
+  useUnmountFieldValidation({ fieldName: name });
 
   const onSelectionChange = useCallback(
     (selectedValue: string) => {

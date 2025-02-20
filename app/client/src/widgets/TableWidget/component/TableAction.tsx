@@ -31,7 +31,6 @@ export const TableIconWrapper = styled.div<{
     white-space: nowrap;
     color: ${(props) => props.titleColor || Colors.GRAY};
   }
-  border-bottom: 1px solid ${Colors.GEYSER_LIGHT};
   position: relative;
   margin-left: 5px;
   padding: 0 5px;
@@ -48,6 +47,7 @@ function TableAction(props: TableActionProps) {
     },
     [props.selected],
   );
+
   return (
     <TableIconWrapper
       className={props.className}

@@ -1,10 +1,8 @@
 import equal from "fast-deep-equal/es6";
 import { isEmpty } from "lodash";
 import { debug } from "loglevel";
-import {
-  AdditionalDynamicDataTree,
-  customTreeTypeDefCreator,
-} from "./customTreeTypeDefCreator";
+import type { AdditionalDynamicDataTree } from "./customTreeTypeDefCreator";
+import { customTreeTypeDefCreator } from "./customTreeTypeDefCreator";
 import CodemirrorTernService from "./CodemirrorTernService";
 
 class CustomDef {
@@ -13,6 +11,7 @@ class CustomDef {
   update(customData?: AdditionalDynamicDataTree) {
     if (customData && !isEmpty(customData)) {
       const customDataDef = customTreeTypeDefCreator(customData);
+
       if (!equal(CustomDef.lastCustomDataDef, customDataDef)) {
         const start = performance.now();
 
@@ -28,6 +27,7 @@ class CustomDef {
       }
     } else if (CustomDef.lastCustomDataDef) {
       const start = performance.now();
+
       CodemirrorTernService.removeDef("customDataTree");
       debug(
         "Tern: removeDef for customDataTree took",

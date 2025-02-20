@@ -1,170 +1,101 @@
-import { Datasource } from "entities/Datasource";
 import React from "react";
-import { map, get, isArray } from "lodash";
-import { Colors } from "constants/Colors";
+import type { Datasource } from "entities/Datasource";
 import styled from "styled-components";
-import { isHidden, isKVArray } from "components/formControls/utils";
-import log from "loglevel";
+import type { AppState } from "ee/reducers";
+import { connect } from "react-redux";
+import { getPlugin } from "ee/selectors/entitiesSelector";
+import { DB_NOT_SUPPORTED } from "ee/utils/Environments";
+import type { PluginType } from "entities/Plugin";
+import { getDefaultEnvId } from "ee/api/ApiUtils";
+import { EnvConfigSection } from "ee/components/EnvConfigSection";
+import { getCurrentEnvironmentId } from "ee/selectors/environmentSelectors";
+import { isMultipleEnvEnabled } from "ee/utils/planHelpers";
+import { selectFeatureFlags } from "ee/selectors/featureFlagsSelectors";
+import type { FeatureFlags } from "ee/entities/FeatureFlag";
+import DatasourceFormRenderer from "./DatasourceFormRenderer";
 
-const Key = styled.div`
-  color: ${Colors.DOVE_GRAY};
-  font-size: 14px;
-  display: inline-block;
+export const ViewModeWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: var(--ads-v2-spaces-7) 0;
+  gap: var(--ads-v2-spaces-4);
+  overflow: auto;
+  height: 100%;
+  width: 100%;
+  flex-shrink: 0;
 `;
 
-const Value = styled.div`
-  font-size: 14px;
-  font-weight: 500;
-  display: inline-block;
-  margin-left: 5px;
-`;
-
-const ValueWrapper = styled.div`
-  display: inline-block;
-  &:not(:first-child) {
-    margin-left: 10px;
-  }
-`;
-
-const FieldWrapper = styled.div`
-  &:not(:first-child) {
-    margin-top: 9px;
-  }
-`;
-
-export default class RenderDatasourceInformation extends React.Component<{
+interface RenderDatasourceSectionProps {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config: any;
   datasource: Datasource;
-}> {
-  renderKVArray = (children: Array<any>) => {
-    try {
-      // setup config for each child
-      const firstConfigProperty = children[0].configProperty;
-      const configPropertyInfo = firstConfigProperty.split("[*].");
-      const values = get(this.props.datasource, configPropertyInfo[0], null);
-      const renderValues: Array<Array<{
-        key: string;
-        value: any;
-        label: string;
-      }>> = children.reduce(
-        (
-          acc,
-          { configProperty, label }: { configProperty: string; label: string },
-        ) => {
-          const configPropertyKey = configProperty.split("[*].")[1];
-          values.forEach((value: any, index: number) => {
-            if (!acc[index]) {
-              acc[index] = [];
-            }
+  viewMode?: boolean;
+  showOnlyCurrentEnv?: boolean;
+  currentEnv: string;
+  isEnvEnabled: boolean;
+  featureFlags?: FeatureFlags;
+}
 
-            acc[index].push({
-              key: configPropertyKey,
-              label,
-              value: value[configPropertyKey],
-            });
-          });
-          return acc;
-        },
-        [],
+class RenderDatasourceInformation extends React.Component<RenderDatasourceSectionProps> {
+  render() {
+    const {
+      config,
+      currentEnv,
+      datasource,
+      featureFlags,
+      isEnvEnabled,
+      showOnlyCurrentEnv,
+      viewMode,
+    } = this.props;
+    const { datasourceStorages } = datasource;
+
+    if (showOnlyCurrentEnv || !isEnvEnabled) {
+      // in this case, we will show the env that is present in datasourceStorages
+
+      if (!datasourceStorages) {
+        return null;
+      }
+
+      return (
+        <DatasourceFormRenderer
+          currentEnvironment={currentEnv}
+          datasource={datasource}
+          featureFlags={featureFlags}
+          section={config}
+          viewMode={viewMode}
+        />
       );
-      return renderValues.map((renderValue, index: number) => (
-        <FieldWrapper key={`${firstConfigProperty}.${index}`}>
-          {renderValue.map(({ key, label, value }) => (
-            <ValueWrapper key={`${firstConfigProperty}.${key}.${index}`}>
-              <Key>{label}: </Key>
-              <Value>{value}</Value>
-            </ValueWrapper>
-          ))}
-        </FieldWrapper>
-      ));
-    } catch (e) {
-      return;
     }
-  };
 
-  renderDatasourceSection(section: any) {
-    const { datasource } = this.props;
     return (
-      <React.Fragment key={datasource.id}>
-        {map(section.children, (section) => {
-          if (isHidden(datasource, section.hidden)) return null;
-          if ("children" in section) {
-            if (isKVArray(section.children)) {
-              return this.renderKVArray(section.children);
-            }
-
-            return this.renderDatasourceSection(section);
-          } else {
-            try {
-              const { configProperty, controlType, label } = section;
-              const reactKey = datasource.id + "_" + label;
-
-              if (controlType === "FIXED_KEY_INPUT") {
-                return (
-                  <FieldWrapper key={reactKey}>
-                    <Key>{configProperty.key}: </Key>{" "}
-                    <Value>{configProperty.value}</Value>
-                  </FieldWrapper>
-                );
-              }
-
-              let value = get(datasource, configProperty);
-
-              if (controlType === "DROP_DOWN") {
-                if (Array.isArray(section.options)) {
-                  const option = section.options.find(
-                    (el: any) => el.value === value,
-                  );
-                  if (option && option.label) {
-                    value = option.label;
-                  }
-                }
-              }
-
-              if (!value || (isArray(value) && value.length < 1)) {
-                return;
-              }
-
-              if (isArray(value)) {
-                return (
-                  <FieldWrapper>
-                    <Key>{label}: </Key>
-                    {value.map(
-                      (
-                        { key, value }: { key: string; value: any },
-                        index: number,
-                      ) => (
-                        <div key={`${reactKey}.${index}`}>
-                          <div style={{ display: "inline-block" }}>
-                            <Key>Key: </Key>
-                            <Value>{key}</Value>
-                          </div>
-                          <ValueWrapper>
-                            <Key>Value: </Key>
-                            <Value>{value}</Value>
-                          </ValueWrapper>
-                        </div>
-                      ),
-                    )}
-                  </FieldWrapper>
-                );
-              }
-
-              return (
-                <FieldWrapper key={reactKey}>
-                  <Key>{label}: </Key> <Value>{value}</Value>
-                </FieldWrapper>
-              );
-            } catch (e) {
-              log.error(e);
-            }
-          }
-        })}
-      </React.Fragment>
+      <EnvConfigSection
+        config={config}
+        currentEnv={currentEnv}
+        datasource={datasource}
+        viewMode={viewMode}
+      />
     );
   }
-
-  render() {
-    return this.renderDatasourceSection(this.props.config);
-  }
 }
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapStateToProps = (state: AppState, ownProps: any) => {
+  const { datasource } = ownProps;
+  const pluginId = datasource.pluginId;
+  const plugin = getPlugin(state, pluginId);
+  const pluginType = plugin?.type;
+  const isEnvEnabled = DB_NOT_SUPPORTED.includes(pluginType as PluginType)
+    ? false
+    : isMultipleEnvEnabled(selectFeatureFlags(state));
+  const currentEnvironmentId = getCurrentEnvironmentId(state);
+  const featureFlags = selectFeatureFlags(state);
+
+  return {
+    currentEnv: isEnvEnabled ? currentEnvironmentId : getDefaultEnvId(),
+    isEnvEnabled,
+    featureFlags,
+  };
+};
+
+export default connect(mapStateToProps)(RenderDatasourceInformation);

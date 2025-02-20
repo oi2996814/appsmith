@@ -5,57 +5,67 @@ import {
 } from "actions/pluginActionActions";
 import { initExplorerEntityNameEdit } from "actions/explorerActions";
 import { noop } from "lodash";
-import TreeDropdown from "pages/Editor/Explorer/TreeDropdown";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useContext, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { getPageListAsOptions } from "selectors/entitiesSelector";
+import { getPageListAsOptions } from "ee/selectors/entitiesSelector";
 import history from "utils/history";
-import ContextMenuTrigger from "../ContextMenuTrigger";
-import { ContextMenuPopoverModifiers } from "@appsmith/pages/Editor/Explorer/helpers";
-import { useNewActionName } from "./helpers";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import { ENTITY_TYPE } from "entities/DataTree/dataTreeFactory";
-import { inGuidedTour } from "selectors/onboardingSelectors";
-import { toggleShowDeviationDialog } from "actions/onboardingActions";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import { ENTITY_TYPE } from "ee/entities/DataTree/types";
 import {
   CONTEXT_COPY,
   CONTEXT_DELETE,
   CONFIRM_CONTEXT_DELETE,
-  CONTEXT_EDIT_NAME,
+  CONTEXT_RENAME,
   CONTEXT_MOVE,
   CONTEXT_NO_PAGE,
   CONTEXT_SHOW_BINDING,
   createMessage,
-} from "@appsmith/constants/messages";
-import { builderURL } from "RouteBuilder";
-import { getCurrentPageId } from "selectors/editorSelectors";
-import { TreeDropdownOption } from "design-system";
+  CONTEXT_DUPLICATE,
+} from "ee/constants/messages";
+import { builderURL } from "ee/RouteBuilder";
 
-type EntityContextMenuProps = {
+import ContextMenu from "pages/Editor/Explorer/ContextMenu";
+import type { TreeDropdownOption } from "pages/Editor/Explorer/ContextMenu";
+import {
+  ActionEntityContextMenuItemsEnum,
+  FilesContext,
+} from "../Files/FilesContextProvider";
+import { useConvertToModuleOptions } from "ee/pages/Editor/Explorer/hooks";
+import { MODULE_TYPE } from "ee/constants/ModuleConstants";
+import { PluginType } from "entities/Plugin";
+import { convertToBaseParentEntityIdSelector } from "selectors/pageListSelectors";
+import { ActionParentEntityType } from "ee/entities/Engine/actionHelpers";
+
+export interface EntityContextMenuProps {
   id: string;
   name: string;
   className?: string;
-  pageId: string;
-  canManageAction?: boolean;
-  canDeleteAction?: boolean;
-};
+  canManageAction: boolean;
+  canDeleteAction: boolean;
+  pluginType: PluginType;
+}
+
 export function ActionEntityContextMenu(props: EntityContextMenuProps) {
-  const { canDeleteAction = false, canManageAction = false } = props;
-  const nextEntityName = useNewActionName();
-  const guidedTourEnabled = useSelector(inGuidedTour);
+  // Import the context
+  const context = useContext(FilesContext);
+  const { menuItems, parentEntityId, parentEntityType } = context;
+  const baseParentEntityId = useSelector((state) =>
+    convertToBaseParentEntityIdSelector(state, parentEntityId),
+  );
+
+  const { canDeleteAction, canManageAction } = props;
   const dispatch = useDispatch();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const pageId = useSelector(getCurrentPageId);
-  const copyActionToPage = useCallback(
-    (actionId: string, actionName: string, pageId: string) =>
+  const copyAction = useCallback(
+    (actionId: string, actionName: string, destinationEntityId: string) =>
       dispatch(
         copyActionRequest({
           id: actionId,
-          destinationPageId: pageId,
-          name: nextEntityName(actionName, pageId, true),
+          destinationEntityId,
+          name: actionName,
         }),
       ),
-    [dispatch, nextEntityName],
+    [dispatch],
   );
   const moveActionToPage = useCallback(
     (actionId: string, actionName: string, destinationPageId: string) =>
@@ -63,33 +73,30 @@ export function ActionEntityContextMenu(props: EntityContextMenuProps) {
         moveActionRequest({
           id: actionId,
           destinationPageId,
-          originalPageId: props.pageId,
-          name: nextEntityName(actionName, destinationPageId),
+          originalPageId: parentEntityId,
+          name: actionName,
         }),
       ),
-    [dispatch, nextEntityName, props.pageId],
+    [dispatch, parentEntityId],
   );
   const deleteActionFromPage = useCallback(
     (actionId: string, actionName: string, onSuccess?: () => void) => {
-      if (guidedTourEnabled) {
-        dispatch(toggleShowDeviationDialog(true));
-        return;
-      }
-
       dispatch(deleteAction({ id: actionId, name: actionName, onSuccess }));
     },
-    [dispatch, guidedTourEnabled],
+    [dispatch],
   );
+
+  const convertQueryToModuleOption = useConvertToModuleOptions({
+    id: props.id,
+    moduleType: MODULE_TYPE.QUERY,
+    canDelete: canDeleteAction,
+  });
 
   const menuPages = useSelector(getPageListAsOptions);
 
   const editActionName = useCallback(() => {
-    if (guidedTourEnabled) {
-      dispatch(toggleShowDeviationDialog(true));
-      return;
-    }
     dispatch(initExplorerEntityNameEdit(props.id));
-  }, [dispatch, props.id, guidedTourEnabled]);
+  }, [dispatch, props.id]);
 
   const showBinding = useCallback(
     (actionId, actionName) =>
@@ -106,79 +113,95 @@ export function ActionEntityContextMenu(props: EntityContextMenuProps) {
   );
 
   const optionsTree = [
-    canManageAction && {
-      value: "rename",
-      onSelect: editActionName,
-      label: createMessage(CONTEXT_EDIT_NAME),
-    },
-    {
+    menuItems.includes(ActionEntityContextMenuItemsEnum.RENAME) &&
+      canManageAction && {
+        value: "rename",
+        onSelect: editActionName,
+        label: createMessage(CONTEXT_RENAME),
+      },
+    menuItems.includes(ActionEntityContextMenuItemsEnum.SHOW_BINDING) && {
       value: "showBinding",
       onSelect: () => showBinding(props.id, props.name),
       label: createMessage(CONTEXT_SHOW_BINDING),
     },
-    canManageAction && {
-      value: "copy",
-      onSelect: noop,
-      label: createMessage(CONTEXT_COPY),
-      children: menuPages.map((page) => {
-        return {
-          ...page,
-          onSelect: () => copyActionToPage(props.id, props.name, page.id),
-        };
-      }),
-    },
-    canManageAction && {
-      value: "move",
-      onSelect: noop,
-      label: createMessage(CONTEXT_MOVE),
-      children:
-        menuPages.length > 1
-          ? menuPages
-              .filter((page) => page.id !== props.pageId) // Remove current page from the list
-              .map((page) => {
-                return {
-                  ...page,
-                  onSelect: () =>
-                    moveActionToPage(props.id, props.name, page.id),
-                };
-              })
-          : [
-              {
-                value: "No Pages",
-                onSelect: noop,
-                label: createMessage(CONTEXT_NO_PAGE),
+    menuItems.includes(
+      ActionEntityContextMenuItemsEnum.CONVERT_QUERY_MODULE_INSTANCE,
+    ) &&
+      props.pluginType !== PluginType.INTERNAL &&
+      convertQueryToModuleOption,
+    menuItems.includes(ActionEntityContextMenuItemsEnum.COPY) &&
+      canManageAction && {
+        value: "copy",
+        onSelect:
+          parentEntityType === ActionParentEntityType.PAGE
+            ? noop
+            : () => {
+                copyAction(props.id, props.name, parentEntityId);
               },
-            ],
-    },
-    canDeleteAction && {
-      confirmDelete: confirmDelete,
-      className: "t--apiFormDeleteBtn single-select",
-      value: "delete",
-      label: confirmDelete
-        ? createMessage(CONFIRM_CONTEXT_DELETE)
-        : createMessage(CONTEXT_DELETE),
-      intent: "danger",
-      onSelect: () => {
-        confirmDelete
-          ? deleteActionFromPage(props.id, props.name, () => {
-              history.push(builderURL({ pageId }));
-              setConfirmDelete(false);
-            })
-          : setConfirmDelete(true);
+        label: createMessage(
+          parentEntityType === ActionParentEntityType.PAGE
+            ? CONTEXT_COPY
+            : CONTEXT_DUPLICATE,
+        ),
+        children:
+          parentEntityType === ActionParentEntityType.PAGE &&
+          menuPages.length > 0 &&
+          menuPages.map((page) => {
+            return {
+              ...page,
+              onSelect: () => copyAction(props.id, props.name, page.id),
+            };
+          }),
       },
-    },
+    menuItems.includes(ActionEntityContextMenuItemsEnum.MOVE) &&
+      canManageAction && {
+        value: "move",
+        onSelect: noop,
+        label: createMessage(CONTEXT_MOVE),
+        children:
+          menuPages.length > 1
+            ? menuPages
+                .filter((page) => page.id !== parentEntityId) // Remove current page from the list
+                .map((page) => {
+                  return {
+                    ...page,
+                    onSelect: () =>
+                      moveActionToPage(props.id, props.name, page.id),
+                  };
+                })
+            : [
+                {
+                  value: "No Pages",
+                  onSelect: noop,
+                  label: createMessage(CONTEXT_NO_PAGE),
+                },
+              ],
+      },
+    menuItems.includes(ActionEntityContextMenuItemsEnum.DELETE) &&
+      canDeleteAction && {
+        confirmDelete: confirmDelete,
+        className: "t--apiFormDeleteBtn single-select",
+        value: "delete",
+        label: confirmDelete
+          ? createMessage(CONFIRM_CONTEXT_DELETE)
+          : createMessage(CONTEXT_DELETE),
+        intent: "danger",
+        onSelect: () => {
+          confirmDelete
+            ? deleteActionFromPage(props.id, props.name, () => {
+                history.push(builderURL({ basePageId: baseParentEntityId }));
+                setConfirmDelete(false);
+              })
+            : setConfirmDelete(true);
+        },
+      },
   ].filter(Boolean);
 
   return optionsTree.length > 0 ? (
-    <TreeDropdown
+    <ContextMenu
       className={props.className}
-      defaultText=""
-      modifiers={ContextMenuPopoverModifiers}
-      onSelect={noop}
       optionTree={optionsTree as TreeDropdownOption[]}
-      selectedValue=""
       setConfirmDelete={setConfirmDelete}
-      toggle={<ContextMenuTrigger className="t--context-menu" />}
     />
   ) : null;
 }

@@ -1,22 +1,20 @@
 import React, { useMemo } from "react";
-import { Link, RouteComponentProps, withRouter } from "react-router-dom";
+import type { RouteComponentProps } from "react-router-dom";
+import { Link, withRouter } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { getIsFetchingPage } from "selectors/appViewSelectors";
 import styled from "styled-components";
-import { AppViewerRouteParams } from "constants/routes";
+import type { AppViewerRouteParams } from "constants/routes";
 import { theme } from "constants/DefaultTheme";
 import { Icon, NonIdealState, Spinner } from "@blueprintjs/core";
 import Centered from "components/designSystems/appsmith/CenteredWrapper";
 import AppPage from "./AppPage";
 import { getCanvasWidth, getCurrentPageName } from "selectors/editorSelectors";
 import RequestConfirmationModal from "pages/Editor/RequestConfirmationModal";
-import { getCurrentApplication } from "selectors/applicationSelectors";
-import {
-  isPermitted,
-  PERMISSION_TYPE,
-} from "@appsmith/utils/permissionHelpers";
-import { builderURL } from "RouteBuilder";
-import { getCanvasWidgetsStructure } from "selectors/entitiesSelector";
+import { getCurrentApplication } from "ee/selectors/applicationSelectors";
+import { isPermitted, PERMISSION_TYPE } from "ee/utils/permissionHelpers";
+import { builderURL } from "ee/RouteBuilder";
+import { getCanvasWidgetsStructure } from "ee/selectors/entitiesSelector";
 import equal from "fast-deep-equal/es6";
 
 const Section = styled.section`
@@ -52,7 +50,7 @@ function AppViewerPageContainer(props: AppViewerPageContainerProps) {
           Please add widgets to this page in the&nbsp;
           <Link
             to={builderURL({
-              pageId: props.match.params.pageId as string,
+              basePageId: props.match.params.basePageId as string,
             })}
           >
             Appsmith Editor
@@ -93,8 +91,8 @@ function AppViewerPageContainer(props: AppViewerPageContainerProps) {
     <Section>
       <AppPage
         appName={currentApplication?.name}
+        basePageId={match.params.basePageId}
         canvasWidth={canvasWidth}
-        pageId={match.params.pageId}
         pageName={currentPageName}
         widgetsStructure={widgetsStructure}
       />

@@ -1,27 +1,21 @@
-import { parse, Node } from "acorn";
+import type { Node } from "acorn";
+import { parse } from "acorn";
 import { ancestor } from "acorn-walk";
-import { CodeEditorGutter } from "components/editorComponents/CodeEditor";
-import { JSAction, JSCollection } from "entities/JSCollection";
-import {
-  RUN_GUTTER_CLASSNAME,
-  RUN_GUTTER_ID,
-  NO_FUNCTION_DROPDOWN_OPTION,
-} from "./constants";
-import { DropdownOption } from "design-system";
+import type { CodeEditorGutter } from "components/editorComponents/CodeEditor";
+import type { JSAction, JSCollection } from "entities/JSCollection";
+import { RUN_GUTTER_CLASSNAME, RUN_GUTTER_ID } from "./constants";
 import { find, memoize } from "lodash";
+import type { PropertyNode } from "@shared/ast";
 import {
+  ECMA_VERSION,
   isLiteralNode,
   isPropertyNode,
-  PropertyNode,
-  ECMA_VERSION,
   NodeTypes,
   SourceType,
 } from "@shared/ast";
-import { EventLocation } from "utils/AnalyticsUtil";
-
-export interface JSActionDropdownOption extends DropdownOption {
-  data: JSAction | null;
-}
+import type { EventLocation } from "ee/utils/analyticsUtilTypes";
+import log from "loglevel";
+import type CodeMirror from "codemirror";
 
 export const getAST = memoize((code: string, sourceType: SourceType) =>
   parse(code, {
@@ -44,6 +38,50 @@ export const isCursorWithinNode = (
 const getNameFromPropertyNode = (node: PropertyNode): string =>
   isLiteralNode(node.key) ? String(node.key.value) : node.key.name;
 
+export const getJSFunctionLocationFromCursor = (
+  code: string,
+  currentCursor: CodeMirror.Position,
+): {
+  cursorLineNumber: number;
+  functionString: string;
+  functionName: string;
+} => {
+  let functionString = "";
+  let cursorLineNumber = 0;
+  let functionName = "";
+
+  try {
+    const ast = getAST(code, SourceType.module);
+
+    ancestor(ast, {
+      Property(node, ancestors: Node[]) {
+        // We are only interested in identifiers at this depth (exported object keys)
+        const depth = ancestors.length - 3;
+
+        if (
+          isPropertyNode(node) &&
+          (node.value.type === NodeTypes.ArrowFunctionExpression ||
+            node.value.type === NodeTypes.FunctionExpression) &&
+          node.loc &&
+          isCursorWithinNode(node.loc, currentCursor.line + 1) &&
+          ancestors[depth] &&
+          ancestors[depth].type === NodeTypes.ExportDefaultDeclaration
+        ) {
+          functionString = code.slice(node.start, node.end);
+          // +1 for adjusting the 0 based and 1 based line numbers
+          // +1 for counting the function name line, therefor we need to add +2
+          cursorLineNumber = currentCursor.line - node.loc.start.line + 2;
+          functionName = getNameFromPropertyNode(node);
+        }
+      },
+    });
+  } catch (e) {
+    log.error(e);
+  }
+
+  return { cursorLineNumber, functionName, functionString };
+};
+
 // Function to get start line of js function from code, returns null if function not found
 export const getJSFunctionStartLineFromCode = (
   code: string,
@@ -51,6 +89,7 @@ export const getJSFunctionStartLineFromCode = (
 ): { line: number; actionName: string } | null => {
   let ast: Node = { end: 0, start: 0, type: "" };
   let result: { line: number; actionName: string } | null = null;
+
   try {
     ast = getAST(code, SourceType.module);
   } catch (e) {
@@ -61,6 +100,7 @@ export const getJSFunctionStartLineFromCode = (
     Property(node, ancestors: Node[]) {
       // We are only interested in identifiers at this depth (exported object keys)
       const depth = ancestors.length - 3;
+
       if (
         isPropertyNode(node) &&
         (node.value.type === NodeTypes.ArrowFunctionExpression ||
@@ -78,6 +118,7 @@ export const getJSFunctionStartLineFromCode = (
       }
     },
   });
+
   return result;
 };
 
@@ -87,6 +128,7 @@ export const getJSPropertyLineFromName = (
 ): { line: number; ch: number } | null => {
   let ast: Node = { end: 0, start: 0, type: "" };
   let result: { line: number; ch: number } | null = null;
+
   try {
     ast = getAST(code, SourceType.module);
   } catch (e) {
@@ -97,6 +139,7 @@ export const getJSPropertyLineFromName = (
     Property(node, ancestors: Node[]) {
       // We are only interested in identifiers at this depth (exported object keys)
       const depth = ancestors.length - 3;
+
       if (
         isPropertyNode(node) &&
         node.loc &&
@@ -112,25 +155,28 @@ export const getJSPropertyLineFromName = (
       }
     },
   });
+
   return result;
 };
 
 export const createGutterMarker = (gutterOnclick: () => void) => {
   const marker = document.createElement("button");
+
   // For most browsers the default type of button is submit, this causes the page to reload when marker is clicked
   // Set type to button, to prevent this behaviour
   marker.type = "button";
   marker.innerHTML = "&#9654;";
   marker.classList.add(RUN_GUTTER_CLASSNAME);
-  marker.onmousedown = function(e) {
+  marker.onmousedown = function (e) {
     e.preventDefault();
     gutterOnclick();
   };
   // Allows executing functions (via run gutter) when devtool is open
-  marker.ontouchstart = function(e) {
+  marker.ontouchstart = function (e) {
     e.preventDefault();
     gutterOnclick();
   };
+
   return marker;
 };
 
@@ -145,12 +191,14 @@ export const getJSFunctionLineGutter = (
     getGutterConfig: null,
     gutterId: RUN_GUTTER_ID,
   };
+
   if (!showGutters || !jsActions.length) return gutter;
 
   return {
     getGutterConfig: (code: string, lineNumber: number) => {
       const config = getJSFunctionStartLineFromCode(code, lineNumber);
       const action = find(jsActions, ["name", config?.actionName]);
+
       return config && action && isExecutePermitted
         ? {
             line: config.line,
@@ -167,41 +215,11 @@ export const getJSFunctionLineGutter = (
   };
 };
 
-export const convertJSActionsToDropdownOptions = (
-  JSActions: JSAction[],
-): JSActionDropdownOption[] => {
-  return JSActions.map(convertJSActionToDropdownOption);
-};
-
-export const convertJSActionToDropdownOption = (
-  JSAction: JSAction,
-): JSActionDropdownOption => ({
-  label: JSAction.name,
-  value: JSAction.id,
-  data: JSAction,
-  hasCustomBadge: !!JSAction.actionConfiguration.isAsync,
-});
-
 export const getActionFromJsCollection = (
   actionId: string | null,
   jsCollection: JSCollection,
 ): JSAction | null => {
   if (!actionId) return null;
-  return jsCollection.actions.find((action) => action.id === actionId) || null;
-};
 
-/**
- * Returns dropdown option based on priority and availability
- */
-export const getJSActionOption = (
-  activeJSAction: JSAction | null,
-  jsActions: JSAction[],
-): JSActionDropdownOption => {
-  let jsActionOption = NO_FUNCTION_DROPDOWN_OPTION;
-  if (activeJSAction) {
-    jsActionOption = convertJSActionToDropdownOption(activeJSAction);
-  } else if (jsActions.length) {
-    jsActionOption = convertJSActionToDropdownOption(jsActions[0]);
-  }
-  return jsActionOption;
+  return jsCollection.actions.find((action) => action.id === actionId) || null;
 };

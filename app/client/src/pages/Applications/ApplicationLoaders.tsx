@@ -1,5 +1,5 @@
 import { Classes } from "@blueprintjs/core";
-import { Theme } from "constants/DefaultTheme";
+import type { Theme } from "constants/DefaultTheme";
 import React from "react";
 import styled, { createGlobalStyle } from "styled-components";
 
@@ -107,14 +107,7 @@ export const loadingUserWorkspaces = [
   {
     workspace: {
       id: "loadingWorkspaceId2",
-      userPermissions: [
-        "read:workspaces",
-        "manage:workspaceApplications",
-        "inviteUsers:workspace",
-        "manage:workspaces",
-        "publish:workspaceApplications",
-        "read:workspaceApplications",
-      ],
+      userPermissions: ["read:workspaces", "read:workspaceApplications"],
       name: "loadingWorkspaceName2",
       workspaceSettings: [],
       plugins: [

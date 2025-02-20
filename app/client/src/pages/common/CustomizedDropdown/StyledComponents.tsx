@@ -1,5 +1,6 @@
 import styled, { css } from "styled-components";
-import { Intent, Skin } from "constants/DefaultTheme";
+import type { Intent } from "constants/DefaultTheme";
+import { Skin } from "constants/DefaultTheme";
 
 export const DropdownTrigger = styled.div<{ skin: Skin }>`
   display: flex;
@@ -23,8 +24,8 @@ export const DropdownTrigger = styled.div<{ skin: Skin }>`
         props.skin === Skin.DARK
           ? props.theme.colors.textOnDarkBG
           : props.skin === Skin.LIGHT
-          ? props.theme.colors.defaultText
-          : "initial"};
+            ? props.theme.colors.defaultText
+            : "initial"};
     }
     &:hover {
       background: inherit;

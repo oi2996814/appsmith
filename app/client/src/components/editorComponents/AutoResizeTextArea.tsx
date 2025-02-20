@@ -1,10 +1,6 @@
 import { debounce } from "lodash";
-import React, {
-  TextareaHTMLAttributes,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from "react";
+import type { TextareaHTMLAttributes } from "react";
+import React, { useEffect, useLayoutEffect, useRef } from "react";
 import styled from "styled-components";
 import useComposedRef from "utils/UseComposeRef";
 
@@ -48,6 +44,7 @@ function updateHeight<T extends HTMLElement | null>({
 }) {
   if (autoResize) {
     const height = proxyElementRef.current?.scrollHeight;
+
     if (height) {
       if (elementRef.current !== null) {
         elementRef.current.style.height = `${height}px`;
@@ -117,20 +114,22 @@ const AutoResizeTextArea: React.ForwardRefRenderFunction<
   return (
     <>
       <StyledTextArea {...props} ref={ref} />
-      {// This is added to get the correct scroll height of a similar
-      // textarea which is not displayed on the screen whose height
-      // is always auto.
-      props.autoResize ? (
-        <ProxyTextArea
-          autoResize={props.autoResize}
-          // making it read only as we will
-          // never use this textarea, it's
-          // always hidden
-          readOnly
-          ref={proxyTextAreaRef}
-          value={props.value}
-        />
-      ) : null}
+      {
+        // This is added to get the correct scroll height of a similar
+        // textarea which is not displayed on the screen whose height
+        // is always auto.
+        props.autoResize ? (
+          <ProxyTextArea
+            autoResize={props.autoResize}
+            // making it read only as we will
+            // never use this textarea, it's
+            // always hidden
+            readOnly
+            ref={proxyTextAreaRef}
+            value={props.value}
+          />
+        ) : null
+      }
     </>
   );
 };

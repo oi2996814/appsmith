@@ -1,7 +1,6 @@
 package com.appsmith.server.domains;
 
 import com.appsmith.external.models.BaseDomain;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -16,8 +15,11 @@ public class UsagePulse extends BaseDomain {
     // Hashed user email
     private String user;
     private String instanceId;
-    private String tenantId;
+    private String organizationId;
     private Boolean viewMode;
     private Boolean isAnonymousUser;
 
+    @Deprecated
+    // TODO: Remove this field once we have migrated the data to use organizationId instead of tenantId
+    private String tenantId;
 }

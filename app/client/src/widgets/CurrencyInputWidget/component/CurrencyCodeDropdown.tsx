@@ -1,11 +1,14 @@
 import React from "react";
 import styled, { createGlobalStyle } from "styled-components";
-import { CurrencyTypeOptions, CurrencyOptionProps } from "constants/Currency";
-import { Dropdown, DropdownOption, Icon, IconSize } from "design-system";
+import type { CurrencyOptionProps } from "constants/Currency";
+import { CurrencyTypeOptions } from "constants/Currency";
+import type { DropdownOption } from "@design-system/widgets-old";
+import { Dropdown, Icon, IconSize } from "@design-system/widgets-old";
 import { Classes } from "@blueprintjs/core";
 import { countryToFlag } from "./utilities";
 import { Colors } from "constants/Colors";
 import { lightenColor } from "widgets/WidgetUtils";
+import { CANVAS_ART_BOARD } from "constants/componentClassNameConstants";
 
 const StyledDropdown = styled(Dropdown)`
   /*
@@ -98,8 +101,8 @@ export const PopoverStyles = createGlobalStyle<{
     }
 
     .${props.portalClassName}  .${Classes.INPUT}:focus, .${
-    props.portalClassName
-  }  .${Classes.INPUT}:active {
+      props.portalClassName
+    }  .${Classes.INPUT}:active {
       border: 1px solid ${props.accentColor} !important;
       box-shadow: 0px 0px 0px 2px ${lightenColor(props.accentColor)} !important;
     }
@@ -170,12 +173,12 @@ export const CurrencyDropdownOptions = getCurrencyOptions();
 
 export const getDefaultCurrency = () => {
   return {
-    code: "US",
-    currency: "USD",
-    currency_name: "US Dollar",
-    label: "United States",
-    phone: "1",
-    symbol_native: "$",
+    code: "IN",
+    currency: "INR",
+    currency_name: "Indian Rupee",
+    label: "India",
+    phone: "91",
+    symbol_native: "₹",
   };
 };
 
@@ -185,9 +188,11 @@ export const getSelectedCurrency = (currencyCode?: string): DropdownOption => {
         return item.currency === currencyCode;
       })
     : undefined;
+
   if (!selectedCurrency) {
     selectedCurrency = getDefaultCurrency();
   }
+
   return {
     label: `${selectedCurrency.currency} - ${selectedCurrency.currency_name}`,
     searchText: selectedCurrency.label,
@@ -209,7 +214,7 @@ export const getCountryCodeFromCurrencyCode = (currencyCode?: string) => {
 };
 
 interface CurrencyDropdownProps {
-  onCurrencyTypeChange: (currencyCountryCode?: string) => void;
+  onCurrencyTypeChange?: (currencyCountryCode?: string) => void;
   options: Array<DropdownOption>;
   selected?: string;
   allowCurrencyChange?: boolean;
@@ -251,10 +256,10 @@ export default function CurrencyTypeDropdown(props: CurrencyDropdownProps) {
         enableSearch
         height="36px"
         onSelect={props.onCurrencyTypeChange}
-        optionWidth="340px"
+        optionWidth="360px"
         options={props.options}
         portalClassName={`country-type-filter-dropdown-${props.widgetId}`}
-        portalContainer={document.getElementById("art-board") || undefined}
+        portalContainer={document.getElementById(CANVAS_ART_BOARD) || undefined}
         searchAutoFocus
         searchPlaceholder="Search by currency or country"
         selected={selectedOption}

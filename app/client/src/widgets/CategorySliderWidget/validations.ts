@@ -1,9 +1,11 @@
-import { ValidationResponse } from "constants/WidgetValidation";
-import { CategorySliderWidgetProps, SliderOption } from "./widget";
+import type { ValidationResponse } from "constants/WidgetValidation";
+import type { CategorySliderWidgetProps, SliderOption } from "./widget";
 
 export function optionsCustomValidation(
   options: unknown,
   props: CategorySliderWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ): ValidationResponse {
   const validationUtil = (
@@ -12,35 +14,51 @@ export function optionsCustomValidation(
     if (options.length < 2) {
       return {
         isValid: false,
-        parsed: options,
-        messages: ["Please have at-least 2 options"],
+        parsed: [],
+        messages: [
+          {
+            name: "ValidationError",
+            message: "Please have at-least 2 options",
+          },
+        ],
       };
     }
 
     let _isValid = true;
-    let message = "";
+    let message = {
+      name: "",
+      message: "",
+    };
     let valueType = "";
     const uniqueLabels: Record<string | number, string> = {};
 
     for (let i = 0; i < options.length; i++) {
       const { label, value } = options[i];
+
       if (!valueType) {
         valueType = typeof value;
       }
+
       //Checks the uniqueness all the values in the options
       if (!uniqueLabels.hasOwnProperty(value)) {
         uniqueLabels[value] = "";
       } else {
         _isValid = false;
-        message = "path:value must be unique. Duplicate values found";
+        message = {
+          name: "ValidationError",
+          message: "path:value must be unique. Duplicate values found",
+        };
         break;
       }
 
       //Check if the required field "label" is present:
       if (!label) {
         _isValid = false;
-        message =
-          "Invalid entry at index: " + i + ". Missing required key: label";
+        message = {
+          name: "ValidationError",
+          message:
+            "Invalid entry at index: " + i + ". Missing required key: label",
+        };
         break;
       }
 
@@ -51,25 +69,34 @@ export function optionsCustomValidation(
         (typeof label !== "string" && typeof label !== "number")
       ) {
         _isValid = false;
-        message =
-          "Invalid entry at index: " +
-          i +
-          ". Value of key: label is invalid: This value does not evaluate to type string";
+        message = {
+          name: "ValidationError",
+          message:
+            "Invalid entry at index: " +
+            i +
+            ". Value of key: label is invalid: This value does not evaluate to type string",
+        };
         break;
       }
 
       //Check if all the data types for the value prop is the same.
       if (typeof value !== valueType) {
         _isValid = false;
-        message = "All value properties in options must have the same type";
+        message = {
+          name: "TypeError",
+          message: "All value properties in options must have the same type",
+        };
         break;
       }
 
       //Check if the each object has value property.
       if (_.isNil(value)) {
         _isValid = false;
-        message =
-          'This value does not evaluate to type Array<{ "label": "string", "value": "string" | number }>';
+        message = {
+          name: "TypeError",
+          message:
+            'This value does not evaluate to type Array<{ "label": "string", "value": "string" | number }>',
+        };
         break;
       }
     }
@@ -85,9 +112,14 @@ export function optionsCustomValidation(
     isValid: false,
     parsed: [],
     messages: [
-      'This value does not evaluate to type Array<{ "label": "string", "value": "string" | number }>',
+      {
+        name: "TypeError",
+        message:
+          'This value does not evaluate to type Array<{ "label": "string", "value": "string" | number }>',
+      },
     ],
   };
+
   try {
     if (_.isString(options)) {
       options = JSON.parse(options as string);
@@ -106,6 +138,8 @@ export function optionsCustomValidation(
 export function defaultOptionValidation(
   value: unknown,
   props: CategorySliderWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ): ValidationResponse {
   //Checks if the value is not of object type in {{}}
@@ -113,7 +147,12 @@ export function defaultOptionValidation(
     return {
       isValid: false,
       parsed: JSON.stringify(value, null, 2),
-      messages: ["This value does not evaluate to type: string or number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value does not evaluate to type: string or number",
+        },
+      ],
     };
   }
 
@@ -122,7 +161,12 @@ export function defaultOptionValidation(
     return {
       isValid: false,
       parsed: value,
-      messages: ["This value does not evaluate to type: string or number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value does not evaluate to type: string or number",
+        },
+      ],
     };
   }
 
@@ -136,7 +180,11 @@ export function defaultOptionValidation(
       isValid: false,
       parsed: value,
       messages: [
-        "Default value is missing in options. Please update the value.",
+        {
+          name: "ValidationError",
+          message:
+            "Default value is missing in options. Please update the value.",
+        },
       ],
     };
   }

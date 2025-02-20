@@ -1,13 +1,14 @@
 import React from "react";
 import styled from "styled-components";
 import { Colors } from "constants/Colors";
-import ProfileImage from "pages/common/ProfileImage";
-import { MenuItem } from "design-system";
+import { MenuItem } from "@appsmith/ads-old";
+import { Text, Avatar } from "@appsmith/ads";
+import { getInitials } from "utils/AppsmithUtils";
 import {
   DropdownOnSelectActions,
   getOnSelectAction,
 } from "./CustomizedDropdown/dropdownHelpers";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { useSelector } from "react-redux";
 import { getCurrentUser } from "selectors/usersSelectors";
 import {
@@ -15,18 +16,21 @@ import {
   APPSMITH_DISPLAY_VERSION,
   createMessage,
   DOCUMENTATION,
-} from "@appsmith/constants/messages";
-import { getAppsmithConfigs } from "@appsmith/configs";
+} from "ee/constants/messages";
+import { getAppsmithConfigs } from "ee/configs";
 import { howMuchTimeBeforeText } from "utils/helpers";
-import { getDefaultAdminSettingsPath } from "@appsmith/utils/adminSettingsHelpers";
-import { getTenantPermissions } from "@appsmith/selectors/tenantSelectors";
+import { getOrganizationPermissions } from "ee/selectors/organizationSelectors";
+import { DISCORD_URL } from "constants/ThirdPartyConstants";
+import { useFeatureFlag } from "utils/hooks/useFeatureFlag";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
+import { getAdminSettingsPath } from "ee/utils/BusinessFeatures/adminSettingsHelpers";
 
-type MobileSideBarProps = {
+interface MobileSideBarProps {
   name: string;
   isOpen: boolean;
   userName?: string;
   photoId?: string;
-};
+}
 
 const MainContainer = styled.div<{ isOpen: boolean }>`
   position: absolute;
@@ -41,14 +45,7 @@ const MainContainer = styled.div<{ isOpen: boolean }>`
 
 const Section = styled.div`
   padding: 20px 0;
-  border-bottom: 1px solid ${Colors.MERCURY};
-
-  & > h4 {
-    color: ${Colors.BLACK};
-    font-size: 13px;
-    font-weight: 600;
-    margin-left: 4px;
-  }
+  border-bottom: 1px solid var(--ads-v2-color-border);
 `;
 
 const ProfileSection = styled(Section)`
@@ -63,71 +60,64 @@ const UserNameSection = styled.div`
   margin-left: 12px;
 `;
 
-const Name = styled.span`
-  font-weight: 600;
-  color: ${Colors.BLACK};
-  font-size: 16px;
-`;
-
-const Email = styled.span`
-  font-size: 14px;
-  color: ${Colors.GREY_8};
-`;
-
 const StyledMenuItem = styled(MenuItem)`
-  svg {
-    width: 16px;
-    height: 16px;
-    fill: ${Colors.DARK_GRAY};
+  svg,
+  .ads-v2-icon svg path {
+    width: 18px;
+    height: 18px;
+    fill: var(--ads-v2-color-fg);
   }
 
   .cs-text {
-    color: ${Colors.BLACK};
-    font-size: 16px;
+    font-size: 14px;
+    color: var(--ads-v2-color-fg);
   }
 `;
 
 const LeftPaneVersionData = styled.div`
   display: flex;
   justify-content: space-between;
-  color: #121826;
-  font-size: 8px;
+  color: var(--ads-v2-color-fg);
+  font-size: 10px;
   width: 92%;
   margin-top: 8px;
 `;
 
 export default function MobileSideBar(props: MobileSideBarProps) {
   const user = useSelector(getCurrentUser);
-  const tenantPermissions = useSelector(getTenantPermissions);
-  const { appVersion, cloudHosting } = getAppsmithConfigs();
+  const organizationPermissions = useSelector(getOrganizationPermissions);
+  const { appVersion } = getAppsmithConfigs();
   const howMuchTimeBefore = howMuchTimeBeforeText(appVersion.releaseDate);
+  const isFeatureEnabled = useFeatureFlag(FEATURE_FLAG.license_gac_enabled);
 
   return (
     <MainContainer isOpen={props.isOpen}>
       <ProfileSection>
-        <ProfileImage
+        <Avatar
           className="t--profile-menu-icon"
-          size={52}
-          source={!!props.photoId ? `/api/v1/assets/${props.photoId}` : ""}
-          userName={props.name || props.userName}
+          firstLetter={getInitials(props.name || props.userName)}
+          image={!!props.photoId ? `/api/v1/assets/${props.photoId}` : ""}
+          label={props.name || props.userName || ""}
+          size="md"
         />
         <UserNameSection>
-          <Name>{props.name}</Name>
-          <Email>{props.userName}</Email>
+          <Text kind="heading-s">{props.name}</Text>
+          <Text kind="body-s">{props.userName}</Text>
         </UserNameSection>
       </ProfileSection>
       <Section>
-        <h4>ACCOUNT</h4>
+        <Text kind="heading-s">Account</Text>
         {user?.isSuperUser && user?.isConfigurable && (
           <StyledMenuItem
             className="admin-settings-menu-option"
             icon="setting"
             onSelect={() => {
               getOnSelectAction(DropdownOnSelectActions.REDIRECT, {
-                path: getDefaultAdminSettingsPath({
-                  isSuperUser: user?.isSuperUser,
-                  tenantPermissions,
-                }),
+                path: getAdminSettingsPath(
+                  isFeatureEnabled,
+                  user?.isSuperUser,
+                  organizationPermissions,
+                ),
               });
             }}
             text={createMessage(ADMIN_SETTINGS)}
@@ -148,9 +138,9 @@ export default function MobileSideBar(props: MobileSideBarProps) {
         <StyledMenuItem
           icon="discord"
           onSelect={() => {
-            window.open("https://discord.gg/rBTTVJp", "_blank");
+            window.open(DISCORD_URL, "_blank");
           }}
-          text={"Join our Discord"}
+          text={"Join our discord"}
         />
         <StyledMenuItem
           icon="book"
@@ -166,7 +156,6 @@ export default function MobileSideBar(props: MobileSideBarProps) {
             APPSMITH_DISPLAY_VERSION,
             appVersion.edition,
             appVersion.id,
-            cloudHosting,
           )}
         </span>
         {howMuchTimeBefore !== "" && (

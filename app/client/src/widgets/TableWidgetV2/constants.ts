@@ -1,26 +1,34 @@
-import {
+import type {
   ColumnProperties,
   CompactMode,
   ReactTableFilter,
   TableStyles,
   SortOrderTypes,
 } from "./component/Constants";
-import { WidgetProps } from "widgets/BaseWidget";
-import { WithMeta } from "widgets/MetaHOC";
-import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import type { WidgetProps } from "widgets/BaseWidget";
+import type { WithMeta } from "widgets/MetaHOC";
+import type { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import { IconNames } from "@blueprintjs/icons";
-import { ColumnAction } from "components/propertyControls/ColumnActionSelectorControl";
-import { Alignment } from "@blueprintjs/core";
-import { IconName } from "@blueprintjs/icons";
-import { ButtonVariant } from "components/constants";
+import type { ColumnAction } from "components/propertyControls/ColumnActionSelectorControl";
+import type { Alignment } from "@blueprintjs/core";
+import type { IconName } from "@blueprintjs/icons";
+import type { ButtonVariant } from "components/constants";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
 
-export type EditableCell = {
+export interface EditableCell {
   column: string;
   index: number;
   value: string | number | null;
   initialValue: string;
   inputValue: string;
-};
+  [ORIGINAL_INDEX_KEY]: number;
+}
+
+export enum PaginationDirection {
+  INITIAL = "INITIAL",
+  PREVIOUS_PAGE = "PREVIOUS_PAGE",
+  NEXT_PAGE = "NEXT_PAGE",
+}
 
 export enum EditableCellActions {
   SAVE = "SAVE",
@@ -45,6 +53,7 @@ export interface TableWidgetProps
     WithMeta,
     TableStyles,
     AddNewRowProps {
+  pristine: boolean;
   nextPageKey?: string;
   prevPageKey?: string;
   label: string;
@@ -65,6 +74,8 @@ export interface TableWidgetProps
   enableClientSideSearch?: boolean;
   hiddenColumns?: string[];
   columnOrder?: string[];
+  frozenColumnIndices: Record<string, number>;
+  canFreezeColumn?: boolean;
   columnNameMap?: { [key: string]: string };
   columnTypeMap?: {
     [key: string]: { type: string; format: string; inputFormat?: string };
@@ -96,6 +107,11 @@ export interface TableWidgetProps
   isAddRowInProgress: boolean;
   newRow: Record<string, unknown>;
   firstEditableColumnIdByOrder: string;
+  enableServerSideFiltering: boolean;
+  onTableFilterUpdate: string;
+  customIsLoading: boolean;
+  customIsLoadingValue: boolean;
+  infiniteScrollEnabled: boolean;
 }
 
 export enum TableVariantTypes {
@@ -114,6 +130,8 @@ export const DEFAULT_COLUMN_WIDTH = 150;
 
 export const COLUMN_MIN_WIDTH = 60;
 
+export const TABLE_COLUMN_ORDER_KEY = "tableWidgetColumnOrder";
+
 export enum ColumnTypes {
   TEXT = "text",
   URL = "url",
@@ -128,6 +146,8 @@ export enum ColumnTypes {
   EDIT_ACTIONS = "editActions",
   CHECKBOX = "checkbox",
   SWITCH = "switch",
+  CURRENCY = "currency",
+  HTML = "html",
 }
 
 export enum ReadOnlyColumnTypes {
@@ -140,6 +160,7 @@ export enum ReadOnlyColumnTypes {
   CHECKBOX = "checkbox",
   SWITCH = "switch",
   SELECT = "select",
+  HTML = "html",
 }
 
 export const ActionColumnTypes = [
@@ -147,6 +168,7 @@ export const ActionColumnTypes = [
   ColumnTypes.ICON_BUTTON,
   ColumnTypes.MENU_BUTTON,
   ColumnTypes.EDIT_ACTIONS,
+  ColumnTypes.HTML,
 ];
 
 export const FilterableColumnTypes = [
@@ -157,6 +179,7 @@ export const FilterableColumnTypes = [
   ColumnTypes.SELECT,
   ColumnTypes.CHECKBOX,
   ColumnTypes.SWITCH,
+  ColumnTypes.HTML,
 ];
 
 export const DEFAULT_BUTTON_COLOR = "rgb(3, 179, 101)";
@@ -167,12 +190,12 @@ export const DEFAULT_MENU_VARIANT = "PRIMARY";
 
 export const DEFAULT_MENU_BUTTON_LABEL = "Open menu";
 
-export type TransientDataPayload = {
+export interface TransientDataPayload {
   [key: string]: string | number | boolean;
   __originalIndex__: number;
-};
+}
 
-export type OnColumnEventArgs = {
+export interface OnColumnEventArgs {
   rowIndex: number;
   action: string;
   onComplete?: () => void;
@@ -180,7 +203,7 @@ export type OnColumnEventArgs = {
   eventType: EventType;
   row?: Record<string, unknown>;
   additionalData?: Record<string, unknown>;
-};
+}
 
 export const ICON_NAMES = Object.keys(IconNames).map(
   (name: string) => IconNames[name as keyof typeof IconNames],
@@ -203,10 +226,24 @@ export enum DateInputFormat {
   MILLISECONDS = "Milliseconds",
 }
 
-export const defaultEditableCell = {
+export enum MomentDateInputFormat {
+  MILLISECONDS = "x",
+  SECONDS = "X",
+}
+
+export const defaultEditableCell: EditableCell = {
   column: "",
   index: -1,
   inputValue: "",
   value: "",
   initialValue: "",
+  [ORIGINAL_INDEX_KEY]: -1,
 };
+
+export const DEFAULT_COLUMN_NAME = "Table Column";
+
+export const ALLOW_TABLE_WIDGET_SERVER_SIDE_FILTERING =
+  FEATURE_FLAG["release_table_serverside_filtering_enabled"];
+
+export const INFINITE_SCROLL_ENABLED =
+  FEATURE_FLAG["release_tablev2_infinitescroll_enabled"];

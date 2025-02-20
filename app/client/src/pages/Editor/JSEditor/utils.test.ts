@@ -1,12 +1,11 @@
-import { JSAction } from "entities/JSCollection";
+import type { JSAction } from "entities/JSCollection";
 import { uniqueId } from "lodash";
-import { NO_FUNCTION_DROPDOWN_OPTION } from "./constants";
+import { getJSFunctionStartLineFromCode, isCursorWithinNode } from "./utils";
 import {
   convertJSActionToDropdownOption,
   getJSActionOption,
-  getJSFunctionStartLineFromCode,
-  isCursorWithinNode,
-} from "./utils";
+} from "./JSEditorToolbar/utils";
+import { NO_FUNCTION_DROPDOWN_OPTION } from "./JSEditorToolbar/constants";
 
 const BASE_JS_OBJECT_BODY = `export default {
 	myVar1: [],
@@ -20,7 +19,7 @@ const BASE_JS_OBJECT_BODY = `export default {
 		await Api3.run()
 		await Api3.run()
 		return Api3.data
-	}	
+	}
 }`;
 
 const BASE_JS_OBJECT_BODY_WITH_LITERALS = `export default {
@@ -35,12 +34,13 @@ const BASE_JS_OBJECT_BODY_WITH_LITERALS = `export default {
 		await Api3.run()
 		await Api3.run()
 		return Api3.data
-	}	
+	}
 }`;
 
 const BASE_JS_ACTION = (useLiterals = false) => {
   return {
     workspaceId: "workspace-id",
+    applicationId: "application-id",
     pageId: "page-id",
     collectionId: "collection-id",
     pluginId: "plugin-id",
@@ -68,6 +68,7 @@ const createJSAction = (name: string, useLiterals = false): JSAction => {
   return {
     ...BASE_JS_ACTION(useLiterals),
     id: uniqueId(name),
+    baseId: uniqueId(name),
     name,
   };
 };
@@ -152,6 +153,7 @@ describe("jsAction dropdown", () => {
     const activeJSAction = jsActions[0];
     const actualResponse = getJSActionOption(activeJSAction, jsActions);
     const expectedResponse = convertJSActionToDropdownOption(activeJSAction);
+
     expect(actualResponse).toEqual(expectedResponse);
   });
 
@@ -159,6 +161,7 @@ describe("jsAction dropdown", () => {
     const activeJSAction = null;
     const actualResponse = getJSActionOption(activeJSAction, []);
     const expectedResponse = NO_FUNCTION_DROPDOWN_OPTION;
+
     expect(actualResponse).toEqual(expectedResponse);
   });
 });

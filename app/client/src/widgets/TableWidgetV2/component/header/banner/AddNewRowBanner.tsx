@@ -37,7 +37,7 @@ export interface AddNewRowBannerType {
   disabledAddNewRowSave: boolean;
 }
 
-export function AddNewRowBanner(props: AddNewRowBannerType) {
+function AddNewRowBannerComponent(props: AddNewRowBannerType) {
   const [isDiscardLoading, setIsDiscardLoading] = useState(false);
   const [isSaveLoading, setIsSaveLoading] = useState(false);
 
@@ -69,7 +69,8 @@ export function AddNewRowBanner(props: AddNewRowBannerType) {
           className="t--save-new-row"
           disabled={props.disabledAddNewRowSave || isDiscardLoading}
           loading={isSaveLoading}
-          onClick={() => {
+          onClick={(event) => {
+            event.stopPropagation();
             setIsSaveLoading(true);
             props.onAddNewRowAction(AddNewRowActions.SAVE, () =>
               setIsSaveLoading(false),
@@ -81,3 +82,5 @@ export function AddNewRowBanner(props: AddNewRowBannerType) {
     </Container>
   );
 }
+
+export const AddNewRowBanner = React.memo(AddNewRowBannerComponent);

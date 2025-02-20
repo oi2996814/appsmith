@@ -7,13 +7,17 @@ import {
 } from "@blueprintjs/core";
 import { IconWrapper } from "constants/IconConstants";
 import { Colors } from "constants/Colors";
-import { ReactTableColumnProps } from "../../Constants";
+import type { ReactTableColumnProps } from "../../Constants";
 import { TableIconWrapper } from "../../TableStyledWrappers";
 import styled, { createGlobalStyle } from "styled-components";
 import ActionItem from "./ActionItem";
 import { transformTableDataIntoCsv } from "./Utilities";
 import zipcelx from "zipcelx";
-import { ReactComponent as DownloadIcon } from "assets/icons/control/download-data-icon.svg";
+import { importSvg } from "@appsmith/ads-old";
+
+const DownloadIcon = importSvg(
+  async () => import("assets/icons/control/download-data-icon.svg"),
+);
 
 const DropDownWrapper = styled.div`
   display: flex;
@@ -61,6 +65,7 @@ const PopoverStyles = createGlobalStyle<{
     }
   `}
 `;
+
 interface TableDataDownloadProps {
   data: Array<Record<string, unknown>>;
   columns: ReactTableColumnProps[];
@@ -71,10 +76,10 @@ interface TableDataDownloadProps {
 
 type FileDownloadType = "CSV" | "EXCEL";
 
-type DataCellProps = {
+interface DataCellProps {
   value: string | number;
   type: "string" | "number";
-};
+}
 
 interface DownloadOptionProps {
   label: string;
@@ -86,24 +91,27 @@ const dowloadOptions: DownloadOptionProps[] = [
     label: "Download as CSV",
     value: "CSV",
   },
-  {
-    label: "Download as Excel",
-    value: "EXCEL",
-  },
 ];
 
 const downloadDataAsCSV = (props: {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   csvData: Array<Array<any>>;
   delimiter: string;
   fileName: string;
 }) => {
   let csvContent = "";
+
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   props.csvData.forEach((infoArray: Array<any>, index: number) => {
     const dataString = infoArray.join(props.delimiter);
+
     csvContent += index < props.csvData.length ? dataString + "\n" : dataString;
   });
   const anchor = document.createElement("a");
   const mimeType = "application/octet-stream";
+
   // @ts-expect-error: msSaveBlob does not exists on navigator
   if (navigator.msSaveBlob) {
     // @ts-expect-error: msSaveBlob does not exists on navigator
@@ -150,16 +158,22 @@ function TableDataDownload(props: TableDataDownloadProps) {
               : "string",
         };
       });
+
     tableData.push(tableHeaders);
+
     for (let row = 0; row < props.data.length; row++) {
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: { [key: string]: any } = props.data[row];
       const tableRow: Array<DataCellProps> = [];
+
       for (let colIndex = 0; colIndex < props.columns.length; colIndex++) {
         const column = props.columns[colIndex];
         const type =
           column.columnProperties?.columnType === "number"
             ? "number"
             : "string";
+
         if (column.metaProperties && !column.metaProperties.isHidden) {
           tableRow.push({
             value: data[column.alias],
@@ -167,8 +181,10 @@ function TableDataDownload(props: TableDataDownloadProps) {
           });
         }
       }
+
       tableData.push(tableRow);
     }
+
     zipcelx({
       filename: props.widgetName,
       sheet: {
@@ -182,6 +198,7 @@ function TableDataDownload(props: TableDataDownloadProps) {
       columns: props.columns,
       data: props.data,
     });
+
     downloadDataAsCSV({
       csvData: csvData,
       delimiter: props.delimiter,
@@ -204,6 +221,7 @@ function TableDataDownload(props: TableDataDownloadProps) {
       </TableIconWrapper>
     );
   }
+
   return (
     <>
       <Popover

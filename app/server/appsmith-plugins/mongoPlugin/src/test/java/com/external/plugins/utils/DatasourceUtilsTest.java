@@ -22,14 +22,10 @@ public class DatasourceUtilsTest {
         final DBAuth dbAuth = new DBAuth();
         dbAuth.setPassword("newPass");
         datasourceConfiguration.setAuthentication(dbAuth);
-        datasourceConfiguration.setProperties(List.of(
-                new Property("0", "Yes"),
-                new Property("1", testUri)
-        ));
+        datasourceConfiguration.setProperties(List.of(new Property("0", "Yes"), new Property("1", testUri)));
         final String clientURI = buildClientURI(datasourceConfiguration);
         assertEquals(resultUri, clientURI);
     }
-
 
     @Test
     public void testBuildClientURI_withoutUserInfoAndAuthSource() {
@@ -40,10 +36,7 @@ public class DatasourceUtilsTest {
         DatasourceConfiguration datasourceConfiguration = new DatasourceConfiguration();
         final DBAuth dbAuth = new DBAuth();
         datasourceConfiguration.setAuthentication(dbAuth);
-        datasourceConfiguration.setProperties(List.of(
-                new Property("0", "Yes"),
-                new Property("1", testUri)
-        ));
+        datasourceConfiguration.setProperties(List.of(new Property("0", "Yes"), new Property("1", testUri)));
         final String clientURI = buildClientURI(datasourceConfiguration);
         assertEquals(resultUri, clientURI);
     }
@@ -52,18 +45,29 @@ public class DatasourceUtilsTest {
     public void testBuildClientURI_withUserInfoAndAuthSource() {
 
         final String testUri = "mongodb://user:pass@host:port/db?param&authSource=notAdmin";
-        final String resultUri = "mongodb://user:newPass@host:port/db?param&authsource=notAdmin&minpoolsize=0";
+        final String resultUri = "mongodb://user:newPass@host:port/db?param&authSource=notAdmin&minpoolsize=0";
 
         DatasourceConfiguration datasourceConfiguration = new DatasourceConfiguration();
         final DBAuth dbAuth = new DBAuth();
         dbAuth.setPassword("newPass");
         datasourceConfiguration.setAuthentication(dbAuth);
-        datasourceConfiguration.setProperties(List.of(
-                new Property("0", "Yes"),
-                new Property("1", testUri)
-        ));
+        datasourceConfiguration.setProperties(List.of(new Property("0", "Yes"), new Property("1", testUri)));
         final String clientURI = buildClientURI(datasourceConfiguration);
         assertEquals(resultUri, clientURI);
     }
 
+    @Test
+    public void testBuildClientURI_withUpperCaseCharacters_CaseRemainsUnchanged() {
+
+        final String testUri = "mongodb://user:pass@host:port/db?Param&authSource=notAdmin";
+        final String resultUri = "mongodb://user:newPass@host:port/db?Param&authSource=notAdmin&minpoolsize=0";
+
+        DatasourceConfiguration datasourceConfiguration = new DatasourceConfiguration();
+        final DBAuth dbAuth = new DBAuth();
+        dbAuth.setPassword("newPass");
+        datasourceConfiguration.setAuthentication(dbAuth);
+        datasourceConfiguration.setProperties(List.of(new Property("0", "Yes"), new Property("1", testUri)));
+        final String clientURI = buildClientURI(datasourceConfiguration);
+        assertEquals(resultUri, clientURI);
+    }
 }

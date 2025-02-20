@@ -1,11 +1,11 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import {
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type {
   CodeEditorContext,
   CursorPosition,
-  CursorPositionOrigin,
   EvaluatedPopupState,
   PropertyPanelContext,
-} from "reducers/uiReducers/editorContextReducer";
+} from "ee/reducers/uiReducers/editorContextReducer";
+import { CursorPositionOrigin } from "ee/reducers/uiReducers/editorContextReducer";
 
 export const setFocusableInputField = (path: string | undefined) => {
   return {
@@ -25,13 +25,13 @@ export const setCodeEditorCursorAction = (
   };
 };
 
-export type CodeEditorFocusState = {
+export interface CodeEditorFocusState {
   key: string | undefined;
   cursorPosition: {
     ch: number;
     line: number;
   };
-};
+}
 
 export const setEditorFieldFocusAction = (payload: CodeEditorFocusState) => {
   return {
@@ -82,13 +82,6 @@ export const setSelectedPropertyTabIndex = (
   return {
     type: ReduxActionTypes.SET_SELECTED_PROPERTY_TAB_INDEX,
     payload: { index: selectedIndex, panelPropertyPath },
-  };
-};
-
-export const setCanvasDebuggerSelectedTab = (selectedTab: string) => {
-  return {
-    type: ReduxActionTypes.SET_CANVAS_DEBUGGER_SELECTED_TAB,
-    payload: selectedTab,
   };
 };
 

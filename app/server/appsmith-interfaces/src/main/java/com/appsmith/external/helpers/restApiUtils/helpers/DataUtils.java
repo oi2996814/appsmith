@@ -7,17 +7,21 @@ import com.appsmith.external.helpers.PluginUtils;
 import com.appsmith.external.models.ActionConfiguration;
 import com.appsmith.external.models.ApiContentType;
 import com.appsmith.external.models.Property;
+import com.appsmith.util.SerializationUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-import net.minidev.json.JSONArray;
-import net.minidev.json.JSONObject;
+import com.google.gson.ToNumberPolicy;
+import com.google.gson.reflect.TypeToken;
 import net.minidev.json.parser.JSONParser;
 import net.minidev.json.parser.ParseException;
+import net.minidev.json.writer.CollectionMapper;
+import net.minidev.json.writer.JsonReader;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpMethod;
@@ -35,16 +39,39 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static com.appsmith.external.exceptions.pluginExceptions.BasePluginErrorMessages.ERROR_INVALID_BASE64_FORMAT;
+import static com.appsmith.external.exceptions.pluginExceptions.BasePluginErrorMessages.ERROR_INVALID_MULTIPART_DATA;
+
 public class DataUtils {
 
     public static String FIELD_API_CONTENT_TYPE = "apiContentType";
+
+    public static String BASE64_DELIMITER = ";base64,";
+
+    /**
+     * this Gson builder has three parameters for creating a gson instances which is required to maintain the JSON as received
+     * setLenient() : allows parsing of JSONs which don't strictly adhere to RFC4627 (our older implementation is also more permissive)
+     * setObjectToNumberStrategy(): How to parse numbers which comes as a part of JSON objects
+     * i.e. [4, 5.5, 7] --> [4, 5.5, 7] (with lazily parsed numbers), default was [4.0, 5.5, 7.0]
+     * setNumberToNumberStrategy() : same as above but only applies to number json
+     * 4 -> 4,  4.7 --> 4.7
+     */
+    private static final Gson gson = new GsonBuilder()
+            .setLenient()
+            .setObjectToNumberStrategy(ToNumberPolicy.LAZILY_PARSED_NUMBER)
+            .setNumberToNumberStrategy(ToNumberPolicy.LAZILY_PARSED_NUMBER)
+            .create();
+
+    private static final JSONParser jsonParser = new JSONParser(JSONParser.MODE_PERMISSIVE);
 
     private final ObjectMapper objectMapper;
 
@@ -52,11 +79,21 @@ public class DataUtils {
         TEXT,
         FILE,
         ARRAY,
+        // this is for allowing application/json in Multipart from data
+        JSON,
     }
 
     public DataUtils() {
-        this.objectMapper = new ObjectMapper();
-        this.objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        this.objectMapper = SerializationUtils.getObjectMapperWithSourceInLocationEnabled()
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+
+        // Multipart data would be parsed using object mapper, these files may be large in the size.
+        // Hence, the length should not be truncated, therefore allowing maximum length.
+        this.objectMapper
+                .getFactory()
+                .setStreamReadConstraints(StreamReadConstraints.builder()
+                        .maxStringLength(Integer.MAX_VALUE)
+                        .build());
     }
 
     public BodyInserter<?, ?> buildBodyInserter(Object body, String contentType, Boolean encodeParamsToggle) {
@@ -77,6 +114,8 @@ public class DataUtils {
                 return parseMultipartFileData((List<Property>) body);
             case MediaType.TEXT_PLAIN_VALUE:
                 return BodyInserters.fromValue((String) body);
+            case MediaType.APPLICATION_OCTET_STREAM_VALUE:
+                return parseMultimediaData((String) body);
             default:
                 return BodyInserters.fromValue(((String) body).getBytes(StandardCharsets.ISO_8859_1));
         }
@@ -101,10 +140,7 @@ public class DataUtils {
             }
         } catch (JsonSyntaxException | ParseException e) {
             throw new AppsmithPluginException(
-                    AppsmithPluginError.PLUGIN_JSON_PARSE_ERROR,
-                    body,
-                    "Malformed JSON: " + e.getMessage()
-            );
+                    AppsmithPluginError.PLUGIN_JSON_PARSE_ERROR, body, "Malformed JSON: " + e.getMessage());
         }
         return body;
     }
@@ -133,7 +169,23 @@ public class DataUtils {
                     return key + "=" + value;
                 })
                 .collect(Collectors.joining("&"));
+    }
 
+    public BodyInserter<?, ?> parseMultimediaData(String requestBodyObj) {
+        // This decoding for base64 is required because of
+        // issue https://github.com/appsmithorg/appsmith/issues/32378
+        // According to this if we tried to upload any multimedia files (img, audio, video)
+        // It was not getting decoded before uploading on required URL
+        if (requestBodyObj.contains(BASE64_DELIMITER)) {
+            List<String> bodyArrayList = Arrays.asList(requestBodyObj.split(BASE64_DELIMITER));
+            requestBodyObj = bodyArrayList.get(bodyArrayList.size() - 1);
+
+            // Using mimeDecoder here, since base64 conversion by file picker widget follows mime standard
+            byte[] payload = Base64.getMimeDecoder().decode(bodyArrayList.get(bodyArrayList.size() - 1));
+            return BodyInserters.fromValue(payload);
+        }
+
+        return BodyInserters.fromValue(requestBodyObj);
     }
 
     public BodyInserter<?, ?> parseMultipartFileData(List<Property> bodyFormData) {
@@ -141,114 +193,217 @@ public class DataUtils {
             return BodyInserters.fromValue(new byte[0]);
         }
 
-        return (BodyInserter<?, ClientHttpRequest>) (outputMessage, context) ->
-                Mono.defer(() -> {
-                    MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
+        return (BodyInserter<?, ClientHttpRequest>) (outputMessage, context) -> Mono.defer(() -> {
+            MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
 
-                    for (Property property : bodyFormData) {
-                        final String key = property.getKey();
+            for (Property property : bodyFormData) {
+                final String key = property.getKey();
 
-                        if (property.getKey() == null) {
-                            continue;
+                if (property.getKey() == null) {
+                    continue;
+                }
+
+                // null values are not accepted by the Mutli-part form data standards,
+                // null values cannot be achieved via client side changes, hence skipping the form-data property
+                // altogether instead of throwing an error over here.
+                if (property.getValue() == null) {
+                    continue;
+                }
+
+                // This condition is for the current scenario, while we wait for client changes to come in
+                // before the migration can be introduced
+                if (property.getType() == null) {
+                    bodyBuilder.part(key, property.getValue());
+                    continue;
+                }
+
+                final MultipartFormDataType multipartFormDataType =
+                        MultipartFormDataType.valueOf(property.getType().toUpperCase(Locale.ROOT));
+
+                switch (multipartFormDataType) {
+                    case TEXT:
+                        byte[] valueBytesArray = new byte[0];
+                        if (StringUtils.hasLength(String.valueOf(property.getValue()))) {
+                            valueBytesArray =
+                                    String.valueOf(property.getValue()).getBytes(StandardCharsets.ISO_8859_1);
                         }
-
-                        // This condition is for the current scenario, while we wait for client changes to come in
-                        // before the migration can be introduced
-                        if (property.getType() == null) {
-                            bodyBuilder.part(key, property.getValue());
-                            continue;
+                        bodyBuilder.part(key, valueBytesArray, MediaType.TEXT_PLAIN);
+                        break;
+                    case FILE:
+                        try {
+                            populateFileTypeBodyBuilder(bodyBuilder, property, outputMessage);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            throw new AppsmithPluginException(
+                                    AppsmithPluginError.PLUGIN_DATASOURCE_ARGUMENT_ERROR, ERROR_INVALID_MULTIPART_DATA);
                         }
-
-                        final MultipartFormDataType multipartFormDataType =
-                                MultipartFormDataType.valueOf(property.getType().toUpperCase(Locale.ROOT));
-
-                        switch (multipartFormDataType) {
-                            case TEXT:
-                                byte[] valueBytesArray = new byte[0];
-                                if (StringUtils.hasLength(String.valueOf(property.getValue()))) {
-                                    valueBytesArray = String.valueOf(property.getValue()).getBytes(StandardCharsets.ISO_8859_1);
-                                }
-                                bodyBuilder.part(key, valueBytesArray, MediaType.TEXT_PLAIN);
-                                break;
-                            case FILE:
-                                try {
-                                    populateFileTypeBodyBuilder(bodyBuilder, property, outputMessage);
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                    throw new AppsmithPluginException(
-                                            AppsmithPluginError.PLUGIN_DATASOURCE_ARGUMENT_ERROR,
-                                            "Unable to parse content. Expected to receive an array or object of multipart data"
-                                    );
-                                }
-                                break;
-                            case ARRAY:
-                                if (property.getValue() instanceof String) {
-                                    final String value = (String) property.getValue();
-                                    try {
-                                        final JsonNode jsonNode = objectMapper.readTree(value);
-                                        if (jsonNode.isArray()) {
-                                            for (JsonNode node : jsonNode) {
-                                                if (node.isTextual()) bodyBuilder.part(key, node.asText());
-                                                else bodyBuilder.part(key, node);
-                                            }
-                                        } else {
-                                            bodyBuilder.part(key, value);
-                                        }
-                                    } catch (JsonProcessingException e) {
-                                        bodyBuilder.part(key, value);
+                        break;
+                    case ARRAY:
+                        if (property.getValue() instanceof String) {
+                            final String value = (String) property.getValue();
+                            try {
+                                final JsonNode jsonNode = objectMapper.readTree(value);
+                                if (jsonNode.isArray()) {
+                                    for (JsonNode node : jsonNode) {
+                                        if (node.isTextual()) bodyBuilder.part(key, node.asText());
+                                        else bodyBuilder.part(key, node);
                                     }
                                 } else {
-                                    bodyBuilder.part(key, property.getValue());
+                                    bodyBuilder.part(key, value);
                                 }
-                                break;
+                            } catch (JsonProcessingException e) {
+                                bodyBuilder.part(key, value);
+                            }
+                        } else {
+                            bodyBuilder.part(key, property.getValue());
                         }
-                    }
+                        break;
+                    case JSON:
+                        // apart from String we can expect json list or a JSON dictionary as input,
+                        // while spring would typecast a json list to List, a Json Dictionary is not always expected to
+                        // be type-casted as a map, hence this has been chosen to be built as it is.
+                        if (!(property.getValue() instanceof String jsonString)) {
+                            bodyBuilder.part(key, property.getValue(), MediaType.APPLICATION_JSON);
+                            break;
+                        }
 
-                    final BodyInserters.MultipartInserter multipartInserter =
-                            BodyInserters
-                                    .fromMultipartData(bodyBuilder.build());
-                    return multipartInserter
-                            .insert(outputMessage, context);
-                });
+                        if (!StringUtils.hasText(jsonString)) {
+                            // the jsonString is empty, it could be intended by the user hence continuing execution.
+                            bodyBuilder.part(key, "", MediaType.APPLICATION_JSON);
+                            break;
+                        }
+
+                        Object objectFromJson;
+                        try {
+                            objectFromJson = objectFromJson(jsonString);
+                        } catch (JsonSyntaxException | ParseException e) {
+                            throw new AppsmithPluginException(
+                                    AppsmithPluginError.PLUGIN_JSON_PARSE_ERROR,
+                                    jsonString,
+                                    "Malformed JSON: " + e.getMessage());
+                        }
+
+                        if (objectFromJson == null) {
+                            // Although this is not expected to be true; However, in case the parsed object is null,
+                            // choosing to error out as the value provided by user has not transformed into json.
+                            throw new AppsmithPluginException(AppsmithPluginError.PLUGIN_JSON_PARSE_ERROR, jsonString);
+                        } else {
+                            bodyBuilder.part(key, objectFromJson, MediaType.APPLICATION_JSON);
+                        }
+                        break;
+                }
+            }
+
+            final BodyInserters.MultipartInserter multipartInserter =
+                    BodyInserters.fromMultipartData(bodyBuilder.build());
+            return multipartInserter.insert(outputMessage, context);
+        });
     }
 
-    private void populateFileTypeBodyBuilder(MultipartBodyBuilder bodyBuilder, Property property, ClientHttpRequest outputMessage)
-            throws IOException {
+    private void populateFileTypeBodyBuilder(
+            MultipartBodyBuilder bodyBuilder, Property property, ClientHttpRequest outputMessage) throws IOException {
+
         final String fileValue = (String) property.getValue();
         final String key = property.getKey();
-        List<MultipartFormDataDTO> multipartFormDataDTOs = new ArrayList<>();
 
-
-        if (fileValue.startsWith("{")) {
-            // Check whether the JSON string is an object
-            final MultipartFormDataDTO multipartFormDataDTO = objectMapper.readValue(
-                    fileValue,
-                    MultipartFormDataDTO.class);
-            multipartFormDataDTOs.add(multipartFormDataDTO);
-        } else if (fileValue.startsWith("[")) {
-            // Check whether the JSON string is an array
-            multipartFormDataDTOs = Arrays.asList(
-                    objectMapper.readValue(
-                            fileValue,
-                            MultipartFormDataDTO[].class));
+        if (fileValue.contains(BASE64_DELIMITER)) {
+            processBase64Data(fileValue, key, bodyBuilder, outputMessage);
         } else {
-            throw new AppsmithPluginException(AppsmithPluginError.PLUGIN_DATASOURCE_ARGUMENT_ERROR,
-                    "Unable to parse content. Expected to receive an array or object of multipart data");
+            List<MultipartFormDataDTO> multipartFormDataDTOs = parseMultipartData(fileValue);
+
+            for (MultipartFormDataDTO dto : multipartFormDataDTOs) {
+                String dataString = String.valueOf(dto.getData());
+                if (dataString.contains(BASE64_DELIMITER)) {
+                    processBase64Data(dataString, key, bodyBuilder, outputMessage, dto.getName(), dto.getType());
+                } else {
+                    processRegularData(dataString, key, bodyBuilder, outputMessage, dto.getName(), dto.getType());
+                }
+            }
+        }
+    }
+
+    // Process BASE64-encoded content
+    private void processBase64Data(
+            String fileValue, String key, MultipartBodyBuilder bodyBuilder, ClientHttpRequest outputMessage) {
+        processBase64Data(fileValue, key, bodyBuilder, outputMessage, "file", "application/octet-stream");
+    }
+
+    // Overloaded method with custom filename & MIME type
+    private void processBase64Data(
+            String fileValue,
+            String key,
+            MultipartBodyBuilder bodyBuilder,
+            ClientHttpRequest outputMessage,
+            String filename,
+            String defaultMimeType) {
+        String[] parts = fileValue.split(BASE64_DELIMITER, 2);
+        if (parts.length != 2) {
+            throw new AppsmithPluginException(
+                    AppsmithPluginError.PLUGIN_DATASOURCE_ARGUMENT_ERROR, ERROR_INVALID_BASE64_FORMAT);
         }
 
-        multipartFormDataDTOs.forEach(multipartFormDataDTO -> {
-            final MultipartFormDataDTO finalMultipartFormDataDTO = multipartFormDataDTO;
-            Flux<DataBuffer> data = DataBufferUtils.readInputStream(
-                    () -> new ByteArrayInputStream(String.valueOf(finalMultipartFormDataDTO.getData())
-                            .getBytes(StandardCharsets.ISO_8859_1)),
-                    outputMessage.bufferFactory(),
-                    4096);
+        String metadataPart = parts[0];
+        String base64Content = parts[1];
+        String mimeType = extractMimeType(metadataPart, defaultMimeType);
+        byte[] decodedBytes = Base64.getMimeDecoder().decode(base64Content);
 
-            bodyBuilder.asyncPart(key, data, DataBuffer.class)
-                    .filename(multipartFormDataDTO.getName())
-                    .contentType(MediaType.valueOf(multipartFormDataDTO.getType()));
-        });
+        addPartToBody(bodyBuilder, key, decodedBytes, outputMessage, filename, mimeType);
+    }
 
+    // Process regular string data
+    private void processRegularData(
+            String data,
+            String key,
+            MultipartBodyBuilder bodyBuilder,
+            ClientHttpRequest outputMessage,
+            String filename,
+            String mimeType) {
+        byte[] bytes = data.getBytes(StandardCharsets.ISO_8859_1);
+        addPartToBody(bodyBuilder, key, bytes, outputMessage, filename, mimeType);
+    }
+
+    // Extract MIME type from metadata string
+    // The metadataPart typically follows this format: "data:mimetype;base64"
+    // Example values:
+    //   - "data:image/png;base64"  -> Extracted MIME type: "image/png"
+    //   - "data:application/pdf;base64" -> Extracted MIME type: "application/pdf"
+    //   - "data:text/plain;" (without base64) -> Extracted MIME type: "text/plain"
+    // If the format is incorrect or missing, it falls back to the default MIME type.
+    private String extractMimeType(String metadataPart, String defaultMimeType) {
+        if (metadataPart.startsWith("data:")) {
+            int endIndex = metadataPart.indexOf(';');
+            if (endIndex > 5) {
+                return metadataPart.substring(5, endIndex);
+            } else {
+                return metadataPart.substring(5);
+            }
+        }
+        return defaultMimeType;
+    }
+
+    // Add a part to the MultipartBodyBuilder
+    private void addPartToBody(
+            MultipartBodyBuilder bodyBuilder,
+            String key,
+            byte[] bytes,
+            ClientHttpRequest outputMessage,
+            String filename,
+            String mimeType) {
+        Flux<DataBuffer> data = DataBufferUtils.readInputStream(
+                () -> new ByteArrayInputStream(bytes), outputMessage.bufferFactory(), 4096);
+        bodyBuilder.asyncPart(key, data, DataBuffer.class).filename(filename).contentType(MediaType.valueOf(mimeType));
+    }
+
+    // Parse JSON multipart data
+    private List<MultipartFormDataDTO> parseMultipartData(String fileValue) throws IOException {
+        if (fileValue.startsWith("{")) {
+            return Collections.singletonList(objectMapper.readValue(fileValue, MultipartFormDataDTO.class));
+        } else if (fileValue.startsWith("[")) {
+            return Arrays.asList(objectMapper.readValue(fileValue, MultipartFormDataDTO[].class));
+        } else {
+            throw new AppsmithPluginException(
+                    AppsmithPluginError.PLUGIN_DATASOURCE_ARGUMENT_ERROR, ERROR_INVALID_MULTIPART_DATA);
+        }
     }
 
     /**
@@ -272,34 +427,73 @@ public class DataUtils {
             return null;
         }
 
-        JSONParser jsonParser = new JSONParser(JSONParser.MODE_PERMISSIVE);
-        Object parsedJson = null;
+        // For both list and Map type we have used fallback parsing strategies, First GSON tries to parse
+        // the jsonString (we've used gson because the native jsonObject gson uses to parse JSON is implemented on top
+        // of linkedHashMaps, which preserves the order of attributes),
+        // however if gson encounters any errors, which could arise due to a lenient jsonString
+        // i.e. { "a" : "one", "b" : "two",} (Notice the comma at the end), this is not a valid json according to
+        // RFC4627. GSON would fail here, however JsonParser from net.minidev would parse this in permissive mode.
 
         if (type.equals(List.class)) {
-            parsedJson = (JSONArray) jsonParser.parse(jsonString);
+            return parseJsonIntoListWithOrderedObjects(jsonString, gson, jsonParser);
         } else {
-            parsedJson = (JSONObject) jsonParser.parse(jsonString);
+            // We learned from issue #23456 that some use-cases require the order of keys to be preserved
+            //  i.e. for AWS authorisation, one signature header is required whose value holds the hash
+            // of the body.
+            return parseJsonIntoOrderedObject(jsonString, gson, jsonParser);
         }
-
-        return parsedJson;
-
     }
 
-    public Object getRequestBodyObject(ActionConfiguration actionConfiguration, String reqContentType,
-                                       boolean encodeParamsToggle, HttpMethod httpMethod) {
+    private static Object parseJsonIntoListWithOrderedObjects(String jsonString, Gson gson, JSONParser jsonParser)
+            throws ParseException {
+        TypeToken<List<Object>> listTypeToken = new TypeToken<>() {};
+        try {
+            return gson.fromJson(jsonString, listTypeToken.getType());
+        } catch (JsonSyntaxException jsonSyntaxException) {
+            return jsonParser.parse(jsonString);
+        }
+    }
+
+    private static Object parseJsonIntoOrderedObject(String jsonString, Gson gson, JSONParser jsonParser)
+            throws ParseException {
+        TypeToken<LinkedHashMap<String, Object>> linkedHashMapTypeToken = new TypeToken<>() {};
+        try {
+            return gson.fromJson(jsonString, linkedHashMapTypeToken.getType());
+        } catch (JsonSyntaxException jsonSyntaxException) {
+            JsonReader jsonReader = new JsonReader();
+            CollectionMapper.MapClass<LinkedHashMap<String, Object>> collectionMapper =
+                    new CollectionMapper.MapClass<>(jsonReader, linkedHashMapTypeToken.getRawType());
+            return jsonParser.parse(jsonString, collectionMapper);
+        }
+    }
+
+    public Object getRequestBodyObject(
+            ActionConfiguration actionConfiguration,
+            String reqContentType,
+            boolean encodeParamsToggle,
+            HttpMethod httpMethod) {
+        // We will read the request body for all HTTP calls where the apiContentType is NOT "none".
+        // This is irrespective of the content-type header or the HTTP method
+        String apiContentTypeStr = (String)
+                PluginUtils.getValueSafelyFromFormData(actionConfiguration.getFormData(), FIELD_API_CONTENT_TYPE);
+        ApiContentType apiContentType = ApiContentType.getValueFromString(apiContentTypeStr);
+
+        if (HttpMethod.GET.equals(httpMethod) && (apiContentType == null || apiContentType == ApiContentType.NONE)) {
+            /**
+             * Setting request body object to null makes the webClient object to ignore the body when sending the API
+             * request. Earlier, we were setting it to an empty string, which worked fine for almost all the use
+             * cases, however it caused error when used to call Figma's GET API call. Figma's server detected that
+             * there is a body attached with the request and would return with a `BAD REQUEST` error.
+             * Ref: https://github.com/appsmithorg/appsmith/issues/14894
+             */
+            return null;
+        }
+
         // We initialize this object to an empty string because body can never be empty
         // Based on the content-type, this Object may be of type MultiValueMap or String
         Object requestBodyObj = "";
 
-        // We will read the request body for all HTTP calls where the apiContentType is NOT "none".
-        // This is irrespective of the content-type header or the HTTP method
-        String apiContentTypeStr = (String) PluginUtils.getValueSafelyFromFormData(
-                actionConfiguration.getFormData(),
-                FIELD_API_CONTENT_TYPE
-        );
-        ApiContentType apiContentType = ApiContentType.getValueFromString(apiContentTypeStr);
-
-        if (!httpMethod.equals(HttpMethod.GET)) {
+        if (!HttpMethod.GET.equals(httpMethod)) {
             // Read the body normally as this is a non-GET request
             requestBodyObj = (actionConfiguration.getBody() == null) ? "" : actionConfiguration.getBody();
         } else if (apiContentType != null && apiContentType != ApiContentType.NONE) {

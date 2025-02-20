@@ -1,13 +1,12 @@
 import React from "react";
-import BaseControl, { ControlProps } from "./BaseControl";
+import type { ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 import { StyledDynamicInput } from "./StyledControls";
-import CodeEditor, {
-  CodeEditorExpected,
-} from "components/editorComponents/CodeEditor";
+import type { CodeEditorExpected } from "components/editorComponents/CodeEditor";
+import type { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
 import {
   EditorModes,
   EditorSize,
-  EditorTheme,
   TabBehaviour,
 } from "components/editorComponents/CodeEditor/EditorConfig";
 import { isDynamicValue } from "utils/DynamicBindingUtils";
@@ -17,33 +16,45 @@ import {
   JSToString,
   stringToJS,
 } from "components/editorComponents/ActionCreator/utils";
-import { AdditionalDynamicDataTree } from "utils/autocomplete/customTreeTypeDefCreator";
-import { ColumnProperties } from "widgets/TableWidgetV2/component/Constants";
+import type { AdditionalDynamicDataTree } from "utils/autocomplete/customTreeTypeDefCreator";
+import type { ColumnProperties } from "widgets/TableWidgetV2/component/Constants";
 import { getUniqueKeysFromSourceData } from "widgets/MenuButtonWidget/widget/helper";
+import LazyCodeEditor from "components/editorComponents/LazyCodeEditor";
+import { bindingHintHelper } from "components/editorComponents/CodeEditor/hintHelpers";
+import { slashCommandHintHelper } from "components/editorComponents/CodeEditor/commandsHelper";
 
 const PromptMessage = styled.span`
   line-height: 17px;
+
+  > .code-wrapper {
+    font-family: var(--ads-v2-font-family-code);
+    display: inline-flex;
+    align-items: center;
+  }
 `;
 const CurlyBraces = styled.span`
-  color: ${(props) => props.theme.colors.codeMirror.background.hoverState};
-  background-color: #575757;
+  color: var(--ads-v2-color-fg);
+  background-color: var(--ads-v2-color-bg-muted);
   border-radius: 2px;
   padding: 2px;
-  margin: 0px 2px;
+  margin: 0 2px 0 0;
   font-size: 10px;
+  font-weight: var(--ads-v2-font-weight-bold);
 `;
 
-type InputTextProp = {
+interface InputTextProp {
   label: string;
   value: string;
   onChange: (event: React.ChangeEvent<HTMLTextAreaElement> | string) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluatedValue?: any;
   expected?: CodeEditorExpected;
   placeholder?: string;
   dataTreePath?: string;
   additionalDynamicData: AdditionalDynamicDataTree;
   theme: EditorTheme;
-};
+}
 
 function InputText(props: InputTextProp) {
   const {
@@ -56,24 +67,31 @@ function InputText(props: InputTextProp) {
     theme,
     value,
   } = props;
+
   return (
     <StyledDynamicInput>
-      <CodeEditor
+      <LazyCodeEditor
+        AIAssisted
         additionalDynamicData={additionalDynamicData}
         dataTreePath={dataTreePath}
         evaluatedValue={evaluatedValue}
         expected={expected}
+        hinting={[bindingHintHelper, slashCommandHintHelper]}
         input={{
           value: value,
           onChange: onChange,
         }}
         mode={EditorModes.TEXT_WITH_BINDING}
         placeholder={placeholder}
+        positionCursorInsideBinding
         promptMessage={
           <PromptMessage>
-            Access the current item using <CurlyBraces>{"{{"}</CurlyBraces>
-            currentItem
-            <CurlyBraces>{"}}"}</CurlyBraces>
+            Access the current item using{" "}
+            <span className="code-wrapper">
+              <CurlyBraces>{"{{"}</CurlyBraces>
+              currentItem
+              <CurlyBraces>{"}}"}</CurlyBraces>
+            </span>
           </PromptMessage>
         }
         size={EditorSize.EXTENDED}
@@ -84,9 +102,7 @@ function InputText(props: InputTextProp) {
   );
 }
 
-class MenuButtonDynamicItemsControl extends BaseControl<
-  MenuButtonDynamicItemsControlProps
-> {
+class MenuButtonDynamicItemsControl extends BaseControl<MenuButtonDynamicItemsControlProps> {
   render() {
     const {
       dataTreePath,
@@ -108,8 +124,8 @@ class MenuButtonDynamicItemsControl extends BaseControl<
             widgetProperties.primaryColumns,
           )
         : propertyValue
-        ? propertyValue
-        : defaultValue;
+          ? propertyValue
+          : defaultValue;
     let sourceData;
 
     if (widgetType === "TABLE_WIDGET_V2") {
@@ -123,6 +139,8 @@ class MenuButtonDynamicItemsControl extends BaseControl<
     }
 
     const keys = getUniqueKeysFromSourceData(sourceData);
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const currentItem: { [key: string]: any } = {};
 
     Object.values(keys).forEach((key) => {
@@ -166,7 +184,7 @@ class MenuButtonDynamicItemsControl extends BaseControl<
         } else if (${widgetName}.primaryColumns.${columnName}.sourceData.length) {
           primaryColumnData = ${widgetName}.primaryColumns.${columnName}.sourceData;
         }
-        
+
         return primaryColumnData.map((currentItem, currentIndex) => `;
     } else {
       return `{{${widgetName}.sourceData.map((currentItem, currentIndex) => ( `;
@@ -226,11 +244,13 @@ class MenuButtonDynamicItemsControl extends BaseControl<
 
   onTextChange = (event: React.ChangeEvent<HTMLTextAreaElement> | string) => {
     let value = "";
+
     if (typeof event !== "string") {
       value = event.target?.value;
     } else {
       value = event;
     }
+
     if (isString(value)) {
       const output = this.getComputedValue(
         value,

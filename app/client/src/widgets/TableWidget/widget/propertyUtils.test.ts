@@ -175,6 +175,8 @@ const tableWProps = {
 
 describe("unit test case for property utils", () => {
   it("case: check if the defaultSelectedRowValiation returns parsed value as undefined", () => {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const value = defaultSelectedRowValidation("", tableWProps as any, _);
 
     expect(value.isValid).toBeTruthy();
@@ -182,6 +184,8 @@ describe("unit test case for property utils", () => {
   });
   it("case: when columnType is menuButton, iconName should be empty string", () => {
     const propertiesToUpdate = updateIconNameHook(
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tableWProps as any,
       "primaryColumns.action.columnType",
       "menuButton",
@@ -190,32 +194,32 @@ describe("unit test case for property utils", () => {
       {
         propertyPath: "derivedColumns.action.menuColor",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( appsmith.theme.colors.primaryColor))}}",
+          "{{Table1.sanitizedTableData.map((currentRow) => ( (appsmith.theme.colors.primaryColor)))}}",
       },
       {
         propertyPath: "primaryColumns.action.menuColor",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( appsmith.theme.colors.primaryColor))}}",
+          "{{Table1.sanitizedTableData.map((currentRow) => ( (appsmith.theme.colors.primaryColor)))}}",
       },
       {
         propertyPath: "derivedColumns.action.borderRadius",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( appsmith.theme.borderRadius.appBorderRadius))}}",
+          "{{Table1.sanitizedTableData.map((currentRow) => ( (appsmith.theme.borderRadius.appBorderRadius)))}}",
       },
       {
         propertyPath: "primaryColumns.action.borderRadius",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( appsmith.theme.borderRadius.appBorderRadius))}}",
+          "{{Table1.sanitizedTableData.map((currentRow) => ( (appsmith.theme.borderRadius.appBorderRadius)))}}",
       },
       {
         propertyPath: "derivedColumns.action.boxShadow",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( 'none'))}}",
+          '{{Table1.sanitizedTableData.map((currentRow) => ( "none"))}}',
       },
       {
         propertyPath: "primaryColumns.action.boxShadow",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( 'none'))}}",
+          '{{Table1.sanitizedTableData.map((currentRow) => ( "none"))}}',
       },
       {
         propertyPath: "primaryColumns.action.columnType",
@@ -226,10 +230,13 @@ describe("unit test case for property utils", () => {
         propertyValue: "",
       },
     ];
+
     expect(propertiesToUpdate).toEqual(output);
   });
   it("case: when columnType is iconButton, iconName value should be add", () => {
     const propertiesToUpdate = updateIconNameHook(
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tableWProps as any,
       "primaryColumns.action.columnType",
       "iconButton",
@@ -238,32 +245,32 @@ describe("unit test case for property utils", () => {
       {
         propertyPath: "derivedColumns.action.menuColor",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( appsmith.theme.colors.primaryColor))}}",
+          "{{Table1.sanitizedTableData.map((currentRow) => ( (appsmith.theme.colors.primaryColor)))}}",
       },
       {
         propertyPath: "primaryColumns.action.menuColor",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( appsmith.theme.colors.primaryColor))}}",
+          "{{Table1.sanitizedTableData.map((currentRow) => ( (appsmith.theme.colors.primaryColor)))}}",
       },
       {
         propertyPath: "derivedColumns.action.borderRadius",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( appsmith.theme.borderRadius.appBorderRadius))}}",
+          "{{Table1.sanitizedTableData.map((currentRow) => ( (appsmith.theme.borderRadius.appBorderRadius)))}}",
       },
       {
         propertyPath: "primaryColumns.action.borderRadius",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( appsmith.theme.borderRadius.appBorderRadius))}}",
+          "{{Table1.sanitizedTableData.map((currentRow) => ( (appsmith.theme.borderRadius.appBorderRadius)))}}",
       },
       {
         propertyPath: "derivedColumns.action.boxShadow",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( 'none'))}}",
+          '{{Table1.sanitizedTableData.map((currentRow) => ( "none"))}}',
       },
       {
         propertyPath: "primaryColumns.action.boxShadow",
         propertyValue:
-          "{{Table1.sanitizedTableData.map((currentRow) => ( 'none'))}}",
+          '{{Table1.sanitizedTableData.map((currentRow) => ( "none"))}}',
       },
       {
         propertyPath: "primaryColumns.action.columnType",
@@ -274,6 +281,7 @@ describe("unit test case for property utils", () => {
         propertyValue: "add",
       },
     ];
+
     expect(propertiesToUpdate).toEqual(output);
   });
 });

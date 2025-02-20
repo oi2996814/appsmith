@@ -1,88 +1,85 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // Heavily inspired from https://github.com/codemirror/CodeMirror/blob/master/addon/tern/tern.js
-import { Server, Def } from "tern";
-import ecma from "constants/defs/ecmascript.json";
-import lodash from "constants/defs/lodash.json";
-import base64 from "constants/defs/base64-js.json";
-import moment from "constants/defs/moment.json";
-import xmlJs from "constants/defs/xmlParser.json";
-import forge from "constants/defs/forge.json";
-import browser from "constants/defs/browser.json";
-import CodeMirror, { Hint, Pos, cmpPos } from "codemirror";
+import type { Server, Def, QueryRegistry } from "tern";
+import type { Hint, Hints } from "codemirror";
+import type CodeMirror from "codemirror";
 import {
   getDynamicStringSegments,
   isDynamicValue,
 } from "utils/DynamicBindingUtils";
-import {
-  GLOBAL_DEFS,
-  GLOBAL_FUNCTIONS,
-} from "@appsmith/utils/autocomplete/EntityDefinitions";
-import { FieldEntityInformation } from "components/editorComponents/CodeEditor/EditorConfig";
-import { ENTITY_TYPE } from "entities/DataTree/dataTreeFactory";
+import type { FieldEntityInformation } from "components/editorComponents/CodeEditor/EditorConfig";
+import { ENTITY_TYPE } from "ee/entities/DataTree/types";
+import type { EntityTypeValue } from "ee/entities/DataTree/types";
 import { AutocompleteSorter } from "./AutocompleteSortRules";
 import { getCompletionsForKeyword } from "./keywordCompletion";
 import TernWorkerServer from "./TernWorkerService";
-
-const DEFS: Def[] = [
-  // @ts-expect-error: Types are not available
-  ecma,
-  browser,
-  GLOBAL_FUNCTIONS,
-  GLOBAL_DEFS,
-  lodash,
-  base64,
-  moment,
-  xmlJs,
-  forge,
-];
+import { AutocompleteDataType } from "./AutocompleteDataType";
+import {
+  getCodeMirrorNamespaceFromDoc,
+  getCodeMirrorNamespaceFromEditor,
+} from "../getCodeMirrorNamespace";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { findIndex, isString } from "lodash";
+import { renderTernTooltipContent } from "./ternDocTooltip";
 
 const bigDoc = 250;
 const cls = "CodeMirror-Tern-";
 const hintDelay = 1700;
 
-export type Completion = Hint & {
+type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
+
+export interface Completion<
+  T = {
+    doc: string;
+  },
+> extends MakeRequired<Hint, "displayText"> {
   origin: string;
   type: AutocompleteDataType | string;
-  data: {
-    doc: string;
-  };
+  data: T;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   render?: any;
   isHeader?: boolean;
-};
+  recencyWeight?: number;
+  isEntityName?: boolean;
+}
 
-export type CommandsCompletion = Completion & {
-  action?: () => void;
-  shortcut: string;
+export interface CommandsCompletion
+  extends Omit<Completion, "type" | "origin" | "data"> {
+  data: unknown;
+  action?: (callback?: (completion: string) => void) => void;
+  shortcut?: string;
   triggerCompletionsPostPick?: boolean;
-};
+}
 
 type TernDocs = Record<string, TernDoc>;
 
-type TernDoc = {
+interface TernDoc {
   doc: CodeMirror.Doc;
   name: string;
   changed: { to: number; from: number } | null;
-};
-
-export enum AutocompleteDataType {
-  OBJECT = "OBJECT",
-  NUMBER = "NUMBER",
-  ARRAY = "ARRAY",
-  FUNCTION = "FUNCTION",
-  BOOLEAN = "BOOLEAN",
-  STRING = "STRING",
-  UNKNOWN = "UNKNOWN",
 }
 
-type ArgHints = {
+export interface TernCompletionResult {
+  name: string;
+  type?: string | undefined;
+  depth?: number | undefined;
+  doc?: string | undefined;
+  url?: string | undefined;
+  origin?: string | undefined;
+}
+
+interface ArgHints {
   start: CodeMirror.Position;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type: { args: any[]; rettype: null | string };
   name: string;
   guess: boolean;
   doc: CodeMirror.Doc;
-};
+}
 
-type RequestQuery = {
+interface RequestQuery {
   type: string;
   types?: boolean;
   docs?: boolean;
@@ -93,19 +90,62 @@ type RequestQuery = {
   end?: CodeMirror.Position;
   guess?: boolean;
   inLiteral?: boolean;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fullDocs?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lineCharPositions?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   start?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   file?: any;
   includeKeywords?: boolean;
   depth?: number;
   sort?: boolean;
-};
+  expandWordForward?: boolean;
+}
 
-export type DataTreeDefEntityInformation = {
-  type: ENTITY_TYPE;
+export interface DataTreeDefEntityInformation {
+  type: EntityTypeValue;
   subType: string;
-};
+}
+
+/** Tern hard coded some keywords which return `isKeyword` true.
+ * There is however no provision to add more keywords to the list. Therefore,
+ * we maintain a set of keywords that we add and show the keyword icon and type for.
+ */
+export function isCustomKeywordType(
+  completion: TernCompletionResult & { isKeyword?: boolean },
+): boolean {
+  const customKeywordsList = ["async", "await"];
+
+  return Boolean(
+    customKeywordsList.includes(completion.name) || completion.isKeyword,
+  );
+}
+
+// Define the regex for extracting the final object path
+const FINAL_OBJECT_PATH_REGEX = /(?:\w+\.)*\w+$/;
+
+/**
+ * Extracts the final object path from a given input string.
+ * The final object path is the rightmost dot-separated path in the string.
+ *
+ * @param {string} input - The input string from which to extract the object path.
+ * @returns {string|null} - The extracted object path or null if no match is found.
+ *
+ * Example:
+ *   Input: '\tconst k = PageQuery.run'
+ *   Output: 'PageQuery.run'
+ */
+export function extractFinalObjectPath(input: string) {
+  const match = (input || "")?.trim().match(FINAL_OBJECT_PATH_REGEX);
+
+  return match ? match[0] : null;
+}
 
 export function getDataType(type: string): AutocompleteDataType {
   if (type === "?") return AutocompleteDataType.UNKNOWN;
@@ -120,6 +160,7 @@ export function getDataType(type: string): AutocompleteDataType {
 
 export function typeToIcon(type: string, isKeyword: boolean) {
   let suffix;
+
   if (isKeyword) suffix = "keyword";
   else if (type === "?") suffix = "unknown";
   else if (type === "number" || type === "string" || type === "bool")
@@ -127,24 +168,68 @@ export function typeToIcon(type: string, isKeyword: boolean) {
   else if (/^fn\(/.test(type)) suffix = "fn";
   else if (/^\[/.test(type)) suffix = "array";
   else suffix = "object";
+
   return cls + "completion " + cls + "completion-" + suffix;
+}
+
+function shortTernType(type: string) {
+  if (!type) return "";
+
+  return type
+    .replaceAll("string", "str")
+    .replaceAll("boolean", "bool")
+    .replaceAll("number", "num")
+    .replaceAll("{}", "obj");
+}
+
+function getRecencyWeight(
+  completion:
+    | string
+    | {
+        name: string;
+        origin?: string | undefined;
+      },
+  recentEntities: string[],
+) {
+  const completionEntityName = isString(completion)
+    ? completion.split(".")[0]
+    : completion.name.split(".")[0];
+  const completionOrigin = isString(completion) ? "" : completion.origin;
+
+  if (completionOrigin !== "DATA_TREE") return 0;
+
+  const recencyIndex = recentEntities.findIndex(
+    (entityName) => entityName === completionEntityName,
+  );
+
+  if (recencyIndex === -1) return 0;
+
+  const recencyWeight = recentEntities.length - recencyIndex;
+
+  return recencyWeight;
 }
 
 class CodeMirrorTernService {
   server: Server;
   docs: TernDocs = Object.create(null);
   cachedArgHints: ArgHints | null = null;
+  activeArgHints: HTMLElement | null = null;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   active: any;
   fieldEntityInformation: FieldEntityInformation = {};
   defEntityInformation: Map<string, DataTreeDefEntityInformation> = new Map<
     string,
     DataTreeDefEntityInformation
   >();
-  options: { async: boolean; defs: Def[] };
+  entityDef: Def;
+  options: { async: boolean };
+  recentEntities: string[] = [];
 
-  constructor(options: { async: boolean; defs: Def[] }) {
+  constructor(options: { async: boolean }) {
     this.options = options;
     this.server = new TernWorkerServer(this);
+    this.entityDef = {};
   }
 
   resetServer = () => {
@@ -156,15 +241,22 @@ class CodeMirrorTernService {
     cm.showHint({
       hint: this.getHint.bind(this),
       completeSingle: false,
+      alignWithWord: false,
       extraKeys: {
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         Up: (cm: CodeMirror.Editor, handle: any) => {
           handle.moveFocus(-1);
+
           if (this.active.isHeader === true) {
             handle.moveFocus(-1);
           }
         },
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         Down: (cm: CodeMirror.Editor, handle: any) => {
           handle.moveFocus(1);
+
           if (this.active.isHeader === true) {
             handle.moveFocus(1);
           }
@@ -173,11 +265,208 @@ class CodeMirrorTernService {
     });
   }
 
+  // Forked from app/client/node_modules/codemirror/addon/tern/tern.js
+  updateArgHints(cm: CodeMirror.Editor) {
+    this.closeArgHints();
+    cm.state.ternTooltip = null;
+
+    if (cm.somethingSelected()) return false;
+
+    if (cm.state.completionActive) return false;
+
+    const state = cm.getTokenAt(cm.getCursor()).state;
+    const CodeMirror = getCodeMirrorNamespaceFromDoc(cm.getDoc());
+    const inner = CodeMirror.innerMode(cm.getMode(), state);
+
+    if (inner.mode.name != "javascript") return false;
+
+    const lex = inner.state.lexical;
+
+    if (lex.info != "call") return false;
+
+    let ch;
+    const argPos = lex.pos || 0,
+      tabSize = cm.getOption("tabSize") || 0;
+    let found = false;
+    let line = cm.getCursor().line;
+
+    for (let e = Math.max(0, line - 9); line >= e; --line) {
+      const str = cm.getLine(line);
+      let extra = 0;
+
+      for (let pos = 0; ; ) {
+        const tab = str.indexOf("\t", pos);
+
+        if (tab == -1) break;
+
+        extra += tabSize - ((tab + extra) % tabSize) - 1;
+        pos = tab + 1;
+      }
+
+      ch = lex.column - extra;
+
+      if (str.charAt(ch) == "(") {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) return false;
+
+    const start = CodeMirror.Pos(line, ch);
+    const cache = this.cachedArgHints;
+
+    if (
+      cache &&
+      cache.doc == cm.getDoc() &&
+      CodeMirror.cmpPos(start, cache.start) == 0
+    ) {
+      this.showArgHints(cm, argPos);
+
+      return true;
+    }
+
+    this.request<"type">(
+      cm,
+      { type: "type", preferFunction: true, end: start },
+      (error, data) => {
+        if (error || !data.type || !/^fn\(/.test(data.type)) return;
+
+        this.cachedArgHints = {
+          start: start,
+          type: this.parseFnType(data.type),
+          name: data.exprName || data.name || "fn",
+          guess: data.guess,
+          doc: cm.getDoc(),
+        };
+
+        if (!cm.state.completionActive) this.showArgHints(cm, argPos);
+      },
+    );
+
+    return true;
+  }
+
+  // Forked from app/client/node_modules/codemirror/addon/tern/tern.js
+  parseFnType(text: string) {
+    const args = [];
+    let pos = 3;
+
+    function skipMatching(upto: RegExp) {
+      let depth = 0;
+      const start = pos;
+
+      for (;;) {
+        const next = text.charAt(pos);
+
+        if (upto.test(next) && !depth) return text.slice(start, pos);
+
+        if (/[{\[\(]/.test(next)) ++depth;
+        else if (/[}\]\)]/.test(next)) --depth;
+
+        ++pos;
+      }
+    }
+
+    // Parse arguments
+    if (text.charAt(pos) != ")")
+      for (;;) {
+        const mName = text.slice(pos).match(/^([^, \(\[\{]+): /);
+        let name;
+
+        if (mName) {
+          pos += mName[0].length;
+          name = mName[1];
+        }
+
+        args.push({ name: name, type: skipMatching(/[\),]/) });
+
+        if (text.charAt(pos) == ")") break;
+
+        pos += 2;
+      }
+
+    const rettype = text.slice(pos).match(/^\) -> (.*)$/);
+
+    return { args: args, rettype: rettype && rettype[1] };
+  }
+
+  // Forked from app/client/node_modules/codemirror/addon/tern/tern.js
+  closeArgHints() {
+    if (this.activeArgHints) {
+      // @ts-expect-error no types found
+      if (this.activeArgHints.clear) this.activeArgHints.clear();
+
+      this.remove(this.activeArgHints);
+      this.activeArgHints = null;
+    }
+
+    return true;
+  }
+
+  // Forked from app/client/node_modules/codemirror/addon/tern/tern.js
+  showArgHints(cm: CodeMirror.Editor, pos: number) {
+    this.closeArgHints();
+    const cache = this.cachedArgHints,
+      tp = cache?.type;
+    const tip = this.elt(
+      "span",
+      cache?.guess ? cls + "fhint-guess" : null,
+      this.elt("span", cls + "fname", cache?.name),
+      "(",
+    );
+
+    if (!tp) return;
+
+    for (let i = 0; i < tp.args.length; ++i) {
+      if (i) tip.appendChild(document.createTextNode(", "));
+
+      const arg = tp.args[i];
+
+      tip.appendChild(
+        this.elt(
+          "span",
+          cls + "farg" + (i == pos ? " " + cls + "farg-current" : ""),
+          arg.name || "?",
+        ),
+      );
+
+      if (arg.type != "?") {
+        tip.appendChild(document.createTextNode(":\u00a0"));
+        tip.appendChild(
+          this.elt("span", cls + "type", shortTernType(arg.type)),
+        );
+      }
+    }
+
+    tip.appendChild(document.createTextNode(")"));
+
+    if (tp.rettype)
+      tip.appendChild(
+        this.elt("span", cls + "type", `: ${shortTernType(tp.rettype)}`),
+      );
+
+    const place = cm.cursorCoords(null, "page");
+
+    const tooltip: HTMLElement & { clear?: () => void } =
+      (cm.state.ternTooltip =
+      this.activeArgHints =
+        this.makeTooltip(place.left + 1, place.bottom, tip, cm));
+
+    setTimeout(() => {
+      tooltip.clear = this.onEditorActivity(cm, () => {
+        if (this.activeArgHints == tooltip) this.closeArgHints();
+      });
+    }, 20);
+  }
+
   showType(cm: CodeMirror.Editor) {
-    this.showContextInfo(cm, "type");
+    this.showContextInfo(cm, "type", null);
   }
 
   showDocs(cm: CodeMirror.Editor) {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.showContextInfo(cm, "documentation", (data: any) => {
       if (data.url) {
         window.open(data.url, "_blank");
@@ -200,6 +489,8 @@ class CodeMirrorTernService {
       this.server.deleteDefs(name);
     }
 
+    this.entityDef = def || {};
+
     if (entityInfo) this.defEntityInformation = entityInfo;
   }
 
@@ -207,19 +498,30 @@ class CodeMirrorTernService {
     this.server.deleteDefs(name);
   }
 
-  requestCallback(error: any, data: any, cm: CodeMirror.Editor, resolve: any) {
+  requestCallback(
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    error: any,
+    data: QueryRegistry["completions"]["result"],
+    cm: CodeMirror.Editor,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolve: any,
+  ) {
     if (error) return this.showError(cm, error);
-    if (data.completions.length === 0) {
-      return this.showError(cm, "No suggestions");
-    }
+
+    if (data.completions.length === 0) return;
+
     const doc = this.findDoc(cm.getDoc());
     const lineValue = this.lineValue(doc);
     const cursor = cm.getCursor();
     const { extraChars } = this.getFocusedDocValueAndPos(doc);
 
-    let completions: Completion[] = [];
+    let completions: Completion<TernCompletionResult>[] = [];
     let after = "";
     const { end, start } = data;
+
+    if (typeof end === "number" || typeof start === "number") return;
 
     const from = {
       ...start,
@@ -231,6 +533,8 @@ class CodeMirrorTernService {
       ch: end.ch + extraChars,
       line: cursor.line,
     };
+    const { Pos } = getCodeMirrorNamespaceFromEditor(cm);
+
     if (
       cm.getRange(Pos(from.line, from.ch - 2), from) === '["' &&
       cm.getRange(to, Pos(to.line, to.ch + 2)) !== '"]'
@@ -238,36 +542,70 @@ class CodeMirrorTernService {
       after = '"]';
     }
 
+    const token = cm.getTokenAt(cursor);
+    const handleAutocompleteSelection = dotToBracketNotationAtToken(token);
+
     for (let i = 0; i < data.completions.length; ++i) {
       const completion = data.completions[i];
-      let className = typeToIcon(completion.type, completion.isKeyword);
-      const dataType = getDataType(completion.type);
-      if (data.guess) className += " " + cls + "guess";
+
+      if (typeof completion === "string") continue;
+
+      const isKeyword = isCustomKeywordType(completion);
+      const className = typeToIcon(completion.type as string, isKeyword);
+      const dataType = getDataType(completion.type as string);
+      const recencyWeight = getRecencyWeight(completion, this.recentEntities);
+      const isCompletionADataTreeEntityName =
+        completion.origin === "DATA_TREE" &&
+        this.defEntityInformation.has(completion.name);
       let completionText = completion.name + after;
+      const completedLine = lineValue.substring(0, from.ch) + completion.name;
+      const entityPath = extractFinalObjectPath(completedLine);
+
       if (dataType === "FUNCTION" && !completion.origin?.startsWith("LIB/")) {
-        completionText = completionText + "()";
+        if (token.type !== "string" && token.string !== "[") {
+          const entityDef = entityPath && this.entityDef[entityPath];
+
+          if (
+            entityDef &&
+            typeof entityDef === "object" &&
+            "!fnParams" in entityDef
+          ) {
+            completionText = completionText + `(${entityDef["!fnParams"]})`;
+          } else {
+            completionText = completionText + "()";
+          }
+        }
       }
-      const codeMirrorCompletion: Completion = {
+
+      const codeMirrorCompletion: Completion<TernCompletionResult> = {
         text: completionText,
-        displayText: completionText,
+        displayText: completion.name,
         className: className,
         data: completion,
-        origin: completion.origin,
+        origin: completion.origin as string,
         type: dataType,
         isHeader: false,
+        recencyWeight,
+        isEntityName: isCompletionADataTreeEntityName,
       };
-      if (completion.isKeyword) {
+
+      if (isKeyword) {
         codeMirrorCompletion.render = (
           element: HTMLElement,
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           self: any,
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           data: any,
         ) => {
           element.setAttribute("keyword", data.displayText);
           element.innerHTML = data.displayText;
         };
 
-        const trimmedFocusedValueLength = lineValue.substring(0, end.ch).trim()
-          .length;
+        const trimmedFocusedValueLength = lineValue
+          .substring(0, end.ch)
+          .trim().length;
 
         /**
          * end.ch counts tab space as 1 instead of 2 space chars in string
@@ -283,8 +621,12 @@ class CodeMirrorTernService {
           codeMirrorCompletion,
           cursorHorizontalPos,
         );
+
         completions = [...completions, ...keywordCompletions];
+      } else {
+        codeMirrorCompletion.hint = handleAutocompleteSelection;
       }
+
       completions.push(codeMirrorCompletion);
     }
 
@@ -293,7 +635,7 @@ class CodeMirrorTernService {
 
     completions = AutocompleteSorter.sort(
       completions,
-      this.fieldEntityInformation,
+      { ...this.fieldEntityInformation, token },
       this.defEntityInformation.get(
         this.fieldEntityInformation.entityName || "",
       ),
@@ -306,38 +648,52 @@ class CodeMirrorTernService {
       to: to,
       list: completions,
       selectedHint: indexToBeSelected,
+      lineValue,
+      query: this.getQueryForAutocomplete(cm),
     };
     let tooltip: HTMLElement | undefined = undefined;
+    const CodeMirror = getCodeMirrorNamespaceFromEditor(cm);
+
+    CodeMirror.on(obj, "shown", () => {
+      this.activeArgHints && this.remove(this.activeArgHints);
+    });
     CodeMirror.on(obj, "close", () => this.remove(tooltip));
     CodeMirror.on(obj, "update", () => this.remove(tooltip));
     CodeMirror.on(
       obj,
       "select",
-      (cur: { data: { doc: string } }, node: any) => {
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (cur: Completion<TernCompletionResult>, node: any) => {
         this.active = cur;
         this.remove(tooltip);
         const content = cur.data.doc;
-        if (content) {
-          tooltip = this.makeTooltip(
-            node.parentNode.getBoundingClientRect().right + window.pageXOffset,
-            node.getBoundingClientRect().top + window.pageYOffset,
-            content,
-          );
-          tooltip.className += " " + cls + "hint-doc";
-          CodeMirror.on(
-            cm,
-            "keyup",
-            (cm: CodeMirror.Editor, keyboardEvent: KeyboardEvent) => {
-              if (
-                keyboardEvent.code === "Space" &&
-                keyboardEvent.ctrlKey &&
-                tooltip
-              ) {
-                tooltip.className += " visible";
-              }
-            },
-          );
-        }
+
+        if (!content) return;
+
+        const docTooltipContainer = this.elt("div", "flex flex-col pb-1");
+
+        renderTernTooltipContent(docTooltipContainer, cur);
+        tooltip = this.makeTooltip(
+          node.parentNode.getBoundingClientRect().right + window.pageXOffset,
+          node.getBoundingClientRect().top + window.pageYOffset + 2,
+          docTooltipContainer,
+          cm,
+          cls + "hint-doc",
+        );
+        CodeMirror.on(
+          cm,
+          "keyup",
+          (cm: CodeMirror.Editor, keyboardEvent: KeyboardEvent) => {
+            if (
+              keyboardEvent.code === "Space" &&
+              keyboardEvent.ctrlKey &&
+              tooltip
+            ) {
+              tooltip.className += " visible";
+            }
+          },
+        );
       },
     );
     resolve(obj);
@@ -345,9 +701,11 @@ class CodeMirrorTernService {
     return obj;
   }
 
-  getHint(cm: CodeMirror.Editor) {
-    return new Promise((resolve) => {
-      this.request(
+  async getHint(cm: CodeMirror.Editor) {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hints: Record<string, any> = await new Promise((resolve) => {
+      this.request<"completions">(
         cm,
         {
           type: "completions",
@@ -357,40 +715,88 @@ class CodeMirrorTernService {
           origins: true,
           caseInsensitive: true,
           guess: false,
-          inLiteral: false,
+          inLiteral: true,
+          depth: 3,
         },
         (error, data) => this.requestCallback(error, data, cm, resolve),
       );
     });
+
+    // When a function is picked, move the cursor between the parenthesis.
+    const CodeMirror = getCodeMirrorNamespaceFromDoc(cm.getDoc());
+
+    CodeMirror.on(hints, "pick", (selected: Completion) => {
+      const hintsWithoutHeaders = hints.list.filter(
+        (h: Record<string, unknown>) => h.isHeader !== true,
+      );
+
+      const selectedResultIndex = findIndex(
+        hintsWithoutHeaders,
+        (item: Record<string, unknown>) =>
+          item.displayText === selected.displayText,
+      );
+
+      AnalyticsUtil.logEvent("AUTO_COMPLETE_SELECT", {
+        selectedResult: selected.text,
+        query: hints.query,
+        selectedResultIndex,
+        selectedResultType: selected.type,
+        isBestMatch:
+          selectedResultIndex <= AutocompleteSorter.bestMatchEndIndex,
+        isExternalLibrary: selected.origin?.startsWith("LIB/"),
+        libraryNamespace: selected.origin?.split("/")[1],
+      });
+
+      const hasParenthesis = selected.text.endsWith("()");
+
+      if (selected.type === AutocompleteDataType.FUNCTION && hasParenthesis) {
+        cm.setCursor({
+          line: cm.getCursor().line,
+          ch: cm.getCursor().ch - 1,
+        });
+      }
+    });
+
+    return hints;
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   showContextInfo(cm: CodeMirror.Editor, queryName: string, callbackFn?: any) {
-    this.request(cm, { type: queryName }, (error, data) => {
-      if (error) return this.showError(cm, error);
+    this.request<"type">(cm, { type: queryName }, (error, data) => {
+      if (error) return;
+
       const tip = this.elt(
         "span",
         null,
         this.elt("strong", null, data.type || "not found"),
       );
+
       if (data.doc) tip.appendChild(document.createTextNode(" — " + data.doc));
+
       if (data.url) {
         tip.appendChild(document.createTextNode(" "));
         const child = tip.appendChild(this.elt("a", null, "[docs]"));
+
         // @ts-expect-error: Types are not available
         child.href = data.url;
 
         // @ts-expect-error: Types are not available
         child.target = "_blank";
       }
+
       this.tempTooltip(cm, tip);
+
       if (callbackFn) callbackFn(data);
     });
   }
 
-  request(
+  request<T extends keyof QueryRegistry>(
     cm: CodeMirror.Editor,
     query: RequestQuery | string,
-    callbackFn: (error: any, data: any) => void,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    callbackFn: (error: any, data: QueryRegistry[T]["result"]) => void,
     pos?: CodeMirror.Position,
   ) {
     const doc = this.findDoc(cm.getDoc());
@@ -403,45 +809,57 @@ class CodeMirrorTernService {
   findDoc(doc: CodeMirror.Doc, name?: string): TernDoc {
     for (const n in this.docs) {
       const cur = this.docs[n];
+
       if (cur.doc === doc) return cur;
     }
+
     if (!name) {
       let n;
+
       for (let i = 0; ; ++i) {
         n = "[doc" + (i || "") + "]";
+
         if (!this.docs[n]) {
           name = n;
           break;
         }
       }
     }
+
     return this.addDoc(name, doc);
   }
 
   addDoc(name: string, doc: CodeMirror.Doc) {
     const data = { doc: doc, name: name, changed: null };
+
     this.server.addFile(name, this.getFocusedDocValueAndPos(data).value);
+    const CodeMirror = getCodeMirrorNamespaceFromDoc(doc);
+
     CodeMirror.on(doc, "change", this.trackChange.bind(this));
+
     return (this.docs[name] = data);
   }
 
-  buildRequest(
-    doc: TernDoc,
-    query: Partial<RequestQuery> | string,
-    pos?: CodeMirror.Position,
-  ) {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  buildRequest(doc: TernDoc, query: any, pos?: CodeMirror.Position) {
     const files = [];
     let offsetLines = 0;
+
     if (typeof query == "string") query = { type: query };
+
     const allowFragments = !query.fullDocs;
+
     if (!allowFragments) delete query.fullDocs;
+
     query.lineCharPositions = true;
     query.includeKeywords = true;
-    query.depth = 0;
     query.sort = true;
+
     if (query.end == null) {
       const positions = pos || doc.doc.getCursor("end");
       const { end } = this.getFocusedDocValueAndPos(doc);
+
       query.end = {
         ...positions,
         ...end,
@@ -449,6 +867,7 @@ class CodeMirrorTernService {
 
       if (doc.doc.somethingSelected()) query.start = doc.doc.getCursor("start");
     }
+
     const startPos = query.start || query.end;
 
     if (doc.changed) {
@@ -459,11 +878,15 @@ class CodeMirrorTernService {
         doc.changed.from <= startPos.line &&
         doc.changed.to > query.end.line
       ) {
+        const { Pos } = getCodeMirrorNamespaceFromDoc(doc.doc);
+
         files.push(this.getFragmentAround(doc, startPos, query.end));
         query.file = "#0";
         offsetLines = files[0].offsetLines;
+
         if (query.start != null)
           query.start = Pos(query.start.line - -offsetLines, query.start.ch);
+
         query.end = Pos(query.end.line - offsetLines, query.end.ch);
       } else {
         files.push({
@@ -485,8 +908,10 @@ class CodeMirrorTernService {
         text: this.getFocusedDocValueAndPos(doc).value,
       });
     }
+
     for (const name in this.docs) {
       const cur = this.docs[name];
+
       if (cur.changed && (cur != doc || cur.name != doc.name)) {
         files.push({
           type: "full",
@@ -505,12 +930,16 @@ class CodeMirrorTernService {
     change: {
       to: CodeMirror.Position;
       from: CodeMirror.Position;
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       text: string | any[];
     },
   ) {
+    const { cmpPos } = getCodeMirrorNamespaceFromDoc(doc);
     const data = this.findDoc(doc);
 
     const argHints = this.cachedArgHints;
+
     if (
       argHints &&
       argHints.doc === doc &&
@@ -519,12 +948,17 @@ class CodeMirrorTernService {
       this.cachedArgHints = null;
 
     let changed = data.changed;
+
     if (changed === null)
       data.changed = changed = { from: change.from.line, to: change.from.line };
+
     const end = change.from.line + (change.text.length - 1);
+
     if (change.from.line < changed.to)
       changed.to = changed.to - (change.to.line - end);
+
     if (end >= changed.to) changed.to = end + 1;
+
     if (changed.from > change.from.line) changed.from = change.from.line;
 
     if (doc.lineCount() > bigDoc && changed.to - changed.from > 100)
@@ -546,7 +980,7 @@ class CodeMirrorTernService {
           },
         ],
       },
-      function(error: Error) {
+      function (error: Error) {
         if (error) window.console.error(error);
         else doc.changed = null;
       },
@@ -563,15 +997,19 @@ class CodeMirrorTernService {
     return doc.doc.getValue();
   }
 
-  getFocusedDocValueAndPos(
-    doc: TernDoc,
-  ): { value: string; end: { line: number; ch: number }; extraChars: number } {
+  getFocusedDocValueAndPos(doc: TernDoc): {
+    value: string;
+    end: { line: number; ch: number };
+    extraChars: number;
+    isSingleDynamicValue?: boolean;
+  } {
     const cursor = doc.doc.getCursor("end");
     const value = this.docValue(doc);
     const lineValue = this.lineValue(doc);
     let extraChars = 0;
 
     const stringSegments = getDynamicStringSegments(value);
+
     if (stringSegments.length === 1) {
       return {
         value,
@@ -580,6 +1018,7 @@ class CodeMirrorTernService {
           ch: cursor.ch,
         },
         extraChars,
+        isSingleDynamicValue: isDynamicValue(value),
       };
     }
 
@@ -599,8 +1038,10 @@ class CodeMirrorTernService {
 
       const segment = stringSegments[index];
       let currentSegment = segment;
+
       if (segment.startsWith("{{")) {
         currentSegment = segment.replace("{{", "");
+
         if (currentSegment.endsWith("}}")) {
           currentSegment = currentSegment.slice(0, currentSegment.length - 2);
         }
@@ -650,6 +1091,7 @@ class CodeMirrorTernService {
         isCursorInBetweenSegmentStartAndEndLine ||
         (isSegmentStartLineAndEndLineSame &&
           isCursorBetweenSingleLineSegmentBinding);
+
       (!isSegmentStartLineAndEndLineSame &&
         isCursorBeforeBindingCloseAtSegmentEnd) ||
         isCursorAfterBindingOpenAtSegmentStart;
@@ -657,9 +1099,11 @@ class CodeMirrorTernService {
       if (isDynamicValue(segment) && isCursorPointingInsideSegment) {
         dynamicString = currentSegment;
         newCursorLine = cursor.line - currentLine;
+
         if (lineValue.includes("{{")) {
           extraChars = posOfBindingStart + 2;
         }
+
         newCursorPosition = cursor.ch - extraChars;
 
         break;
@@ -690,21 +1134,31 @@ class CodeMirrorTernService {
     end: CodeMirror.Position,
   ) {
     const doc = data.doc;
+    const CodeMirror = getCodeMirrorNamespaceFromDoc(doc);
+
     let minIndent = null;
     let minLine = null;
     let endLine;
     const tabSize = 4;
+
     for (let p = start.line - 1, min = Math.max(0, p - 50); p >= min; --p) {
       const line = doc.getLine(p),
         fn = line.search(/\bfunction\b/);
+
       if (fn < 0) continue;
+
       const indent = CodeMirror.countColumn(line, null, tabSize);
+
       if (minIndent != null && minIndent <= indent) continue;
+
       minIndent = indent;
       minLine = p;
     }
+
     if (minLine === null) minLine = Math.max(0, start.line - 1);
+
     const max = Math.min(doc.lastLine(), end.line + 20);
+
     if (
       minIndent === null ||
       minIndent ===
@@ -718,8 +1172,11 @@ class CodeMirrorTernService {
           null,
           tabSize,
         );
+
         if (indent <= minIndent) break;
       }
+
+    const { Pos } = CodeMirror;
     const from = Pos(minLine, 0);
 
     return {
@@ -739,39 +1196,50 @@ class CodeMirrorTernService {
 
   tempTooltip(cm: CodeMirror.Editor, content: HTMLElement | string) {
     if (cm.state.ternTooltip) this.remove(cm.state.ternTooltip);
+
     if (cm.state.completionActive) {
       // @ts-expect-error: Types are not available
       cm.closeHint();
     }
+
     const where = cm.cursorCoords();
     const tip = (cm.state.ternTooltip = this.makeTooltip(
       // @ts-expect-error: Types are not available
       where.right + 1,
       where.bottom,
       content,
+      cm,
     ));
     const maybeClear = () => {
       old = true;
+
       if (!mouseOnTip) clear();
     };
     const clear = () => {
       cm.state.ternTooltip = null;
+
       if (tip.parentNode) this.fadeOut(tip);
+
       clearActivity();
     };
+
+    const CodeMirror = getCodeMirrorNamespaceFromEditor(cm);
     let mouseOnTip = false;
     let old = false;
-    CodeMirror.on(tip, "mousemove", function() {
+
+    CodeMirror.on(tip, "mousemove", function () {
       mouseOnTip = true;
     });
-    CodeMirror.on(tip, "mouseout", function(e: MouseEvent) {
+    CodeMirror.on(tip, "mouseout", function (e: MouseEvent) {
       const related = e.relatedTarget;
+
       // @ts-expect-error: Types are not available
       if (!related || !CodeMirror.contains(tip, related)) {
         if (old) clear();
         else mouseOnTip = false;
       }
     });
+
     setTimeout(maybeClear, hintDelay);
     const clearActivity = this.onEditorActivity(cm, clear);
   }
@@ -784,7 +1252,8 @@ class CodeMirrorTernService {
     cm.on("blur", f);
     cm.on("scroll", f);
     cm.on("setDoc", f);
-    return function() {
+
+    return function () {
       cm.off("cursorActivity", f);
       cm.off("blur", f);
       cm.off("scroll", f);
@@ -792,35 +1261,89 @@ class CodeMirrorTernService {
     };
   }
 
-  makeTooltip(x: number, y: number, content: HTMLElement | string) {
-    const node = this.elt("div", cls + "tooltip", content);
+  makeTooltip(
+    x: number,
+    y: number,
+    content: HTMLElement | string,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    cm?: any,
+    className?: string | null,
+  ) {
+    const node = this.elt(
+      "div",
+      cls + "tooltip" + " " + (className || ""),
+      content,
+    );
+
     node.style.left = x + "px";
     node.style.top = y + "px";
-    document.body.appendChild(node);
+    const container = cm.options?.hintOptions?.container || document.body;
+
+    container.appendChild(node);
+    const pos = cm.cursorCoords();
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+    let box = node.getBoundingClientRect();
+    const hints = document.querySelector(".CodeMirror-hints") as HTMLElement;
+    const overlapY = box.bottom - winH;
+    let overlapX = box.right - winW;
+
+    if (hints && overlapX > 0) {
+      node.style.left = "0";
+      box = node.getBoundingClientRect();
+      node.style.left = (x = x - hints.offsetWidth - box.width) + "px";
+      overlapX = box.right - winW;
+    }
+
+    if (overlapY > 0) {
+      const height = box.bottom - box.top,
+        curTop = pos.top - (pos.bottom - box.top);
+
+      if (curTop - height > 0) {
+        // Fits above cursor
+        node.style.top = pos.top - height + "px";
+      } else if (height > winH) {
+        node.style.height = winH - 5 + "px";
+        node.style.top = pos.bottom - box.top + "px";
+      }
+    }
+
+    if (overlapX > 0) {
+      if (box.right - box.left > winW) {
+        node.style.width = winW - 5 + "px";
+        overlapX -= box.right - box.left - winW;
+      }
+
+      node.style.left = x - overlapX - 5 + "px";
+    }
+
     return node;
   }
 
   remove(node?: HTMLElement) {
     if (node) {
       const p = node.parentNode;
+
       if (p) p.removeChild(node);
     }
   }
 
-  elt(
-    tagName: string,
-    cls: string | null,
-    content: string | HTMLElement,
-  ): HTMLElement {
-    const e = document.createElement(tagName);
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  elt(tagname: string, cls: string | null, ...rest: any[]) {
+    const e = document.createElement(tagname);
+
     if (cls) e.className = cls;
-    if (content) {
-      const eltNode =
-        typeof content === "string"
-          ? document.createTextNode(content)
-          : content;
-      e.appendChild(eltNode);
+
+    for (let i = 0; i < rest.length; ++i) {
+      let elt = rest[i];
+
+      if (typeof elt == "string") elt = document.createTextNode(elt);
+
+      e.appendChild(elt);
     }
+
     return e;
   }
 
@@ -828,12 +1351,61 @@ class CodeMirrorTernService {
     this.remove(tooltip);
   }
 
-  setEntityInformation(entityInformation: FieldEntityInformation) {
+  setEntityInformation(
+    cm: CodeMirror.Editor,
+    entityInformation: FieldEntityInformation,
+  ) {
+    const state = cm.getTokenAt(cm.getCursor()).state;
+    const CodeMirror = getCodeMirrorNamespaceFromDoc(cm.getDoc());
+    const inner = CodeMirror.innerMode(cm.getMode(), state);
+
+    if (inner.mode.name != "javascript") return false;
+
+    const lex = inner.state.lexical;
+
+    if (lex.info === "call") {
+      const argPos = lex.pos || 0;
+      const args = this.cachedArgHints?.type?.args || [];
+      const arg = args[argPos];
+      const argType = arg?.type;
+
+      entityInformation.expectedType = getDataType(argType);
+    }
+
     this.fieldEntityInformation = entityInformation;
+  }
+
+  getQueryForAutocomplete(cm: CodeMirror.Editor) {
+    const doc = this.findDoc(cm.getDoc());
+    const lineValue = this.lineValue(doc);
+    const { end, extraChars, isSingleDynamicValue } =
+      this.getFocusedDocValueAndPos(doc);
+    let extraCharsInString = extraChars;
+    const endOfString = end.ch + extraChars;
+
+    if (isSingleDynamicValue) {
+      extraCharsInString += 2;
+    }
+
+    const stringFromEndCh = lineValue.substring(
+      extraCharsInString,
+      endOfString,
+    );
+
+    const splitBySpace = stringFromEndCh.split(" ");
+    const query = splitBySpace[splitBySpace.length - 1];
+
+    return query;
+  }
+
+  updateRecentEntities(recentEntities: string[]) {
+    this.recentEntities = recentEntities;
   }
 }
 
-export const createCompletionHeader = (name: string): Completion => ({
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const createCompletionHeader = (name: string): Completion<any> => ({
   text: name,
   displayText: name,
   className: "CodeMirror-hint-header",
@@ -845,5 +1417,41 @@ export const createCompletionHeader = (name: string): Completion => ({
 
 export default new CodeMirrorTernService({
   async: true,
-  defs: DEFS,
 });
+
+function dotToBracketNotationAtToken(token: CodeMirror.Token) {
+  return (cm: CodeMirror.Editor, hints: Hints, curr: Hint) => {
+    let completion = curr.text;
+
+    if (
+      token.type === "string" ||
+      ("type" in curr && curr.type === AutocompleteDataType.FUNCTION)
+    ) {
+      // | represents the cursor
+      // Cases like JSObject1["myV|"]
+      cm.replaceRange(completion, hints.from, hints.to);
+
+      return;
+    } else if (token.type === null && token.state?.lexical?.type === "]") {
+      // Cases like JSObject1[|]
+      cm.replaceRange(`"${completion}"`, hints.from, hints.to);
+
+      return;
+    }
+
+    const splitByDotOperator = completion.split(".");
+
+    if (splitByDotOperator.length === 1) {
+      const splitByBracketOperator = completion.split("[");
+
+      if (splitByBracketOperator.length === 1) {
+        if (completion.includes(" ")) {
+          completion = `["${completion}"]`;
+          hints.from.ch -= 1;
+        }
+      }
+    }
+
+    cm.replaceRange(completion, hints.from, hints.to);
+  };
+}

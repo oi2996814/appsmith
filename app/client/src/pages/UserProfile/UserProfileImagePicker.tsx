@@ -4,11 +4,16 @@ import { useDispatch, useSelector } from "react-redux";
 import { updatePhoto, removePhoto, updatePhotoId } from "actions/userActions";
 import { getCurrentUser } from "selectors/usersSelectors";
 import { USER_PHOTO_ASSET_URL } from "constants/userConstants";
-import { DisplayImageUpload } from "design-system";
+import { DisplayImageUpload } from "@appsmith/ads-old";
 
-import Uppy from "@uppy/core";
+import type Uppy from "@uppy/core";
+import { ReduxActionErrorTypes } from "ee/constants/ReduxActionConstants";
+import type { ErrorActionPayload } from "sagas/ErrorSagas";
+import { USER_DISPLAY_PICTURE_FILE_INVALID } from "ee/constants/messages";
 
 function FormDisplayImage() {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [file, setFile] = useState<any>();
   const dispatch = useDispatch();
   const user = useSelector(getCurrentUser);
@@ -23,6 +28,8 @@ function FormDisplayImage() {
     dispatch(updatePhotoId({ photoId }));
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onSelectFile = (file: any) => {
     setFile(file.data);
   };
@@ -51,9 +58,24 @@ function FormDisplayImage() {
     );
   };
 
+  const onFileTypeInvalid = () => {
+    const payload: ErrorActionPayload = {
+      show: true,
+      error: {
+        message: USER_DISPLAY_PICTURE_FILE_INVALID(),
+      },
+    };
+
+    dispatch({
+      type: ReduxActionErrorTypes.USER_IMAGE_INVALID_FILE_CONTENT,
+      payload,
+    });
+  };
+
   return (
     <DisplayImageUpload
       onChange={onSelectFile}
+      onInvalidFileContent={onFileTypeInvalid}
       onRemove={removeProfileImage}
       submit={upload}
       value={imageURL}

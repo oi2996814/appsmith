@@ -1,15 +1,17 @@
 package com.appsmith.server.repositories.ce;
 
 import com.appsmith.server.domains.NewAction;
+import com.appsmith.server.newactions.projections.IdAndDatasourceIdNewActionView;
+import com.appsmith.server.projections.IdPoliciesOnly;
 import com.appsmith.server.repositories.BaseRepository;
 import com.appsmith.server.repositories.CustomNewActionRepository;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 public interface NewActionRepositoryCE extends BaseRepository<NewAction, String>, CustomNewActionRepository {
 
-    Flux<NewAction> findByApplicationId(String applicationId);
+    Flux<IdPoliciesOnly> findIdsAndPolicyMapByApplicationIdIn(List<String> applicationIds);
 
-    Mono<Long> countByDeletedAtNull();
-
+    Flux<IdAndDatasourceIdNewActionView> findIdAndDatasourceIdByApplicationIdIn(List<String> applicationIds);
 }

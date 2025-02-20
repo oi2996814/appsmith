@@ -3,12 +3,10 @@ import React, { useState } from "react";
 import styled from "styled-components";
 import { Wrapper, Status } from "@googlemaps/react-wrapper";
 
-import { StyledInputGroup } from "./StyledControls";
-import { getAppsmithConfigs } from "@appsmith/configs";
+import { InputGroup } from "./StyledControls";
 import { isDynamicValue } from "utils/DynamicBindingUtils";
-import BaseControl, { ControlData, ControlProps } from "./BaseControl";
-
-const { google } = getAppsmithConfigs();
+import type { ControlData, ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 
 const MapStatusText = styled.span`
   font-size: 14px;
@@ -24,6 +22,7 @@ const renderMapStatus = (status: Status) => {
       return <MapStatusText>Component loaded....</MapStatusText>;
   }
 };
+
 class LocationSearchControl extends BaseControl<ControlProps> {
   clearLocation = () => {
     this.updateProperty(this.props.propertyName, {
@@ -33,6 +32,8 @@ class LocationSearchControl extends BaseControl<ControlProps> {
     });
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onLocationSelection = (ref: any) => {
     try {
       // For some places, the length is zero
@@ -42,6 +43,7 @@ class LocationSearchControl extends BaseControl<ControlProps> {
       const lat = location.lat();
       const long = location.lng();
       const value = { lat, long, title };
+
       this.updateProperty(this.props.propertyName, value, true);
     } catch (e) {
       if (ref && ref.getPlaces)
@@ -52,9 +54,12 @@ class LocationSearchControl extends BaseControl<ControlProps> {
     }
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSearchBoxMounted = (ref: any) => {
     if (window) {
       const searchBox = new window.google.maps.places.SearchBox(ref);
+
       searchBox.addListener("places_changed", () => {
         this.onLocationSelection(searchBox);
       });
@@ -64,7 +69,7 @@ class LocationSearchControl extends BaseControl<ControlProps> {
   render() {
     return (
       <Wrapper
-        apiKey={google.apiKey}
+        apiKey={this.props.widgetProperties.googleMapsApiKey}
         libraries={["geometry", "drawing", "places"]}
         render={renderMapStatus}
       >
@@ -81,14 +86,20 @@ class LocationSearchControl extends BaseControl<ControlProps> {
     return "LOCATION_SEARCH";
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     return !isDynamicValue(value);
   }
 }
 
 interface MapScriptWrapperProps {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSearchBoxMounted: (ref: any) => void;
   clearLocation: () => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   propertyValue: any;
 }
 
@@ -97,13 +108,14 @@ function MapScriptWrapper(props: MapScriptWrapperProps) {
 
   return (
     <div data-standalone-searchbox="">
-      <StyledInputGroup
+      <InputGroup
         dataType="text"
         defaultValue={title || props.propertyValue?.title}
         onChange={(value: string) => {
           if (value === "") {
             props.clearLocation();
           }
+
           setTitle(value);
         }}
         placeholder="Enter location"

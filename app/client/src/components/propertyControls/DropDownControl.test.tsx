@@ -1,6 +1,7 @@
 import { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
 import { noop } from "lodash";
-import DropDownControl, { DropDownControlProps } from "./DropDownControl";
+import type { DropDownControlProps } from "./DropDownControl";
+import DropDownControl from "./DropDownControl";
 
 const requiredParams: DropDownControlProps = {
   evaluatedValue: undefined,
@@ -41,6 +42,7 @@ describe("DropDownControl.canDisplayValue", () => {
     },
   ];
   const config = { ...requiredParams, options };
+
   it("Should return true when a value in the option is passed", () => {
     expect(DropDownControl.canDisplayValueInUI(config, "0")).toEqual(true);
     expect(DropDownControl.canDisplayValueInUI(config, "1")).toEqual(true);
@@ -72,6 +74,7 @@ describe("DropDownControl[isMultiSelect].canDisplayValue", () => {
     },
   ];
   const config = { ...requiredParams, options, isMultiSelect: true };
+
   it("Should return true when a value in the option is passed", () => {
     expect(DropDownControl.canDisplayValueInUI(config, "[0]")).toEqual(true);
     expect(DropDownControl.canDisplayValueInUI(config, "[1]")).toEqual(true);

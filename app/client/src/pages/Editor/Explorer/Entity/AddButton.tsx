@@ -1,45 +1,59 @@
 import React from "react";
 import styled from "styled-components";
+import type { ButtonSizes } from "@appsmith/ads";
+import { Button } from "@appsmith/ads";
 
-import { ControlIcons } from "icons/ControlIcons";
-import { EntityTogglesWrapper } from "../ExplorerStyledComponents";
-import { Colors } from "constants/Colors";
-
-const Wrapper = styled(EntityTogglesWrapper)`
-  &&& {
-    width: 30px;
-    & svg {
-      cursor: ${(props) => (props.onClick ? "pointer" : "initial")};
-      path {
-        fill: ${Colors.CODE_GRAY};
-      }
+const Wrapper = styled.div<{ isSizePassed?: boolean }>`
+  ${({ isSizePassed }) =>
+    !isSizePassed &&
+    `
+    && {
+      height: 36px;
+      width: 30px;
     }
-  }
+  `}
+
   &.selected {
-    background: ${Colors.SHARK2} !important;
-    svg {
-      path {
-        fill: ${Colors.WHITE} !important;
-      }
-    }
+    background-color: var(--ads-v2-color-bg-muted);
+    border-radius: var(--ads-v2-border-radius);
   }
 `;
 
-const PlusIcon = ControlIcons.INCREASE_CONTROL_V2;
+const StyledButton = styled(Button)<{ isSizePassed?: boolean }>`
+  ${({ isSizePassed }) =>
+    !isSizePassed &&
+    `
+  && {
+    height: 100%;
+    width: 100%;
+  }
+  `}
+`;
 
 export const EntityAddButton = (props: {
   onClick?: () => void;
   className?: string;
+  buttonSize?: ButtonSizes;
 }) => {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleClick = (e: any) => {
     props.onClick && props.onClick();
     e.stopPropagation();
   };
+
   if (!props.onClick) return null;
   else {
     return (
-      <Wrapper className={props.className} onClick={handleClick}>
-        <PlusIcon height={16} width={16} />
+      <Wrapper className={props.className} isSizePassed={!!props.buttonSize}>
+        <StyledButton
+          isIconButton
+          isSizePassed={!!props.buttonSize}
+          kind="tertiary"
+          onClick={handleClick}
+          size={props.buttonSize}
+          startIcon="plus"
+        />
       </Wrapper>
     );
   }

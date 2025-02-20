@@ -1,5 +1,5 @@
-import { ApplicationVersion } from "actions/applicationActions";
-import { APP_MODE } from "entities/App";
+import { ApplicationVersion } from "ee/actions/applicationActions";
+import type { APP_MODE } from "entities/App";
 import DefaultURLRedirect from "./DefaultURLRedirect";
 import { SlugURLRedirect } from "./SlugURLRedirect";
 

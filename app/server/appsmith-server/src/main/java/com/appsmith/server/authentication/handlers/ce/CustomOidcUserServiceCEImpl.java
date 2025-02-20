@@ -4,6 +4,7 @@ import com.appsmith.server.domains.LoginSource;
 import com.appsmith.server.domains.User;
 import com.appsmith.server.domains.UserState;
 import com.appsmith.server.exceptions.AppsmithException;
+import com.appsmith.server.exceptions.AppsmithOAuth2AuthenticationException;
 import com.appsmith.server.repositories.UserRepository;
 import com.appsmith.server.services.UserService;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,6 @@ import reactor.core.publisher.Mono;
  * We transform the {@link OAuth2User} object to {@link User} object via the {@link #loadUser(OidcUserRequest)}
  * We also create the user if it doesn't exist we create it via {@link #checkAndCreateUser(OidcUser, OidcUserRequest)}
  */
-
 @Slf4j
 public class CustomOidcUserServiceCEImpl extends OidcReactiveOAuth2UserService {
 
@@ -49,8 +49,7 @@ public class CustomOidcUserServiceCEImpl extends OidcReactiveOAuth2UserService {
 
         String username = (!StringUtils.isEmpty(oidcUser.getEmail())) ? oidcUser.getEmail() : oidcUser.getName();
 
-        return repository.findByEmail(username)
-                .switchIfEmpty(repository.findByCaseInsensitiveEmail(username))
+        return this.findByUsername(username)
                 .switchIfEmpty(Mono.defer(() -> {
                     User newUser = new User();
                     if (oidcUser.getUserInfo() != null) {
@@ -59,7 +58,8 @@ public class CustomOidcUserServiceCEImpl extends OidcReactiveOAuth2UserService {
                         newUser.setName(oidcUser.getName());
                     }
                     newUser.setEmail(username);
-                    LoginSource loginSource = LoginSource.fromString(userRequest.getClientRegistration().getRegistrationId());
+                    LoginSource loginSource = LoginSource.fromString(
+                            userRequest.getClientRegistration().getRegistrationId());
                     newUser.setSource(loginSource);
                     newUser.setState(UserState.ACTIVATED);
                     newUser.setIsEnabled(true);
@@ -75,9 +75,15 @@ public class CustomOidcUserServiceCEImpl extends OidcReactiveOAuth2UserService {
                 })
                 .onErrorMap(
                         AppsmithException.class,
-                        error -> new OAuth2AuthenticationException(
-                                new OAuth2Error(error.getAppErrorCode().toString(), error.getMessage(), "")
-                        )
-                );
+                        // Throwing an AppsmithOAuth2AuthenticationException in case of an AppsmithException
+                        // This is to differentiate between Appsmith exceptions and OAuth2 exceptions
+                        error -> new AppsmithOAuth2AuthenticationException(
+                                new OAuth2Error(error.getAppErrorCode().toString(), error.getMessage(), "")));
+    }
+
+    protected Mono<User> findByUsername(String email) {
+        return repository
+                .findByEmail(email)
+                .switchIfEmpty(repository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(email));
     }
 }

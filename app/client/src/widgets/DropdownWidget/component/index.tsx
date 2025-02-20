@@ -1,24 +1,21 @@
-import React, { PropsWithChildren } from "react";
+import type { PropsWithChildren } from "react";
+import React from "react";
 import styled, { createGlobalStyle } from "styled-components";
-import { ComponentProps } from "widgets/BaseComponent";
-import {
-  MenuItem,
-  Button,
-  ControlGroup,
-  Classes,
-  Alignment,
-} from "@blueprintjs/core";
-import { DropdownOption } from "../constants";
-import { Select, IItemRendererProps } from "@blueprintjs/select";
+import type { ComponentProps } from "widgets/BaseComponent";
+import type { Alignment } from "@blueprintjs/core";
+import { MenuItem, Button, ControlGroup, Classes } from "@blueprintjs/core";
+import type { DropdownOption } from "../constants";
+import type { IItemRendererProps } from "@blueprintjs/select";
+import { Select } from "@blueprintjs/select";
 import _ from "lodash";
-import "../../../../node_modules/@blueprintjs/select/lib/css/blueprint-select.css";
+import "@blueprintjs/select/lib/css/blueprint-select.css";
 import { BlueprintCSSTransform } from "constants/DefaultTheme";
 import { Colors } from "constants/Colors";
-import { TextSize } from "constants/WidgetConstants";
+import type { TextSize } from "constants/WidgetConstants";
 import Fuse from "fuse.js";
 import { WidgetContainerDiff } from "widgets/WidgetUtils";
-import { LabelPosition } from "components/constants";
-import { Icon } from "design-system";
+import type { LabelPosition } from "components/constants";
+import { Icon } from "@design-system/widgets-old";
 import LabelWithTooltip, {
   labelLayoutStyles,
 } from "widgets/components/LabelWithTooltip";
@@ -266,6 +263,7 @@ class DropDownComponent extends React.Component<
       "label",
       activeItem?.label,
     ]);
+
     this.setState({ activeItemIndex });
   };
 
@@ -298,6 +296,7 @@ class DropDownComponent extends React.Component<
     const value = selectedOption
       ? selectedOption
       : this.props.placeholder || "-- Select --";
+
     return (
       <DropdownContainer
         compactMode={compactMode}
@@ -387,6 +386,7 @@ class DropDownComponent extends React.Component<
 
   itemListPredicate(query: string, items: DropdownOption[]) {
     const fuse = new Fuse(items, FUSE_OPTIONS);
+
     return query ? fuse.search(query) : items;
   }
 
@@ -398,6 +398,7 @@ class DropDownComponent extends React.Component<
     const optionIndex = _.findIndex(this.props.options, (option) => {
       return option.value === selectedOption.value;
     });
+
     return optionIndex === this.props.selectedIndex;
   };
   serverSideSearch = _.debounce((filterValue: string) => {
@@ -411,9 +412,11 @@ class DropDownComponent extends React.Component<
     if (!itemProps.modifiers.matchesPredicate) {
       return null;
     }
+
     const isSelected: boolean = this.isOptionSelected(option);
     // For tabbable menuItems
     const isFocused = itemProps.modifiers.active;
+
     return (
       <MenuItem
         active={isSelected}

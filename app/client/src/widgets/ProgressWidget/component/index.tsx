@@ -34,25 +34,29 @@ const renderProgress = (props: ProgressComponentProps) => {
         );
       }
     }
+
     // Pure circular progress
     return <CircularProgress {...props} />;
   }
+
   // Linear progress components
   if (variant === ProgressVariant.DETERMINATE) {
     // With steps
     if (steps > 1) {
       return <LinearProgressWithSteps {...props} />;
     }
+
     // Pure linear progress
     return (
       <DeterminateLinearProgress
         borderRadius={props.borderRadius}
-        data-cy={value}
+        data-testid={value}
         fillColor={fillColor}
         value={value}
       />
     );
   }
+
   // Indeterminate linear progress component
   return (
     <IndeterminateLinearProgress
@@ -69,6 +73,7 @@ const getProgressPosition = (
   currentStep: number,
 ) => {
   const currStepProgress = percentage - stepSize * currentStep;
+
   if (currStepProgress > stepSize) {
     return 100;
   } else if (currStepProgress < 0) {
@@ -128,6 +133,8 @@ const flowAnimation = css`
 const ProgressContainer = styled.div`
   display: flex;
   align-items: center;
+  height: 100%;
+  width: 100%;
 `;
 
 // Determinate Linear progress
@@ -147,7 +154,7 @@ const DeterminateLinearProgress = styled.div<{
 
   &:after {
     background: ${({ fillColor }) => fillColor};
-    ${({ value }) => value && `width: ${value}%`};
+    ${({ value }) => value !== undefined && `width: ${Math.max(0, value)}%;`}
     transition: width 0.4s ease;
     position: absolute;
     content: "";
@@ -188,7 +195,7 @@ function IndeterminateLinearProgress({
   return (
     <IndeterminateLinearProgressContainer borderRadius={borderRadius}>
       <IndeterminateLinearProgressValue
-        data-cy="indeterminate-linear-progress"
+        data-testid="indeterminate-linear-progress"
         fillColor={fillColor}
       />
     </IndeterminateLinearProgressContainer>
@@ -226,11 +233,12 @@ function LinearProgressWithSteps(props: ProgressComponentProps) {
     <StepWrapper>
       {[...Array(Number(steps))].map((_, index) => {
         const width = getProgressPosition(Number(value), stepSize, index);
+
         return (
-          <StepContainer data-cy="step" key={index}>
+          <StepContainer data-testid="step" key={index}>
             <DeterminateLinearProgress
               borderRadius={props.borderRadius}
-              data-cy={width}
+              data-testid={width}
               fillColor={props.fillColor}
               value={width}
               withSteps
@@ -327,7 +335,7 @@ function Separator(props: { turns: number }) {
 
   return (
     <SeparatorContainer turns={turns}>
-      <SeparatorOverlay data-cy="separator" />
+      <SeparatorOverlay data-testid="separator" />
     </SeparatorContainer>
   );
 }
@@ -335,6 +343,7 @@ function Separator(props: { turns: number }) {
 function RadialSeparators(props: { steps: number }) {
   const { steps } = props;
   const turns = 1 / steps;
+
   return (
     <>
       {_.range(steps).map((index) => (
@@ -343,6 +352,7 @@ function RadialSeparators(props: { steps: number }) {
     </>
   );
 }
+
 // Pure circular progress (indeterminate/determinate)
 function CircularProgress(props: ProgressComponentProps) {
   const {
@@ -386,12 +396,13 @@ function CircularProgress(props: ProgressComponentProps) {
 
   return (
     <SvgContainer
-      data-cy="circular"
+      data-testid="circular"
       variant={variant}
       viewBox={
         variant === ProgressVariant.INDETERMINATE
-          ? `${INDETERMINATE_SIZE / 2} ${INDETERMINATE_SIZE /
-              2} ${INDETERMINATE_SIZE} ${INDETERMINATE_SIZE}`
+          ? `${INDETERMINATE_SIZE / 2} ${
+              INDETERMINATE_SIZE / 2
+            } ${INDETERMINATE_SIZE} ${INDETERMINATE_SIZE}`
           : `0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`
       }
     >
@@ -435,7 +446,7 @@ function CircularProgress(props: ProgressComponentProps) {
 
           {showResult && !isNaN(value) && (
             <Label
-              data-cy="circular-label"
+              data-testid="circular-label"
               x={VIEWBOX_CENTER_X}
               y={VIEWBOX_CENTER_Y}
             >
@@ -471,6 +482,7 @@ function CircularProgressWithSteps(
 // Main component
 function ProgressComponent(props: ProgressComponentProps) {
   const { showResult, type, variant } = props;
+
   return (
     <ProgressContainer>
       {renderProgress(props)}

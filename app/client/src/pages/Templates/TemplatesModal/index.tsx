@@ -1,42 +1,60 @@
 import React, { useEffect, useState } from "react";
-import { DialogComponent } from "design-system";
+import styled from "styled-components";
 import { useDispatch, useSelector } from "react-redux";
 import {
-  templateModalOpenSelector,
+  allTemplatesFiltersSelector,
+  templateModalSelector,
   templatesCountSelector,
 } from "selectors/templatesSelectors";
 import {
   getAllTemplates,
   getTemplateFilters,
-  showTemplatesModal,
+  hideTemplatesModal,
 } from "actions/templateActions";
-import TemplatesList from "./TemplateList";
 import { fetchDefaultPlugins } from "actions/pluginActions";
 import TemplateDetailedView from "./TemplateDetailedView";
 import { isEmpty } from "lodash";
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
+import { Modal, ModalBody, ModalContent, ModalHeader } from "@appsmith/ads";
+import TemplateModalHeader from "./Header";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import TemplatesListLayoutSwitcher from "./TemplatesListLayoutSwitcher";
+
+const ModalContentWrapper = styled(ModalContent)`
+  width: 100%;
+  overflow-y: hidden;
+  background-color: var(--ads-v2-color-gray-50);
+`;
+const ModalBodyWrapper = styled(ModalBody)`
+  width: 100%;
+  overflow-y: hidden;
+`;
 
 function TemplatesModal() {
-  const templatesModalOpen = useSelector(templateModalOpenSelector);
+  const templatesModalInfo = useSelector(templateModalSelector);
   const dispatch = useDispatch();
   const templatesCount = useSelector(templatesCountSelector);
   const pluginListLength = useSelector(
     (state: AppState) => state.entities.plugins.defaultPluginList.length,
   );
-  const filters = useSelector(
-    (state: AppState) => state.ui.templates.allFilters,
-  );
+  const filters = useSelector(allTemplatesFiltersSelector);
   const [showTemplateDetails, setShowTemplateDetails] = useState("");
 
   useEffect(() => {
     setShowTemplateDetails("");
-  }, [templatesModalOpen]);
+
+    if (templatesModalInfo.isOpen) {
+      dispatch({
+        type: ReduxActionTypes.RESET_TEMPLATE_FILTERS,
+      });
+    }
+  }, [templatesModalInfo]);
 
   useEffect(() => {
-    if (!templatesCount && templatesModalOpen) {
+    if (!templatesCount && templatesModalInfo) {
       dispatch(getAllTemplates());
     }
-  }, [templatesCount, templatesModalOpen]);
+  }, [templatesCount, templatesModalInfo]);
 
   useEffect(() => {
     if (!pluginListLength) {
@@ -50,9 +68,11 @@ function TemplatesModal() {
     }
   }, [filters]);
 
-  const onClose = () => {
-    dispatch(showTemplatesModal(false));
-    setShowTemplateDetails("");
+  const onClose = (open: boolean) => {
+    if (open === false) {
+      dispatch(hideTemplatesModal());
+      setShowTemplateDetails("");
+    }
   };
 
   const onTemplateClick = (id: string) => {
@@ -60,24 +80,34 @@ function TemplatesModal() {
   };
 
   return (
-    <DialogComponent
-      canEscapeKeyClose
-      canOutsideClickClose
-      isOpen={templatesModalOpen}
-      noModalBodyMarginTop
-      onClose={onClose}
-      width={"90%"}
+    <Modal
+      onOpenChange={(open) => onClose(open)}
+      open={templatesModalInfo.isOpen}
     >
-      {!!showTemplateDetails ? (
-        <TemplateDetailedView
-          onBackPress={() => setShowTemplateDetails("")}
-          onClose={onClose}
-          templateId={showTemplateDetails}
-        />
-      ) : (
-        <TemplatesList onClose={onClose} onTemplateClick={onTemplateClick} />
-      )}
-    </DialogComponent>
+      <ModalContentWrapper data-testid="t--templates-dialog-component">
+        <ModalHeader>
+          <TemplateModalHeader
+            className={!showTemplateDetails ? "modal-header" : ""}
+          />
+        </ModalHeader>
+        <ModalBodyWrapper>
+          {!!showTemplateDetails ? (
+            <TemplateDetailedView
+              isStartWithTemplateFlow={templatesModalInfo.isOpenFromCanvas}
+              onBackPress={() => setShowTemplateDetails("")}
+              onClose={() => onClose(false)}
+              templateId={showTemplateDetails}
+            />
+          ) : (
+            <TemplatesListLayoutSwitcher
+              analyticsEventNameForTemplateCardClick="TEMPLATE_ADD_PAGE_FROM_TEMPLATE_FLOW"
+              isStartWithTemplateFlow={templatesModalInfo.isOpenFromCanvas}
+              onTemplateClick={onTemplateClick}
+            />
+          )}
+        </ModalBodyWrapper>
+      </ModalContentWrapper>
+    </Modal>
   );
 }
 

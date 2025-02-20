@@ -1,15 +1,19 @@
 import React, { useMemo, useRef, useState } from "react";
+import type { VerticalAlignment } from "../Constants";
 import {
   ALIGN_ITEMS,
-  VerticalAlignment,
   EDITABLE_CELL_PADDING_OFFSET,
   TABLE_SIZES,
 } from "../Constants";
 import DateComponent from "widgets/DatePickerWidget2/component";
 import { TimePrecision } from "widgets/DatePickerWidget2/constants";
-import { RenderDefaultPropsType } from "./PlainTextCell";
+import type { RenderDefaultPropsType } from "./PlainTextCell";
 import styled from "styled-components";
-import { EditableCellActions } from "widgets/TableWidgetV2/constants";
+import {
+  DateInputFormat,
+  EditableCellActions,
+  MomentDateInputFormat,
+} from "widgets/TableWidgetV2/constants";
 import { ISO_DATE_FORMAT } from "constants/WidgetValidation";
 import moment from "moment";
 import { BasicCell } from "./BasicCell";
@@ -18,7 +22,7 @@ import ErrorTooltip from "components/editorComponents/ErrorTooltip";
 import {
   createMessage,
   INPUT_WIDGET_DEFAULT_VALIDATION_ERROR,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 
 type DateComponentProps = RenderDefaultPropsType &
   editPropertyType & {
@@ -55,11 +59,11 @@ const COMPONENT_DEFAULT_VALUES = {
   timePrecision: TimePrecision.MINUTE,
 };
 
-type editPropertyType = {
+interface editPropertyType {
   alias: string;
   onDateSelectedString: string;
   rowIndex: number;
-};
+}
 
 const DEFAULT_BORDER_RADIUS = "0";
 
@@ -107,8 +111,10 @@ const Wrapper = styled.div<{
         : "100%";
     } else {
       return props.paddedInput
-        ? `${TABLE_SIZES[props.compactMode].ROW_HEIGHT -
-            EDITABLE_CELL_PADDING_OFFSET}px`
+        ? `${
+            TABLE_SIZES[props.compactMode].ROW_HEIGHT -
+            EDITABLE_CELL_PADDING_OFFSET
+          }px`
         : `${TABLE_SIZES[props.compactMode].ROW_HEIGHT}px`;
     }
   }};
@@ -167,6 +173,7 @@ export const DateCell = (props: DateComponentProps) => {
     isCellEditable,
     isCellEditMode,
     isCellVisible,
+    isEditableCellValid,
     isHidden,
     isNewRow,
     isRequired,
@@ -194,6 +201,23 @@ export const DateCell = (props: DateComponentProps) => {
   const [showRequiredError, setShowRequiredError] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  const convertInputFormatToMomentFormat = (inputFormat: string) => {
+    let momentAdjustedInputFormat = inputFormat;
+
+    if (inputFormat === DateInputFormat.MILLISECONDS) {
+      momentAdjustedInputFormat = MomentDateInputFormat.MILLISECONDS;
+    } else if (inputFormat === DateInputFormat.EPOCH) {
+      momentAdjustedInputFormat = MomentDateInputFormat.SECONDS;
+    }
+
+    return momentAdjustedInputFormat;
+  };
+
+  const isCellCompletelyValid = useMemo(
+    () => isEditableCellValid && isValid,
+    [isEditableCellValid, isValid],
+  );
+
   const valueInISOFormat = useMemo(() => {
     if (typeof value !== "string") return "";
 
@@ -211,30 +235,41 @@ export const DateCell = (props: DateComponentProps) => {
   }, [value, props.outputFormat]);
 
   const onDateSelected = (date: string) => {
+    const momentAdjustedInputFormat =
+      convertInputFormatToMomentFormat(inputFormat);
+
+    const formattedDate = date
+      ? moment(date).format(momentAdjustedInputFormat)
+      : "";
+
     if (isNewRow) {
-      updateNewRowValues(alias, date, date);
+      updateNewRowValues(alias, date, formattedDate);
+
       return;
     }
 
     if (isRequired && !date) {
       setIsValid(false);
       setShowRequiredError(true);
+
       return;
     }
+
     setIsValid(true);
     setShowRequiredError(false);
     setHasFocus(false);
 
-    const formattedDate = date ? moment(date).format(inputFormat) : "";
     onDateSave(rowIndex, alias, formattedDate, onDateSelectedString);
   };
 
   const onDateCellEdit = () => {
     setHasFocus(true);
+
     if (isRequired && !value) {
       setIsValid(false);
       setShowRequiredError(true);
     }
+
     toggleCellEditMode(true, rowIndex, alias, value);
   };
 
@@ -269,18 +304,17 @@ export const DateCell = (props: DateComponentProps) => {
       <Wrapper
         accentColor={accentColor}
         allowCellWrapping={allowCellWrapping}
-        className={`${
-          hasFocus ? FOCUS_CLASS : ""
-        } t--inlined-cell-editor ${!isValid &&
-          "t--inlined-cell-editor-has-error"}`}
+        className={`${hasFocus ? FOCUS_CLASS : ""} t--inlined-cell-editor ${
+          !isCellCompletelyValid && "t--inlined-cell-editor-has-error"
+        }`}
         compactMode={compactMode}
-        isEditableCellValid={isValid}
+        isEditableCellValid={isCellCompletelyValid}
         paddedInput
         textSize={textSize}
         verticalAlignment={verticalAlignment}
       >
         <ErrorTooltip
-          isOpen={showRequiredError && !isValid}
+          isOpen={showRequiredError && !isCellCompletelyValid}
           message={
             validationErrorMessage ||
             createMessage(INPUT_WIDGET_DEFAULT_VALIDATION_ERROR)

@@ -1,35 +1,31 @@
 import React from "react";
-import styled from "styled-components";
 
-import BaseControl, { ControlProps } from "./BaseControl";
-import { StyledPropertyPaneButton } from "./StyledControls";
-import { Category, Size } from "design-system";
+import type { ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
+import { Button } from "@appsmith/ads";
+import type { WidgetProps } from "widgets/BaseWidget";
 
-export type OnButtonClickProps = {
+export interface OnButtonClickProps {
   props: ControlProps;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateProperty: (propertyName: string, propertyValue: any) => void;
   deleteProperties: (propertyPaths: string[]) => void;
   batchUpdateProperties: (updates: Record<string, unknown>) => void;
-};
+  widgetProperties: WidgetProps;
+}
 
 export type ButtonControlProps = ControlProps & {
   onClick: (props: OnButtonClickProps) => void;
   buttonLabel: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   isDisabled?: (widgetProperties: any) => boolean;
 };
 
-type ButtonControlState = {
+interface ButtonControlState {
   isLoading: boolean;
-};
-
-const StyledButton = styled(StyledPropertyPaneButton)`
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  &&&& {
-    margin: 0;
-  }
-`;
+}
 
 class ButtonControl extends BaseControl<
   ButtonControlProps,
@@ -46,6 +42,7 @@ class ButtonControl extends BaseControl<
       updateProperty: this.updateProperty,
       deleteProperties: this.deleteProperties,
       batchUpdateProperties: this.batchUpdateProperties,
+      widgetProperties: this.props.widgetProperties,
     });
     this.disableLoading();
   };
@@ -57,16 +54,15 @@ class ButtonControl extends BaseControl<
     const { buttonLabel, isDisabled, widgetProperties } = this.props;
 
     return (
-      <StyledButton
-        category={Category.secondary}
-        disabled={isDisabled?.(widgetProperties)}
+      <Button
+        isDisabled={isDisabled?.(widgetProperties)}
         isLoading={this.state.isLoading}
+        kind="secondary"
         onClick={this.onCTAClick}
-        size={Size.medium}
-        tag="button"
-        text={buttonLabel}
-        type="button"
-      />
+        size="sm"
+      >
+        {buttonLabel}
+      </Button>
     );
   }
 

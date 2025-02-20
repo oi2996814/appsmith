@@ -1,10 +1,24 @@
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
+import { getJSEntityItemUrl } from "ee/pages/AppIDE/layouts/routers/utils/getJSEntityItemUrl";
+import type { FocusEntityInfo } from "navigation/FocusEntity";
+import { identifyEntityFromPath } from "navigation/FocusEntity";
+import { selectJSSegmentEditorTabs } from "ee/selectors/appIDESelectors";
+import { getCurrentBasePageId } from "./editorSelectors";
 
-export const getJSPaneConfigSelectedTabIndex = (state: AppState) =>
-  state.ui.jsPane.selectedConfigTabIndex;
+export const getJSPaneConfigSelectedTab = (state: AppState) =>
+  state.ui.jsPane.selectedConfigTab;
 
-export const getJSPaneResponseSelectedTab = (state: AppState) =>
-  state.ui.jsPane.selectedResponseTab;
+export const getJsPaneDebuggerState = (state: AppState) =>
+  state.ui.jsPane.debugger;
 
-export const getJSPaneResponsePaneHeight = (state: AppState) =>
-  state.ui.jsPane.responseTabHeight;
+export const getLastJSTab = (state: AppState): FocusEntityInfo | undefined => {
+  const tabs = selectJSSegmentEditorTabs(state);
+  const basePageId = getCurrentBasePageId(state);
+
+  if (tabs.length) {
+    const url = getJSEntityItemUrl(tabs[tabs.length - 1], basePageId);
+    const urlWithoutQueryParams = url.split("?")[0];
+
+    return identifyEntityFromPath(urlWithoutQueryParams);
+  }
+};

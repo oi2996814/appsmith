@@ -5,18 +5,19 @@
       "id": 1,
       "children": [
         {
-          "label": "S3 Service Provider Key",
+          "label": "S3 service provider key",
           "configProperty": "datasourceConfiguration.properties[1].key",
           "controlType": "INPUT_TEXT",
           "initialValue": "s3Provider",
           "hidden": true
         },
         {
-          "label": "S3 Service Provider",
+          "label": "S3 service provider",
           "configProperty": "datasourceConfiguration.properties[1].value",
           "controlType": "DROP_DOWN",
           "isRequired": true,
           "initialValue": "amazon-s3",
+          "setFirstOptionAsDefault": true,
           "options": [
             {
               "label": "Amazon S3",
@@ -27,7 +28,7 @@
               "value": "upcloud"
             },
             {
-              "label": "Digital Ocean Spaces",
+              "label": "Digital Ocean spaces",
               "value": "digital-ocean-spaces"
             },
             {
@@ -43,20 +44,24 @@
               "value": "minio"
             },
             {
+              "label": "Google Cloud Storage",
+              "value": "google-cloud-storage"
+            },
+            {
               "label": "Other",
               "value": "other"
             }
           ]
         },
         {
-          "label": "Access Key",
+          "label": "Access key",
           "configProperty": "datasourceConfiguration.authentication.username",
           "controlType": "INPUT_TEXT",
           "isRequired": true,
           "initialValue": ""
         },
         {
-          "label": "Secret Key",
+          "label": "Secret key",
           "configProperty": "datasourceConfiguration.authentication.password",
           "controlType": "INPUT_TEXT",
           "dataType": "PASSWORD",
@@ -78,7 +83,7 @@
           }
         },
         {
-          "label": "Custom Endpoint URL Key",
+          "label": "Custom endpoint URL key",
           "configProperty": "datasourceConfiguration.properties[2].key",
           "controlType": "INPUT_TEXT",
           "initialValue": "customRegion",
@@ -104,6 +109,19 @@
                 "value": "minio"
               }
             ]
+          }
+        },
+        {
+          "label": "Default Bucket",
+          "configProperty": "datasourceConfiguration.properties[3].value",
+          "controlType": "INPUT_TEXT",
+          "initialValue": "",
+          "placeholderText": "Enter default bucket name",
+          "isRequired": true,
+          "hidden": {
+            "path": "datasourceConfiguration.properties[1].value",
+            "comparison": "NOT_EQUALS",
+            "value": "google-cloud-storage"
           }
         }
       ]

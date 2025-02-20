@@ -1,24 +1,22 @@
-import { spawn } from "redux-saga/effects";
-import { PostMessageDescription } from "@appsmith/entities/DataTree/actionTriggers";
+import { call, spawn } from "redux-saga/effects";
 import {
-  logActionExecutionError,
+  showToastOnExecutionError,
   TriggerFailureError,
 } from "sagas/ActionExecution/errorUtils";
-import { TriggerMeta } from "@appsmith/sagas/ActionExecution/ActionExecutionSagas";
 import { isEmpty } from "lodash";
+import type { TPostWindowMessageDescription } from "workers/Evaluation/fns/postWindowMessage";
 
-export function* postMessageSaga(
-  payload: PostMessageDescription["payload"],
-  triggerMeta: TriggerMeta,
-) {
-  yield spawn(executePostMessage, payload, triggerMeta);
+export function* postMessageSaga(action: TPostWindowMessageDescription) {
+  const { payload } = action;
+
+  yield spawn(executePostMessage, payload);
 }
 
 export function* executePostMessage(
-  payload: PostMessageDescription["payload"],
-  triggerMeta: TriggerMeta,
+  payload: TPostWindowMessageDescription["payload"],
 ) {
   const { message, source, targetOrigin } = payload;
+
   try {
     if (isEmpty(targetOrigin)) {
       throw new TriggerFailureError("Please enter a target origin URL.");
@@ -27,6 +25,7 @@ export function* executePostMessage(
         const src = document.getElementById(
           `iframe-${source}`,
         ) as HTMLIFrameElement;
+
         if (src && src.contentWindow) {
           src.contentWindow.postMessage(message, targetOrigin);
         } else {
@@ -39,10 +38,6 @@ export function* executePostMessage(
       }
     }
   } catch (error) {
-    logActionExecutionError(
-      (error as Error).message,
-      triggerMeta.source,
-      triggerMeta.triggerPropertyName,
-    );
+    yield call(showToastOnExecutionError, (error as Error).message);
   }
 }

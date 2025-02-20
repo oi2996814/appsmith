@@ -1,9 +1,6 @@
 import { ValidationTypes } from "constants/WidgetValidation";
-import {
-  ColumnTypes,
-  ICON_NAMES,
-  TableWidgetProps,
-} from "widgets/TableWidgetV2/constants";
+import type { TableWidgetProps } from "widgets/TableWidgetV2/constants";
+import { ColumnTypes, ICON_NAMES } from "widgets/TableWidgetV2/constants";
 import {
   hideByColumnType,
   hideByMenuItemsSource,
@@ -13,9 +10,7 @@ import {
 } from "../../propertyUtils";
 import { IconNames } from "@blueprintjs/icons";
 import { MenuItemsSource } from "widgets/MenuButtonWidget/constants";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
-import { sourceDataArrayValidation } from "widgets/MenuButtonWidget/validations";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
 import configureMenuItemsConfig from "./childPanels/configureMenuItemsConfig";
 
 export default {
@@ -84,7 +79,7 @@ export default {
     {
       propertyName: "menuItemsSource",
       helpText: "Sets the source for the menu items",
-      label: "Menu Items Source",
+      label: "Menu items source",
       controlType: "ICON_TABS",
       fullWidth: true,
       defaultValue: MenuItemsSource.STATIC,
@@ -121,20 +116,49 @@ export default {
     {
       helpText: "Takes in an array of items to display the menu items.",
       propertyName: "sourceData",
-      label: "Source Data",
+      label: "Source data",
       controlType: "TABLE_COMPUTE_VALUE",
       placeholderText: "{{Query1.data}}",
       isBindProperty: true,
       isTriggerProperty: false,
       validation: {
-        type: ValidationTypes.FUNCTION,
+        type: ValidationTypes.ARRAY,
         params: {
-          expected: {
-            type: "Array of values",
-            example: `['option1', 'option2'] | [{ "label": "label1", "value": "value1" }]`,
-            autocompleteDataType: AutocompleteDataType.ARRAY,
+          required: true,
+          default: [],
+          children: {
+            type: ValidationTypes.ARRAY,
+            params: {
+              required: true,
+              default: [],
+              children: {
+                type: ValidationTypes.UNION,
+                params: {
+                  required: true,
+                  types: [
+                    {
+                      type: ValidationTypes.TEXT,
+                      params: {
+                        required: true,
+                      },
+                    },
+                    {
+                      type: ValidationTypes.NUMBER,
+                      params: {
+                        required: true,
+                      },
+                    },
+                    {
+                      type: ValidationTypes.OBJECT,
+                      params: {
+                        required: true,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
           },
-          fnString: sourceDataArrayValidation.toString(),
         },
       },
       evaluationSubstitutionType: EvaluationSubstitutionType.SMART_SUBSTITUTE,
@@ -156,10 +180,10 @@ export default {
       propertyName: "configureMenuItems",
       controlType: "OPEN_CONFIG_PANEL",
       buttonConfig: {
-        label: "Item Configuration",
-        icon: "settings-2-line",
+        label: "Configure",
+        icon: "settings-v3",
       },
-      label: "Configure Menu Items",
+      label: "Configure menu items",
       isBindProperty: false,
       isTriggerProperty: false,
       hidden: (props: TableWidgetProps, propertyPath: string) =>
@@ -183,7 +207,7 @@ export default {
       helpText: "Menu items",
       propertyName: "menuItems",
       controlType: "MENU_ITEMS",
-      label: "Menu Items",
+      label: "Menu items",
       isBindProperty: false,
       isTriggerProperty: false,
       hidden: (props: TableWidgetProps, propertyPath: string) => {
@@ -219,7 +243,7 @@ export default {
                 dependencies: ["primaryColumns", "columnOrder"],
               },
               {
-                helpText: "Triggers an action when the menu item is clicked",
+                helpText: "when the menu item is clicked",
                 propertyName: "onClick",
                 label: "onClick",
                 controlType: "ACTION_SELECTOR",
@@ -289,13 +313,15 @@ export default {
                 label: "Position",
                 helpText: "Sets the icon alignment of a menu item",
                 controlType: "ICON_TABS",
+                defaultValue: "left",
+                fullWidth: false,
                 options: [
                   {
-                    icon: "VERTICAL_LEFT",
+                    startIcon: "skip-left-line",
                     value: "left",
                   },
                   {
-                    icon: "VERTICAL_RIGHT",
+                    startIcon: "skip-right-line",
                     value: "right",
                   },
                 ],
@@ -364,7 +390,7 @@ export default {
       },
     },
     {
-      helpText: "Triggers an action when the button is clicked",
+      helpText: "when the button is clicked",
       propertyName: "onClick",
       label: "onClick",
       controlType: "ACTION_SELECTOR",

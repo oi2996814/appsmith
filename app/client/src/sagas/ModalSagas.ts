@@ -1,64 +1,76 @@
 import {
   all,
-  select,
   call,
-  put,
-  takeLatest,
-  takeEvery,
   delay,
+  put,
+  select,
+  takeEvery,
+  takeLatest,
 } from "redux-saga/effects";
 
 import { generateReactKey } from "utils/generators";
-import {
-  updateAndSaveLayout,
-  WidgetAddChild,
-  ModalWidgetResize,
-} from "actions/pageActions";
+import type { ModalWidgetResize, WidgetAddChild } from "actions/pageActions";
+import { updateAndSaveLayout } from "actions/pageActions";
 import {
   GridDefaults,
   MAIN_CONTAINER_WIDGET_ID,
 } from "constants/WidgetConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-  ReduxAction,
   WidgetReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 
 import {
   getWidget,
-  getWidgets,
   getWidgetByName,
-  getWidgetsMeta,
   getWidgetIdsByType,
   getWidgetMetaProps,
+  getWidgets,
+  getWidgetsMeta,
 } from "sagas/selectors";
-import {
+import type {
   CanvasWidgetsReduxState,
   FlattenedWidgetProps,
-} from "reducers/entityReducers/canvasWidgetsReducer";
+} from "ee/reducers/entityReducers/canvasWidgetsReducer";
 import { updateWidgetMetaPropAndEval } from "actions/metaActions";
-import { focusWidget } from "actions/widgetActions";
+import {
+  closePropertyPane,
+  focusWidget,
+  showModal,
+} from "actions/widgetActions";
 import log from "loglevel";
 import { flatten } from "lodash";
-import AppsmithConsole from "utils/AppsmithConsole";
+import WidgetFactory from "WidgetProvider/factory";
+import type { WidgetProps } from "widgets/BaseWidget";
+import { selectWidgetInitAction } from "actions/widgetSelectionActions";
+import { SelectionRequestType } from "./WidgetSelectUtils";
+import { toast } from "@appsmith/ads";
+import { getIsAutoLayout } from "selectors/editorSelectors";
+import { recalculateAutoLayoutColumnsAndSave } from "./AutoLayoutUpdateSagas";
+import {
+  FlexLayerAlignment,
+  LayoutDirection,
+} from "layoutSystems/common/utils/constants";
+import { getModalWidgetType } from "selectors/widgetSelectors";
+import { AnvilReduxActionTypes } from "layoutSystems/anvil/integrations/actions/actionTypes";
+import { getWidgetSelectionBlock } from "selectors/ui";
+import { getIsAnvilLayout } from "layoutSystems/anvil/integrations/selectors";
+import { showPropertyPane } from "../actions/propertyPaneActions";
 
-import WidgetFactory from "utils/WidgetFactory";
-import { Toaster } from "design-system";
-import { deselectAllInitAction } from "actions/widgetSelectionActions";
-import { navigateToCanvas } from "pages/Editor/Explorer/Widgets/utils";
-import { getCurrentPageId } from "selectors/editorSelectors";
-import { APP_MODE } from "entities/App";
-import { getAppMode } from "selectors/applicationSelectors";
 const WidgetTypes = WidgetFactory.widgetTypes;
 
 export function* createModalSaga(action: ReduxAction<{ modalName: string }>) {
   try {
     const modalWidgetId = generateReactKey();
-    const props: WidgetAddChild = {
+    const isAutoLayout: boolean = yield select(getIsAutoLayout);
+    const modalWidgetType: string = yield select(getModalWidgetType);
+    const isAnvilLayout: boolean = yield select(getIsAnvilLayout);
+    const newWidget: WidgetAddChild = {
       widgetId: MAIN_CONTAINER_WIDGET_ID,
       widgetName: action.payload.modalName,
-      type: WidgetTypes.MODAL_WIDGET,
+      type: modalWidgetType,
       newWidgetId: modalWidgetId,
       parentRowSpace: 1,
       parentColumnSpace: 1,
@@ -68,15 +80,49 @@ export function* createModalSaga(action: ReduxAction<{ modalName: string }>) {
       rows: 0,
       tabId: "",
     };
-    yield put({
-      type: WidgetReduxActionTypes.WIDGET_ADD_CHILD,
-      payload: props,
-    });
 
-    yield put({
-      type: ReduxActionTypes.SHOW_MODAL,
-      payload: { modalId: modalWidgetId },
-    });
+    if (isAutoLayout) {
+      const dropPayload = {
+        alignment: FlexLayerAlignment.Center,
+        index: 0,
+        isNewLayer: true,
+        layerIndex: 0,
+        rowIndex: 0,
+      };
+
+      newWidget.props = {
+        alignment: FlexLayerAlignment.Center,
+      };
+
+      yield put({
+        type: ReduxActionTypes.AUTOLAYOUT_ADD_NEW_WIDGETS,
+        payload: {
+          dropPayload,
+          newWidget,
+          parentId: MAIN_CONTAINER_WIDGET_ID,
+          direction: LayoutDirection.Vertical,
+          addToBottom: true,
+        },
+      });
+    } else if (isAnvilLayout) {
+      //TODO(#30604): Refactor to separate this logic from the anvil layout system
+      yield put({
+        type: AnvilReduxActionTypes.ANVIL_ADD_NEW_WIDGET,
+        payload: {
+          highlight: { alignment: "none", canvasId: "0" },
+          newWidget: { ...newWidget, detachFromLayout: true },
+          dragMeta: {
+            draggedWidgetTypes: "WIDGETS",
+            draggedOn: "MAIN_CANVAS",
+          },
+        },
+      });
+    } else {
+      yield put({
+        type: WidgetReduxActionTypes.WIDGET_ADD_CHILD,
+        payload: newWidget,
+      });
+    }
   } catch (error) {
     log.error(error);
     yield put({
@@ -89,26 +135,15 @@ export function* createModalSaga(action: ReduxAction<{ modalName: string }>) {
 export function* showModalByNameSaga(
   action: ReduxAction<{ modalName: string }>,
 ) {
-  const widgets: { [widgetId: string]: FlattenedWidgetProps } = yield select(
-    getWidgets,
-  );
+  const widgets: { [widgetId: string]: FlattenedWidgetProps } =
+    yield select(getWidgets);
   const modal: FlattenedWidgetProps | undefined = Object.values(widgets).find(
     (widget: FlattenedWidgetProps) =>
       widget.widgetName === action.payload.modalName,
   );
-  if (modal) {
-    AppsmithConsole.info({
-      text: action.payload.modalName
-        ? `showModal('${action.payload.modalName}') was triggered`
-        : `showModal() was triggered`,
-    });
 
-    yield put({
-      type: ReduxActionTypes.SHOW_MODAL,
-      payload: {
-        modalId: modal.widgetId,
-      },
-    });
+  if (modal) {
+    yield put(showModal(modal.widgetId));
   }
 }
 
@@ -116,16 +151,11 @@ export function* showIfModalSaga(
   action: ReduxAction<{ widgetId: string; type: string }>,
 ) {
   if (action.payload.type === "MODAL_WIDGET") {
-    yield put({
-      type: ReduxActionTypes.SHOW_MODAL,
-      payload: { modalId: action.payload.widgetId },
-    });
+    yield put(showModal(action.payload.widgetId));
   }
 }
 
-export function* showModalSaga(
-  action: ReduxAction<{ modalId: string; shouldSelectModal?: boolean }>,
-) {
+export function* showModalSaga(action: ReduxAction<{ modalId: string }>) {
   // First we close the currently open modals (if any)
   // Notice the empty payload.
   yield call(closeModalSaga, {
@@ -135,17 +165,16 @@ export function* showModalSaga(
     },
   });
 
-  const pageId: string = yield select(getCurrentPageId);
-  const appMode: APP_MODE = yield select(getAppMode);
-
-  if (appMode === APP_MODE.EDIT) navigateToCanvas(pageId);
-
   yield put(focusWidget(action.payload.modalId));
 
+  const widgetLikeProps = {
+    widgetId: action.payload.modalId,
+  } as WidgetProps;
   const metaProps: Record<string, unknown> = yield select(
     getWidgetMetaProps,
-    action.payload.modalId,
+    widgetLikeProps,
   );
+
   if (!metaProps || !metaProps.isVisible) {
     // Then show the modal we would like to show.
     yield put(
@@ -153,14 +182,14 @@ export function* showModalSaga(
     );
     yield delay(1000);
   }
-  yield put({
-    type: ReduxActionTypes.SHOW_PROPERTY_PANE,
-    payload: {
+
+  yield put(
+    showPropertyPane({
       widgetId: action.payload.modalId,
       callForDragOrResize: undefined,
       force: true,
-    },
-  });
+    }),
+  );
 }
 
 export function* closeModalSaga(
@@ -168,27 +197,33 @@ export function* closeModalSaga(
 ) {
   try {
     const { modalName } = action.payload;
+
     let widgetIds: string[] = [];
+
     // If modalName is provided, we just want to close this modal
     if (modalName) {
       const widget: FlattenedWidgetProps | undefined = yield select(
         getWidgetByName,
         modalName,
       );
+
       widgetIds = widget ? [widget.widgetId] : [];
-      yield put({
-        type: ReduxActionTypes.SHOW_PROPERTY_PANE,
-        payload: {},
-      });
+      yield put(closePropertyPane());
     } else {
       // If modalName is not provided, find all open modals
       // Get all meta prop records
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const metaProps: Record<string, any> = yield select(getWidgetsMeta);
+      const modalWidgetType: string = yield select(getModalWidgetType);
 
       // Get widgetIds of all widgets of type MODAL_WIDGET
+      // Note: Not updating this code path for WDS_MODAL_WIDGET, as the functionality
+      // may require us to keep existing modals open.
+      // In this, the flow of switching back and forth between multiple modals is to be tested.
       const modalWidgetIds: string[] = yield select(
         getWidgetIdsByType,
-        WidgetTypes.MODAL_WIDGET,
+        modalWidgetType,
       );
 
       // Loop through all modal widgetIds
@@ -200,9 +235,11 @@ export function* closeModalSaga(
         }
       });
     }
+
     widgetIds = action.payload.exclude
       ? widgetIds.filter((id: string) => id !== action.payload.exclude)
       : widgetIds;
+
     // If we have modals to close, set its isVisible to false to close.
     if (widgetIds) {
       yield all(
@@ -215,9 +252,16 @@ export function* closeModalSaga(
         ),
       );
     }
+
     if (modalName) {
-      yield put(deselectAllInitAction());
-      yield put(focusWidget(MAIN_CONTAINER_WIDGET_ID));
+      const isWidgetSelectionBlocked: boolean = yield select(
+        getWidgetSelectionBlock,
+      );
+
+      if (!isWidgetSelectionBlocked) {
+        yield put(selectWidgetInitAction(SelectionRequestType.Empty));
+        yield put(focusWidget(MAIN_CONTAINER_WIDGET_ID));
+      }
     }
   } catch (error) {
     log.error(error);
@@ -226,12 +270,13 @@ export function* closeModalSaga(
 
 export function* resizeModalSaga(resizeAction: ReduxAction<ModalWidgetResize>) {
   try {
-    Toaster.clear();
+    toast.dismiss();
     const start = performance.now();
     const { canvasWidgetId, height, widgetId, width } = resizeAction.payload;
 
     const stateWidget: FlattenedWidgetProps = yield select(getWidget, widgetId);
     const stateWidgets: CanvasWidgetsReduxState = yield select(getWidgets);
+    const isAutoLayout: boolean = yield select(getIsAutoLayout);
 
     let widget = { ...stateWidget };
     const widgets = { ...stateWidgets };
@@ -261,14 +306,23 @@ export function* resizeModalSaga(resizeAction: ReduxAction<ModalWidgetResize>) {
     }
 
     log.debug("resize computations took", performance.now() - start, "ms");
+
     //TODO Identify the updated widgets and pass the values
-    yield put(updateAndSaveLayout(widgets));
+    if (isAutoLayout) {
+      yield call(recalculateAutoLayoutColumnsAndSave, widgets);
+      yield put({
+        type: ReduxActionTypes.PROCESS_AUTO_LAYOUT_DIMENSION_UPDATES,
+      });
+    } else {
+      yield put(updateAndSaveLayout(widgets));
+    }
   } catch (error) {
     yield put({
       type: ReduxActionErrorTypes.WIDGET_OPERATION_ERROR,
       payload: {
         action: WidgetReduxActionTypes.WIDGET_RESIZE,
         error,
+        logToDebugger: true,
       },
     });
   }
@@ -291,6 +345,7 @@ const getModalCanvasBottomRow = (
   ) {
     return height;
   }
+
   const lowestBottomRowHeight =
     height -
     GridDefaults.CANVAS_EXTENSION_OFFSET *
@@ -310,6 +365,7 @@ const getModalCanvasBottomRow = (
       lowestBottomRow = child.bottomRow;
     }
   });
+
   return (
     (lowestBottomRow + GridDefaults.CANVAS_EXTENSION_OFFSET) *
     GridDefaults.DEFAULT_GRID_ROW_HEIGHT

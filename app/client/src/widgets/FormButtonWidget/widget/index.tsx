@@ -1,29 +1,107 @@
-import React from "react";
-import { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import { WidgetType } from "constants/WidgetConstants";
-import {
-  EventType,
-  ExecutionResult,
-} from "constants/AppsmithActionConstants/ActionConstants";
-import ButtonComponent, { ButtonType } from "widgets/ButtonWidget/component";
-import { ValidationTypes } from "constants/WidgetValidation";
-import ButtonWidget from "widgets/ButtonWidget";
-import {
+import { Alignment } from "@blueprintjs/core";
+import type { IconName } from "@blueprintjs/icons";
+import type {
+  AutocompletionDefinitions,
+  PropertyUpdates,
+  SnipingModeProperty,
+  WidgetCallout,
+} from "WidgetProvider/constants";
+import type {
   ButtonBorderRadius,
-  ButtonPlacementTypes,
   ButtonVariant,
-  ButtonVariantTypes,
   RecaptchaType,
+} from "components/constants";
+import {
+  ButtonPlacementTypes,
+  ButtonVariantTypes,
   RecaptchaTypes,
 } from "components/constants";
-import { IconName } from "@blueprintjs/icons";
-import { Alignment } from "@blueprintjs/core";
-import { ButtonWidgetProps } from "widgets/ButtonWidget/widget";
-import { Stylesheet } from "entities/AppTheming";
+import type { ExecutionResult } from "constants/AppsmithActionConstants/ActionConstants";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
+import { ValidationTypes } from "constants/WidgetValidation";
+import type { Stylesheet } from "entities/AppTheming";
+import { buildDeprecationWidgetMessage } from "pages/Editor/utils";
+import React from "react";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import ButtonWidget from "widgets/ButtonWidget";
+import type { ButtonType } from "widgets/ButtonWidget/component";
+import ButtonComponent from "widgets/ButtonWidget/component";
+import type { ButtonWidgetProps } from "widgets/ButtonWidget/widget";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
+import IconSVG from "../icon.svg";
 
 class FormButtonWidget extends ButtonWidget {
   constructor(props: FormButtonWidgetProps) {
     super(props);
+  }
+
+  static type = "FORM_BUTTON_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "FormButton",
+      iconSVG: IconSVG,
+      hideCard: true,
+      isDeprecated: true,
+      replacement: "BUTTON_WIDGET",
+      needsMeta: true,
+      tags: [WIDGET_TAGS.BUTTONS],
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any; // TODO (Sangeeth): Type error
+  }
+
+  static getDefaults() {
+    return {
+      rows: 4,
+      columns: 12,
+      widgetName: "FormButton",
+      text: "Submit",
+      isDefaultClickDisabled: true,
+      recaptchaType: RecaptchaTypes.V3,
+      version: 1,
+      animateLoading: true,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any; // TODO (Sangeeth): Type error
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "onClick",
+            propertyValue: propValueMap.run,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+      getEditorCallouts(): WidgetCallout[] {
+        return [
+          {
+            message: buildDeprecationWidgetMessage(
+              FormButtonWidget.getConfig().name,
+            ),
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Form button is provided by default to every form. It is used for form submission and resetting form inputs",
+      "!url": "https://docs.appsmith.com/widget-reference/form",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      text: "string",
+      isDisabled: "bool",
+      recaptchaToken: "string",
+    };
   }
 
   static getPropertyPaneConfig() {
@@ -63,7 +141,7 @@ class FormButtonWidget extends ButtonWidget {
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -84,7 +162,7 @@ class FormButtonWidget extends ButtonWidget {
           },
           {
             propertyName: "recaptchaType",
-            label: "Google reCAPTCHA Version",
+            label: "Google reCAPTCHA version",
             controlType: "DROP_DOWN",
             helpText: "Select reCAPTCHA version",
             options: [
@@ -116,7 +194,7 @@ class FormButtonWidget extends ButtonWidget {
             helpText:
               "Disabled if the form is invalid, if this widget exists directly within a Form widget.",
             propertyName: "disabledWhenInvalid",
-            label: "Disabled Invalid Forms",
+            label: "Disabled invalid forms",
             controlType: "SWITCH",
             isJSConvertible: true,
             isBindProperty: true,
@@ -127,7 +205,7 @@ class FormButtonWidget extends ButtonWidget {
             helpText:
               "Resets the fields of the form, on click, if this widget exists directly within a Form widget.",
             propertyName: "resetFormOnClick",
-            label: "Reset Form on Success",
+            label: "Reset form on success",
             controlType: "SWITCH",
             isJSConvertible: true,
             isBindProperty: true,
@@ -140,7 +218,7 @@ class FormButtonWidget extends ButtonWidget {
         sectionName: "Events",
         children: [
           {
-            helpText: "Triggers an action when the button is clicked",
+            helpText: "when the button is clicked",
             propertyName: "onClick",
             label: "onClick",
             controlType: "ACTION_SELECTOR",
@@ -156,7 +234,7 @@ class FormButtonWidget extends ButtonWidget {
           {
             propertyName: "buttonColor",
             helpText: "Changes the color of the button",
-            label: "Button Color",
+            label: "Button color",
             controlType: "COLOR_PICKER",
             isJSConvertible: true,
             isBindProperty: true,
@@ -165,7 +243,7 @@ class FormButtonWidget extends ButtonWidget {
           },
           {
             propertyName: "buttonVariant",
-            label: "Button Variant",
+            label: "Button variant",
             controlType: "DROP_DOWN",
             helpText: "Sets the variant of the icon button",
             options: [
@@ -199,7 +277,7 @@ class FormButtonWidget extends ButtonWidget {
           },
           {
             propertyName: "borderRadius",
-            label: "Border Radius",
+            label: "Border radius",
             helpText:
               "Rounds the corners of the icon button's outer border edge",
             controlType: "BORDER_RADIUS_OPTIONS",
@@ -212,7 +290,7 @@ class FormButtonWidget extends ButtonWidget {
           },
           {
             propertyName: "boxShadow",
-            label: "Box Shadow",
+            label: "Box shadow",
             helpText:
               "Enables you to cast a drop shadow from the frame of the widget",
             controlType: "BOX_SHADOW_OPTIONS",
@@ -234,12 +312,14 @@ class FormButtonWidget extends ButtonWidget {
               propertyValue: string,
             ) => {
               const propertiesToUpdate = [{ propertyPath, propertyValue }];
+
               if (!props.iconAlign) {
                 propertiesToUpdate.push({
                   propertyPath: "iconAlign",
                   propertyValue: Alignment.LEFT,
                 });
               }
+
               return propertiesToUpdate;
             },
             dependencies: ["iconAlign"],
@@ -287,13 +367,14 @@ class FormButtonWidget extends ButtonWidget {
             label: "Icon Alignment",
             helpText: "Sets the icon alignment of the button",
             controlType: "ICON_TABS",
+            defaultValue: "left",
             options: [
               {
-                icon: "VERTICAL_LEFT",
+                startIcon: "align-left",
                 value: "left",
               },
               {
-                icon: "VERTICAL_RIGHT",
+                startIcon: "align-right",
                 value: "right",
               },
             ],
@@ -325,6 +406,7 @@ class FormButtonWidget extends ButtonWidget {
         isLoading: true,
       });
     }
+
     this.props.updateWidgetMetaProperty("recaptchaToken", token, {
       triggerPropertyName: "onClick",
       dynamicString: this.props.onClick,
@@ -357,13 +439,14 @@ class FormButtonWidget extends ButtonWidget {
     this.setState({
       isLoading: false,
     });
+
     if (result.success) {
       if (this.props.resetFormOnClick && this.props.onReset)
         this.props.onReset();
     }
   };
 
-  getPageView() {
+  getWidgetView() {
     const disabled =
       this.props.disabledWhenInvalid &&
       "isFormValid" in this.props &&
@@ -371,15 +454,11 @@ class FormButtonWidget extends ButtonWidget {
 
     return (
       <ButtonComponent
-        {...super.getPageView().props}
+        {...super.getWidgetView().props}
         isDisabled={disabled}
         onClick={!disabled ? this.onButtonClickBound : undefined}
       />
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "FORM_BUTTON_WIDGET";
   }
 }
 

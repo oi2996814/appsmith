@@ -1,12 +1,25 @@
 import * as React from "react";
 
-import BaseWidget, { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
 import { TAILWIND_COLORS } from "constants/ThemeConstants";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import SliderComponent, { SliderComponentProps } from "../component/Slider";
+import type { SliderComponentProps } from "../component/Slider";
+import SliderComponent from "../component/Slider";
 import contentConfig from "./propertyConfig/contentConfig";
 import styleConfig from "./propertyConfig/styleConfig";
-import { Stylesheet } from "entities/AppTheming";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { Alignment } from "@blueprintjs/core";
+import { LabelPosition } from "components/constants";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
 export interface NumberSliderWidgetProps
   extends WidgetProps,
@@ -31,6 +44,90 @@ class NumberSliderWidget extends BaseWidget<
   NumberSliderWidgetProps,
   WidgetState
 > {
+  static type = "NUMBER_SLIDER_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Number Slider",
+      needsMeta: true,
+      searchTags: ["range"],
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.SLIDERS],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      min: 0,
+      max: 100,
+      step: 1,
+      defaultValue: 10,
+      showMarksLabel: true,
+      marks: [
+        { value: 25, label: "25%" },
+        { value: 50, label: "50%" },
+        { value: 75, label: "75%" },
+      ],
+      isVisible: true,
+      isDisabled: false,
+      tooltipAlwaysOn: false,
+      rows: 8,
+      columns: 40,
+      widgetName: "NumberSlider",
+      shouldScroll: false,
+      shouldTruncate: false,
+      version: 1,
+      animateLoading: true,
+      labelText: "Percentage",
+      labelPosition: LabelPosition.Top,
+      labelAlignment: Alignment.LEFT,
+      labelWidth: 8,
+      labelTextSize: "0.875rem",
+      sliderSize: "m",
+      responsiveBehavior: ResponsiveBehavior.Fill,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      disabledPropsDefaults: {
+        labelPosition: LabelPosition.Top,
+        labelTextSize: "0.875rem",
+      },
+      defaults: {
+        rows: 7,
+        columns: 40,
+      },
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "180px",
+              minHeight: "70px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        vertical: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "70px" },
+        minWidth: { base: "180px" },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return contentConfig;
   }
@@ -42,6 +139,36 @@ class NumberSliderWidget extends BaseWidget<
   static getStylesheetConfig(): Stylesheet {
     return {
       accentColor: "{{appsmith.theme.colors.primaryColor}}",
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Number slider widget is used to capture user feedback from a range of values",
+      "!url": "https://docs.appsmith.com/widget-reference/circular-progress",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      value: "number",
+    };
+  }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+        setValue: {
+          path: "defaultValue",
+          type: "number",
+          accessor: "value",
+        },
+      },
     };
   }
 
@@ -99,7 +226,7 @@ class NumberSliderWidget extends BaseWidget<
       : sliderValue.toString();
   };
 
-  getPageView() {
+  getWidgetView() {
     return (
       <SliderComponent
         color={this.props.accentColor || TAILWIND_COLORS.green["600"]}
@@ -111,7 +238,7 @@ class NumberSliderWidget extends BaseWidget<
         labelTextColor={this.props.labelTextColor}
         labelTextSize={this.props.labelTextSize}
         labelTooltip={this.props.labelTooltip}
-        labelWidth={this.getLabelWidth()}
+        labelWidth={this.props.labelComponentWidth}
         loading={this.props.isLoading}
         // If showMarks is off don't show marks at all
         marks={this.props.showMarksLabel ? this.props.marks : []}
@@ -127,10 +254,6 @@ class NumberSliderWidget extends BaseWidget<
         tooltipAlwaysOn={this.props.tooltipAlwaysOn || false}
       />
     );
-  }
-
-  static getWidgetType() {
-    return "NUMBER_SLIDER_WIDGET";
   }
 }
 

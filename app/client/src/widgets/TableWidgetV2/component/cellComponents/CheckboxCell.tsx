@@ -1,10 +1,6 @@
-import React from "react";
-import {
-  ALIGN_ITEMS,
-  BaseCellComponentProps,
-  CellAlignment,
-  JUSTIFY_CONTENT,
-} from "../Constants";
+import React, { memo } from "react";
+import type { BaseCellComponentProps, CellAlignment } from "../Constants";
+import { ALIGN_ITEMS, JUSTIFY_CONTENT } from "../Constants";
 import { CellWrapper, TooltipContentWrapper } from "../TableStyledWrappers";
 import CheckboxComponent from "widgets/CheckboxWidget/component/index";
 import { LabelPosition } from "components/constants";
@@ -63,7 +59,7 @@ type CheckboxCellProps = BaseCellComponentProps & {
   disabledCheckboxMessage: string;
 };
 
-export const CheckboxCell = (props: CheckboxCellProps) => {
+const CheckboxCellComponent = (props: CheckboxCellProps) => {
   const {
     accentColor,
     borderRadius,
@@ -88,6 +84,7 @@ export const CheckboxCell = (props: CheckboxCellProps) => {
       borderRadius={borderRadius}
       isChecked={value}
       isDisabled={!!disabledCheckbox || !isCellEditable}
+      isFullWidth={false}
       isLoading={false}
       isRequired={false}
       label=""
@@ -96,6 +93,7 @@ export const CheckboxCell = (props: CheckboxCellProps) => {
       widgetId={""}
     />
   );
+
   return (
     <CheckboxCellWrapper
       cellBackground={cellBackground}
@@ -126,3 +124,5 @@ export const CheckboxCell = (props: CheckboxCellProps) => {
     </CheckboxCellWrapper>
   );
 };
+
+export const CheckboxCell = memo(CheckboxCellComponent);

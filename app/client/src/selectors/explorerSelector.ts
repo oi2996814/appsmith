@@ -1,5 +1,5 @@
-import { AppState } from "@appsmith/reducers";
-import { ExplorerPinnedState } from "reducers/uiReducers/explorerReducer";
+import type { AppState } from "ee/reducers";
+import { ExplorerPinnedState } from "ee/reducers/uiReducers/explorerReducer";
 
 /**
  * returns the pinned state of explorer
@@ -34,3 +34,5 @@ export const getExplorerActive = (state: AppState) => {
 export const getUpdatingEntity = (state: AppState) => {
   return state.ui.explorer.entity.updatingEntity;
 };
+export const getEditingEntityName = (state: AppState) =>
+  state.ui.explorer.entity.editingEntityName;

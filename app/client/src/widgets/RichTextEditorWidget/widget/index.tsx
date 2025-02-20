@@ -1,34 +1,155 @@
-import React, { lazy, Suspense } from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "../../BaseWidget";
-import { TextSize, WidgetType } from "constants/WidgetConstants";
-import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import { ValidationTypes } from "constants/WidgetValidation";
-import { DerivedPropertiesMap } from "utils/WidgetFactory";
-import Skeleton from "components/utils/Skeleton";
-import { retryPromise } from "utils/AppsmithUtils";
-import { LabelPosition } from "components/constants";
 import { Alignment } from "@blueprintjs/core";
-import { GRID_DENSITY_MIGRATION_V1 } from "widgets/constants";
-import { isAutoHeightEnabledForWidget } from "widgets/WidgetUtils";
-
+import { LabelPosition } from "components/constants";
+import Skeleton from "components/utils/Skeleton";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import type { TextSize } from "constants/WidgetConstants";
+import { ValidationTypes } from "constants/WidgetValidation";
+import React, { lazy, Suspense } from "react";
 import showdown from "showdown";
-import { Stylesheet } from "entities/AppTheming";
+import { retryPromise } from "utils/AppsmithUtils";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
+import {
+  isAutoHeightEnabledForWidget,
+  DefaultAutocompleteDefinitions,
+  isCompactMode,
+} from "widgets/WidgetUtils";
+import type { WidgetProps, WidgetState } from "../../BaseWidget";
+import BaseWidget from "../../BaseWidget";
+
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import {
+  FlexVerticalAlignment,
+  ResponsiveBehavior,
+} from "layoutSystems/common/utils/constants";
+import { DynamicHeight } from "utils/WidgetFeatures";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+
+import type {
+  SnipingModeProperty,
+  PropertyUpdates,
+} from "WidgetProvider/constants";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
 export enum RTEFormats {
   MARKDOWN = "markdown",
   HTML = "html",
 }
-const RichTextEditorComponent = lazy(() =>
-  retryPromise(() =>
-    import(/* webpackChunkName: "rte",webpackPrefetch: 2 */ "../component"),
+const RichTextEditorComponent = lazy(async () =>
+  retryPromise(
+    async () => import(/* webpackChunkName: "rte" */ "../component"),
   ),
 );
 
 const converter = new showdown.Converter();
+
 class RichTextEditorWidget extends BaseWidget<
   RichTextEditorWidgetProps,
   WidgetState
 > {
+  static type = "RICH_TEXT_EDITOR_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Rich Text Editor",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.INPUTS],
+      needsMeta: true,
+      searchTags: ["input", "rte"],
+    };
+  }
+
+  static getFeatures() {
+    return {
+      dynamicHeight: {
+        sectionIndex: 3,
+        defaultValue: DynamicHeight.FIXED,
+        active: true,
+      },
+    };
+  }
+
+  static getDefaults() {
+    return {
+      defaultText: "This is the initial <b>content</b> of the editor",
+      rows: 20,
+      columns: 24,
+      animateLoading: true,
+      isDisabled: false,
+      isVisible: true,
+      isRequired: false,
+      widgetName: "RichTextEditor",
+      isDefaultClickDisabled: true,
+      inputType: "html",
+      labelText: "Label",
+      labelPosition: LabelPosition.Top,
+      labelAlignment: Alignment.LEFT,
+      labelWidth: 5,
+      version: 1,
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+      flexVerticalAlignment: FlexVerticalAlignment.Top,
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "defaultText",
+            propertyValue: propValueMap.data,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "280px",
+              minHeight: "300px",
+            };
+          },
+        },
+      ],
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "300px" },
+        minWidth: { base: "280px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      text: "string",
+      isDisabled: "string",
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return [
       {
@@ -40,6 +161,7 @@ class RichTextEditorWidget extends BaseWidget<
               "Sets the input type of the default text property in widget.",
             label: "Input Type",
             controlType: "ICON_TABS",
+            defaultValue: "html",
             fullWidth: true,
             options: [
               {
@@ -58,7 +180,7 @@ class RichTextEditorWidget extends BaseWidget<
             propertyName: "defaultText",
             helpText:
               "Sets the default text of the widget. The text is updated if the default text changes",
-            label: "Default Value",
+            label: "Default value",
             controlType: "INPUT_TEXT",
             placeholderText: "<b>Hello World</b>",
             isBindProperty: true,
@@ -101,13 +223,14 @@ class RichTextEditorWidget extends BaseWidget<
             propertyName: "labelAlignment",
             label: "Alignment",
             controlType: "LABEL_ALIGNMENT_OPTIONS",
+            fullWidth: false,
             options: [
               {
-                icon: "LEFT_ALIGN",
+                startIcon: "align-left",
                 value: Alignment.LEFT,
               },
               {
-                icon: "RIGHT_ALIGN",
+                startIcon: "align-right",
                 value: Alignment.RIGHT,
               },
             ],
@@ -190,7 +313,7 @@ class RichTextEditorWidget extends BaseWidget<
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -211,11 +334,12 @@ class RichTextEditorWidget extends BaseWidget<
           },
         ],
       },
+
       {
         sectionName: "Events",
         children: [
           {
-            helpText: "Triggers an action when the text is changed",
+            helpText: "when the text is changed",
             propertyName: "onTextChange",
             label: "onTextChanged",
             controlType: "ACTION_SELECTOR",
@@ -231,11 +355,11 @@ class RichTextEditorWidget extends BaseWidget<
   static getPropertyPaneStyleConfig() {
     return [
       {
-        sectionName: "Label Styles",
+        sectionName: "Label styles",
         children: [
           {
             propertyName: "labelTextColor",
-            label: "Font Color",
+            label: "Font color",
             helpText: "Control the color of the label associated",
             controlType: "COLOR_PICKER",
             isJSConvertible: true,
@@ -245,7 +369,7 @@ class RichTextEditorWidget extends BaseWidget<
           },
           {
             propertyName: "labelTextSize",
-            label: "Font Size",
+            label: "Font size",
             helpText: "Control the font size of the label associated",
             controlType: "DROP_DOWN",
             defaultValue: "0.875rem",
@@ -291,11 +415,11 @@ class RichTextEditorWidget extends BaseWidget<
             controlType: "BUTTON_GROUP",
             options: [
               {
-                icon: "BOLD_FONT",
+                icon: "text-bold",
                 value: "BOLD",
               },
               {
-                icon: "ITALICS_FONT",
+                icon: "text-italic",
                 value: "ITALIC",
               },
             ],
@@ -307,11 +431,11 @@ class RichTextEditorWidget extends BaseWidget<
         ],
       },
       {
-        sectionName: "Border and Shadow",
+        sectionName: "Border and shadow",
         children: [
           {
             propertyName: "borderRadius",
-            label: "Border Radius",
+            label: "Border radius",
             helpText:
               "Rounds the corners of the icon button's outer border edge",
             controlType: "BORDER_RADIUS_OPTIONS",
@@ -323,7 +447,7 @@ class RichTextEditorWidget extends BaseWidget<
           },
           {
             propertyName: "boxShadow",
-            label: "Box Shadow",
+            label: "Box shadow",
             helpText:
               "Enables you to cast a drop shadow from the frame of the widget",
             controlType: "BOX_SHADOW_OPTIONS",
@@ -344,6 +468,8 @@ class RichTextEditorWidget extends BaseWidget<
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       text: undefined,
@@ -386,24 +512,40 @@ class RichTextEditorWidget extends BaseWidget<
     });
   };
 
-  getPageView() {
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+        setRequired: {
+          path: "isRequired",
+          type: "boolean",
+        },
+      },
+    };
+  }
+
+  getWidgetView() {
     let value = this.props.text ?? "";
+
     if (this.props.inputType === RTEFormats.MARKDOWN) {
       value = converter.makeHtml(value);
     }
+
+    const { componentHeight } = this.props;
 
     return (
       <Suspense fallback={<Skeleton />}>
         <RichTextEditorComponent
           borderRadius={this.props.borderRadius}
           boxShadow={this.props.boxShadow}
-          compactMode={
-            !(
-              (this.props.bottomRow - this.props.topRow) /
-                GRID_DENSITY_MIGRATION_V1 >
-              1
-            )
-          }
+          compactMode={isCompactMode(componentHeight)}
           isDisabled={this.props.isDisabled}
           isDynamicHeightEnabled={isAutoHeightEnabledForWidget(this.props)}
           isMarkdown={this.props.inputType === RTEFormats.MARKDOWN}
@@ -418,7 +560,7 @@ class RichTextEditorWidget extends BaseWidget<
           labelTextColor={this.props.labelTextColor}
           labelTextSize={this.props.labelTextSize}
           labelTooltip={this.props.labelTooltip}
-          labelWidth={this.getLabelWidth()}
+          labelWidth={this.props.labelComponentWidth}
           onValueChange={this.onValueChange}
           placeholder={this.props.placeholder}
           value={value}
@@ -426,10 +568,6 @@ class RichTextEditorWidget extends BaseWidget<
         />
       </Suspense>
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "RICH_TEXT_EDITOR_WIDGET";
   }
 }
 
@@ -453,6 +591,7 @@ export interface RichTextEditorWidgetProps extends WidgetProps {
   labelTextSize?: TextSize;
   labelStyle?: string;
   isDirty: boolean;
+  labelComponentWidth?: number;
 }
 
 export default RichTextEditorWidget;

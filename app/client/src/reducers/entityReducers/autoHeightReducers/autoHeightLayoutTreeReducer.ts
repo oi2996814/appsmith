@@ -1,19 +1,18 @@
 import { createImmerReducer } from "utils/ReducerUtils";
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { TreeNode } from "utils/autoHeight/constants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { TreeNode } from "utils/autoHeight/constants";
 import { xor } from "lodash";
 
-export type AutoHeightLayoutTreePayload = {
+export interface AutoHeightLayoutTreePayload {
   tree: Record<string, TreeNode>;
   canvasLevelMap: Record<string, number>;
-};
+}
 
-export type AutoHeightLayoutTreeReduxState = {
+export interface AutoHeightLayoutTreeReduxState {
   [widgetId: string]: TreeNode;
-};
+}
+
 const initialState: AutoHeightLayoutTreeReduxState = {};
 
 const autoHeightLayoutTreeReducer = createImmerReducer(initialState, {
@@ -22,16 +21,19 @@ const autoHeightLayoutTreeReducer = createImmerReducer(initialState, {
     action: ReduxAction<AutoHeightLayoutTreePayload>,
   ) => {
     const { tree } = action.payload;
-    const diff = xor(Object.keys(state), [...Object.keys(tree)]);
-    for (const widgetId in diff) {
+    const diff: string[] = xor(Object.keys(state), [...Object.keys(tree)]);
+
+    for (const widgetId of diff) {
       delete state[widgetId];
     }
+
     for (const widgetId in tree) {
       if (state[widgetId]) {
         const differentAboves = xor(
           state[widgetId].aboves,
           tree[widgetId].aboves,
         );
+
         if (differentAboves.length > 0) {
           state[widgetId].aboves = tree[widgetId].aboves;
         }
@@ -40,6 +42,7 @@ const autoHeightLayoutTreeReducer = createImmerReducer(initialState, {
           state[widgetId].belows,
           tree[widgetId].belows,
         );
+
         if (differentBelows.length > 0) {
           state[widgetId].belows = tree[widgetId].belows;
         }

@@ -4,11 +4,13 @@ import { Alignment, Classes, Label } from "@blueprintjs/core";
 
 import { LabelPosition } from "components/constants";
 import { FontStyleTypes } from "constants/WidgetConstants";
-import { TooltipComponent as Tooltip } from "design-system";
+import { TooltipComponent as Tooltip } from "@design-system/widgets-old";
 import { isEllipsisActive } from "utils/helpers";
 import { Colors } from "constants/Colors";
 import { IconWrapper } from "constants/IconConstants";
-import { ReactComponent as HelpIcon } from "assets/icons/control/help.svg";
+import { importSvg } from "@appsmith/ads-old";
+
+const HelpIcon = importSvg(async () => import("assets/icons/control/help.svg"));
 
 export interface LabelWithTooltipProps {
   alignment?: Alignment;
@@ -27,6 +29,7 @@ export interface LabelWithTooltipProps {
   text: string;
   width?: number;
   isDynamicHeightEnabled?: boolean;
+  rtl?: boolean;
 }
 
 export interface LabelContainerProps {
@@ -48,6 +51,7 @@ export interface StyledLabelProps {
   $hasHelpText: boolean;
   position?: LabelPosition;
   $isDynamicHeightEnabled?: boolean;
+  rtl?: boolean;
 }
 
 interface TooltipIconProps {
@@ -93,13 +97,18 @@ export const labelLayoutStyles = css<{
   display: flex;
   flex-direction: ${({ compactMode, labelPosition }) => {
     if (labelPosition === LabelPosition.Left) return "row";
+
     if (labelPosition === LabelPosition.Top) return "column";
+
     if (compactMode) return "row";
+
     return "column";
   }};
   align-items: ${({ compactMode, labelPosition }) => {
     if (labelPosition === LabelPosition.Top) return "flex-start";
+
     if (compactMode) return "center";
+
     return "flex-start";
   }};
   justify-content: flex-start;
@@ -114,8 +123,11 @@ export const multiSelectInputContainerStyles = css<{
   display: flex;
   align-items: ${({ compactMode, labelPosition }) => {
     if (labelPosition === LabelPosition.Top) return "flex-start";
+
     if (labelPosition === LabelPosition.Left) return "center";
+
     if (compactMode) return "center";
+
     return "flex-start";
   }};
 `;
@@ -138,7 +150,8 @@ export const LabelContainer = styled.div<LabelContainerProps>`
         ? `&&& {margin-right: ${LABEL_DEFAULT_GAP}; flex-shrink: 0;} max-width: ${LABEL_MAX_WIDTH_RATE}%;`
         : `width: 100%;`
     }
-    ${position === LabelPosition.Left &&
+    ${
+      position === LabelPosition.Left &&
       `
       ${!width && `width: ${LABEL_DEFAULT_WIDTH_RATE}%`};
       ${alignment === Alignment.RIGHT && `justify-content: flex-end`};
@@ -149,7 +162,8 @@ export const LabelContainer = styled.div<LabelContainerProps>`
             : `text-align: left`
         };
       }
-    `}
+    `
+    }
     ${!inline && optionCount && optionCount > 1 && `align-self: flex-start;`}
   `}
 `;
@@ -160,16 +174,18 @@ export const StyledTooltip = styled(Tooltip)`
 
 export const StyledLabel = styled(Label)<StyledLabelProps>`
   &&& {
-    ${({ $compact, $hasHelpText, position }) => {
+    ${({ $compact, $hasHelpText, position, rtl }) => {
       if (!position && !$compact) return;
+
       if (
         position === LabelPosition.Left ||
         ((!position || position === LabelPosition.Auto) && $compact)
       )
         return `margin-bottom: 0px; margin-right: ${LABEL_DEFAULT_GAP}`;
+
       return `margin-bottom: ${LABEL_DEFAULT_GAP}; ${
         $hasHelpText
-          ? `margin-right: ${LABEL_DEFAULT_GAP}`
+          ? `margin-${rtl ? "left" : "right"}: ${LABEL_DEFAULT_GAP}`
           : "margin-right: 0px"
       }`;
     }};
@@ -210,7 +226,9 @@ const ToolTipIcon = styled(IconWrapper)<TooltipIconProps>`
     if (position === LabelPosition.Top) {
       return `margin-bottom: ${LABEL_DEFAULT_GAP}`;
     }
+
     if (compact || position === LabelPosition.Left) return "margin-bottom: 0px";
+
     return `margin-bottom: ${LABEL_DEFAULT_GAP}`;
   }};
 `;
@@ -234,6 +252,7 @@ const LabelWithTooltip = React.forwardRef<
     loading,
     optionCount,
     position,
+    rtl,
     text,
     width,
   } = props;
@@ -257,7 +276,8 @@ const LabelWithTooltip = React.forwardRef<
       alignment={alignment}
       className={LABEL_CONTAINER_CLASS}
       compact={compact}
-      data-cy={LABEL_CONTAINER_CLASS}
+      data-testid={LABEL_CONTAINER_CLASS}
+      dir={rtl ? "rtl" : "ltr"}
       inline={inline}
       isDynamicHeightEnabled={isDynamicHeightEnabled}
       optionCount={optionCount}
@@ -286,6 +306,7 @@ const LabelWithTooltip = React.forwardRef<
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           position={position}
+          rtl={rtl}
         >
           {text}
         </StyledLabel>
@@ -308,6 +329,7 @@ const LabelWithTooltip = React.forwardRef<
     </LabelContainer>
   );
 });
+
 LabelWithTooltip.displayName = "LabelWithTooltip";
 
 export default LabelWithTooltip;

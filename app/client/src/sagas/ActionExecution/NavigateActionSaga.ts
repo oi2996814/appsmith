@@ -1,36 +1,26 @@
-import { call, select } from "redux-saga/effects";
+import { call, put, select } from "redux-saga/effects";
 import { getCurrentPageId, getPageList } from "selectors/editorSelectors";
 import _ from "lodash";
-import { Page } from "@appsmith/constants/ReduxActionConstants";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { getAppMode } from "selectors/applicationSelectors";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { Page } from "entities/Page";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { getAppMode } from "ee/selectors/applicationSelectors";
 import { APP_MODE } from "entities/App";
-import { getQueryStringfromObject } from "RouteBuilder";
+import { getQueryStringfromObject } from "ee/entities/URLRedirect/URLAssembly";
 import history from "utils/history";
-import { setDataUrl } from "sagas/PageSagas";
+import { setDataUrl } from "ee/sagas/PageSagas";
 import AppsmithConsole from "utils/AppsmithConsole";
-import { NavigateActionDescription } from "@appsmith/entities/DataTree/actionTriggers";
-import { builderURL, viewerURL } from "RouteBuilder";
+import { builderURL, viewerURL } from "ee/RouteBuilder";
 import { TriggerFailureError } from "./errorUtils";
-import { isValidURL } from "utils/URLUtils";
+import { isValidURL, matchesURLPattern } from "utils/URLUtils";
+import type { TNavigateToDescription } from "workers/Evaluation/fns/navigateTo";
+import { NavigationTargetType } from "workers/Evaluation/fns/navigateTo";
+import type { SourceEntity } from "entities/AppsmithConsole";
 
-export enum NavigationTargetType {
+export enum NavigationTargetType_Dep {
   SAME_WINDOW = "SAME_WINDOW",
   NEW_WINDOW = "NEW_WINDOW",
 }
-
-const isValidUrlScheme = (url: string): boolean => {
-  return (
-    // Standard http call
-    url.startsWith("http://") ||
-    // Secure http call
-    url.startsWith("https://") ||
-    // Mail url to directly open email app prefilled
-    url.startsWith("mailto:") ||
-    // Tel url to directly open phone app prefilled
-    url.startsWith("tel:")
-  );
-};
 
 const isValidPageName = (
   pageNameOrUrl: string,
@@ -40,36 +30,16 @@ const isValidPageName = (
 };
 
 export default function* navigateActionSaga(
-  action: NavigateActionDescription["payload"],
+  action: TNavigateToDescription,
+  source?: SourceEntity,
 ) {
+  const { payload } = action;
   const pageList: Page[] = yield select(getPageList);
-
-  const {
-    pageNameOrUrl,
-    params,
-    target = NavigationTargetType.SAME_WINDOW,
-  } = action;
+  const { pageNameOrUrl, params, target } = payload;
 
   const page = isValidPageName(pageNameOrUrl, pageList);
 
-  if (isValidURL(pageNameOrUrl)) {
-    AnalyticsUtil.logEvent("NAVIGATE", {
-      navUrl: pageNameOrUrl,
-    });
-
-    let url = pageNameOrUrl + getQueryStringfromObject(params);
-
-    // Add a default protocol if it doesn't exist.
-    if (!isValidUrlScheme(url)) {
-      url = "https://" + url;
-    }
-
-    if (target === NavigationTargetType.SAME_WINDOW) {
-      window.location.assign(url);
-    } else if (target === NavigationTargetType.NEW_WINDOW) {
-      window.open(url, "_blank");
-    }
-  } else if (page) {
+  if (page) {
     const currentPageId: string = yield select(getCurrentPageId);
 
     AnalyticsUtil.logEvent("NAVIGATE", {
@@ -81,30 +51,66 @@ export default function* navigateActionSaga(
     const path =
       appMode === APP_MODE.EDIT
         ? builderURL({
-            pageId: page.pageId,
+            basePageId: page.basePageId,
             params,
           })
         : viewerURL({
-            pageId: page.pageId,
+            basePageId: page.basePageId,
             params,
           });
 
     if (target === NavigationTargetType.SAME_WINDOW) {
       history.push(path);
+
       if (currentPageId === page.pageId) {
         yield call(setDataUrl);
+        yield put({
+          type: ReduxActionTypes.TRIGGER_EVAL,
+        });
       }
     } else if (target === NavigationTargetType.NEW_WINDOW) {
       window.open(path, "_blank");
     }
 
     AppsmithConsole.info({
-      text: `navigateTo('${page.pageName}') was triggered`,
+      source,
+      text: `navigateTo triggered`,
       state: {
+        page,
         params,
       },
     });
   } else {
-    throw new TriggerFailureError("Enter a valid URL or page name");
+    let url = pageNameOrUrl + getQueryStringfromObject(params);
+
+    if (!isValidURL(url)) {
+      const looksLikeURL = matchesURLPattern(url);
+
+      // Filter out cases like navigateTo("1");
+      if (!looksLikeURL)
+        throw new TriggerFailureError("Enter a valid URL or page name");
+
+      // Default to https protocol to support navigation to URLs like www.google.com
+      url = `https://${url}`;
+
+      if (!isValidURL(url))
+        throw new TriggerFailureError("Enter a valid URL or page name");
+    }
+
+    if (target === NavigationTargetType.SAME_WINDOW) {
+      window.location.assign(url);
+    } else if (target === NavigationTargetType.NEW_WINDOW) {
+      window.open(url, "_blank");
+    }
+
+    AppsmithConsole.info({
+      text: `navigateTo('${url}') was triggered`,
+      state: {
+        params,
+      },
+    });
+    AnalyticsUtil.logEvent("NAVIGATE", {
+      navUrl: pageNameOrUrl,
+    });
   }
 }

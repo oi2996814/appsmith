@@ -1,33 +1,62 @@
-import { getAppsmithConfigs } from "@appsmith/configs";
+import { useSelector } from "react-redux";
+import { getInstanceId } from "ee/selectors/organizationSelectors";
 import {
-  createMessage,
-  UPGRADE_TO_EE_GENERIC,
-} from "@appsmith/constants/messages";
-import AnalyticsUtil, { EventName } from "utils/AnalyticsUtil";
+  CUSTOMER_PORTAL_URL_WITH_PARAMS,
+  PRICING_PAGE_URL,
+} from "constants/ThirdPartyConstants";
+import type { EventName } from "ee/utils/analyticsUtilTypes";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { getAppsmithConfigs } from "ee/configs";
+import { pricingPageUrlSource } from "ee/utils/licenseHelpers";
+import type {
+  RampFeature,
+  RampSection,
+} from "utils/ProductRamps/RampsControlList";
 
-const { intercomAppID } = getAppsmithConfigs();
-
-type Props = {
-  intercomMessage?: string;
+interface Props {
   logEventName?: EventName;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logEventData?: any;
-};
+  featureName?: RampFeature;
+  sectionName?: RampSection;
+  isEnterprise?: boolean;
+}
 
 const useOnUpgrade = (props: Props) => {
-  const { intercomMessage, logEventData, logEventName } = props;
-
-  const triggerIntercom = (message: string) => {
-    if (intercomAppID && window.Intercom) {
-      window.Intercom("showNewMessage", message);
-    }
-  };
+  const { featureName, isEnterprise, logEventData, logEventName, sectionName } =
+    props;
+  const instanceId = useSelector(getInstanceId);
+  const appsmithConfigs = getAppsmithConfigs();
 
   const onUpgrade = () => {
     AnalyticsUtil.logEvent(
       logEventName || "ADMIN_SETTINGS_UPGRADE",
       logEventData,
     );
-    triggerIntercom(intercomMessage || createMessage(UPGRADE_TO_EE_GENERIC));
+
+    if (isEnterprise) {
+      window.open(
+        PRICING_PAGE_URL(
+          appsmithConfigs.pricingUrl,
+          pricingPageUrlSource,
+          instanceId,
+          featureName,
+          sectionName,
+        ),
+      );
+    } else {
+      window.open(
+        CUSTOMER_PORTAL_URL_WITH_PARAMS(
+          appsmithConfigs.customerPortalUrl,
+          pricingPageUrlSource,
+          instanceId,
+          featureName,
+          sectionName,
+        ),
+        "_blank",
+      );
+    }
   };
 
   return { onUpgrade };

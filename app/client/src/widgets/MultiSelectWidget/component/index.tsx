@@ -1,24 +1,26 @@
 /* eslint-disable no-console */
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import Select, { SelectProps } from "rc-select";
-import { DraftValueType } from "rc-select/lib/Select";
+import type { SelectProps } from "rc-select";
+import Select from "rc-select";
+import type { DraftValueType } from "rc-select/lib/Select";
 import {
   DropdownStyles,
   MultiSelectContainer,
   StyledCheckbox,
 } from "./index.styled";
+import type { TextSize } from "constants/WidgetConstants";
 import {
   CANVAS_SELECTOR,
   MODAL_PORTAL_CLASSNAME,
-  TextSize,
 } from "constants/WidgetConstants";
 import debounce from "lodash/debounce";
-import { Icon } from "design-system";
-import { Alignment, Classes } from "@blueprintjs/core";
+import { Icon } from "@design-system/widgets-old";
+import type { Alignment } from "@blueprintjs/core";
+import { Classes } from "@blueprintjs/core";
 import { WidgetContainerDiff } from "widgets/WidgetUtils";
 import _ from "lodash";
 import { Colors } from "constants/Colors";
-import { LabelPosition } from "components/constants";
+import type { LabelPosition } from "components/constants";
 import LabelWithTooltip from "widgets/components/LabelWithTooltip";
 
 const menuItemSelectedIcon = (props: { isSelected: boolean }) => {
@@ -99,6 +101,7 @@ function MultiSelectComponent({
     ) {
       setIsSelectAll(true);
     }
+
     if (isSelectAll && options.length !== value.length) {
       setIsSelectAll(false);
     }
@@ -106,25 +109,32 @@ function MultiSelectComponent({
 
   const getDropdownPosition = useCallback(() => {
     const node = _menu.current;
+
     if (Boolean(node?.closest(`.${MODAL_PORTAL_CLASSNAME}`))) {
       return document.querySelector(
         `.${MODAL_PORTAL_CLASSNAME}`,
       ) as HTMLElement;
     }
+
     return document.querySelector(`.${CANVAS_SELECTOR}`) as HTMLElement;
   }, []);
 
   const handleSelectAll = () => {
     if (!isSelectAll) {
       const allOption = options.map((option) => option.value) as string[];
+
       onChange(allOption);
+
       return;
     }
+
     return onChange([]);
   };
 
   const dropdownRender = useCallback(
     (
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       menu: React.ReactElement<any, string | React.JSXElementConstructor<any>>,
     ) => (
       <div className={loading ? Classes.SKELETON : ""}>
@@ -147,12 +157,10 @@ function MultiSelectComponent({
   // input is always a string.
   const filterOption = useCallback(
     (input, option) =>
-      String(option?.props.label)
-        .toLowerCase()
-        .indexOf(input.toLowerCase()) >= 0 ||
-      String(option?.props.value)
-        .toLowerCase()
-        .indexOf(input.toLowerCase()) >= 0,
+      String(option?.props.label).toLowerCase().indexOf(input.toLowerCase()) >=
+        0 ||
+      String(option?.props.value).toLowerCase().indexOf(input.toLowerCase()) >=
+        0,
     [],
   );
 
@@ -162,10 +170,12 @@ function MultiSelectComponent({
     const updateFilter = (filterValue: string) => {
       onFilterChange(filterValue);
     };
+
     return debounce(updateFilter, DEBOUNCE_TIMEOUT);
   }, []);
 
   const id = _.uniqueId();
+
   return (
     <MultiSelectContainer
       className={loading ? Classes.SKELETON : ""}

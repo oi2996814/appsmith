@@ -1,14 +1,17 @@
 import equal from "fast-deep-equal/es6";
 import React from "react";
-import { DraggableList } from "design-system";
+import { DraggableList } from "@appsmith/ads-old";
 
-export type BaseItemProps = {
+export interface BaseItemProps {
   id: string;
   isVisible?: boolean;
   label: string;
-};
+  isDuplicateLabel?: boolean;
+  isChecked?: boolean;
+  isDragDisabled?: boolean;
+}
 
-export type RenderComponentProps<TItem extends BaseItemProps> = {
+export interface RenderComponentProps<TItem extends BaseItemProps> {
   focusedIndex: number | null | undefined;
   index: number;
   item: TItem;
@@ -20,9 +23,9 @@ export type RenderComponentProps<TItem extends BaseItemProps> = {
   updateFocus?: (index: number, isFocused: boolean) => void;
   isDragging: boolean;
   isDelete?: boolean;
-};
+}
 
-export type DroppableComponentProps<TItem extends BaseItemProps> = {
+export interface DroppableComponentProps<TItem extends BaseItemProps> {
   className?: string;
   fixedHeight?: number | boolean;
   focusedIndex: number | null | undefined;
@@ -36,10 +39,11 @@ export type DroppableComponentProps<TItem extends BaseItemProps> = {
   updateItems: (items: TItem[]) => void;
   onEdit?: (index: number) => void;
   updateFocus?: (index: number, isFocused: boolean) => void;
-};
+  keyAccessor?: string;
+}
 
 export class DroppableComponent<
-  TItem extends BaseItemProps
+  TItem extends BaseItemProps,
 > extends React.Component<DroppableComponentProps<TItem>> {
   constructor(props: DroppableComponentProps<TItem>) {
     super(props);
@@ -51,10 +55,13 @@ export class DroppableComponent<
 
   shouldComponentUpdate(
     prevProps: DroppableComponentProps<TItem>,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     prevState: any,
   ) {
     const presentOrder = this.props.items.map(this.getVisibleObject);
     const previousOrder = prevProps.items.map(this.getVisibleObject);
+
     return (
       !equal(presentOrder, previousOrder) ||
       this.props.focusedIndex !== prevProps.focusedIndex ||
@@ -62,7 +69,7 @@ export class DroppableComponent<
     );
   }
 
-  getVisibleObject(item: Record<string, unknown>) {
+  getVisibleObject(item: TItem) {
     if (!item) return {};
 
     return {
@@ -71,6 +78,7 @@ export class DroppableComponent<
       isVisible: item.isVisible,
       isDuplicateLabel: item.isDuplicateLabel,
       isChecked: item.isChecked,
+      isDragDisabled: item?.isDragDisabled,
     };
   }
 
@@ -80,7 +88,9 @@ export class DroppableComponent<
     newIndex: number,
   ) => {
     const newOrderedItems = itemsOrder.map((each) => this.props.items[each]);
+
     this.props.updateItems(newOrderedItems);
+
     if (this.props.updateFocus && originalIndex !== newIndex) {
       this.props.updateFocus(newIndex, true);
     }
@@ -90,6 +100,8 @@ export class DroppableComponent<
     this.setState({ isDragging });
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   renderItem = ({ index, item }: any) => {
     const {
       deleteOption,
@@ -125,6 +137,7 @@ export class DroppableComponent<
         focusedIndex={this.props.focusedIndex}
         itemHeight={45}
         items={this.props.items}
+        keyAccessor={this.props?.keyAccessor}
         onUpdate={this.onUpdate}
         shouldReRender={false}
         updateDragging={this.updateDragging}

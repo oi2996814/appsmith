@@ -8,6 +8,7 @@ import { isNaN } from "lodash";
 const ProgressBarWrapper = styled.div`
   display: flex;
   align-items: center;
+  height: 100%;
 `;
 
 const ProgressBar = styled.div<{
@@ -61,6 +62,7 @@ const getProgressPosition = (
   currentStep: number,
 ) => {
   const currStepProgress = percentage - stepSize * currentStep;
+
   if (currStepProgress > stepSize) {
     return 100;
   } else if (currStepProgress < 0) {
@@ -85,10 +87,11 @@ function StepProgressBar(props: ProgressBarComponentProps) {
           stepSize,
           index,
         );
+
         return (
           <StepContainer key={index}>
             <ProgressBar
-              data-cy={width}
+              data-testid={width}
               fillColor={props.fillColor}
               progress={width}
             />
@@ -102,6 +105,7 @@ function StepProgressBar(props: ProgressBarComponentProps) {
 function ProgressBarComponent(props: ProgressBarComponentProps) {
   const isDeterminate =
     props.barType === BarType.DETERMINATE && !isNaN(Number(props.steps));
+
   return (
     <ProgressBarWrapper className="t--progressbar-widget">
       {isDeterminate ? (
@@ -109,7 +113,7 @@ function ProgressBarComponent(props: ProgressBarComponentProps) {
       ) : (
         <ProgressBar
           borderRadius={props.borderRadius}
-          data-cy={props.progress}
+          data-testid={props.progress}
           fillColor={props.fillColor}
           progress={props.progress}
         />
@@ -118,6 +122,7 @@ function ProgressBarComponent(props: ProgressBarComponentProps) {
     </ProgressBarWrapper>
   );
 }
+
 export interface ProgressBarComponentProps {
   progress?: number;
   showResult: boolean;

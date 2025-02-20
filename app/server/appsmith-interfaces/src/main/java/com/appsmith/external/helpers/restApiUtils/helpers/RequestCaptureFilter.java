@@ -2,6 +2,9 @@ package com.appsmith.external.helpers.restApiUtils.helpers;
 
 import com.appsmith.external.models.ActionConfiguration;
 import com.appsmith.external.models.ActionExecutionRequest;
+import com.appsmith.external.models.ApiKeyAuth;
+import com.appsmith.external.models.AuthenticationDTO;
+import com.appsmith.external.models.DatasourceConfiguration;
 import com.appsmith.external.models.Property;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
@@ -15,6 +18,7 @@ import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.ExchangeFunction;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
@@ -39,55 +43,111 @@ public class RequestCaptureFilter implements ExchangeFilterFunction {
     private ClientRequest request;
     private final ObjectMapper objectMapper;
     private final BodyReceiver bodyReceiver = new BodyReceiver();
+    private static final String MASKED_VALUE = "****";
 
     public RequestCaptureFilter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
     @Override
-    @NonNull
-    public Mono<ClientResponse> filter(@NonNull ClientRequest request, ExchangeFunction next) {
+    @NonNull public Mono<ClientResponse> filter(@NonNull ClientRequest request, ExchangeFunction next) {
         this.request = request;
         return next.exchange(request);
     }
 
-    public ActionExecutionRequest populateRequestFields(ActionExecutionRequest existing) {
+    private static String maskQueryParamInURL(URI uriToMask, String queryParamKeyToMask) {
+        MultiValueMap<String, String> queryParams =
+                UriComponentsBuilder.fromUri(uriToMask).build().getQueryParams();
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUri(uriToMask);
+        // Clear the query parameters from the builder
+        uriBuilder.replaceQuery(null);
+        // Loop through the query parameters
+        for (Map.Entry<String, List<String>> entry : queryParams.entrySet()) {
+            String key = entry.getKey();
+            List<String> values = entry.getValue();
 
+            // If the key matches the queryParamKeyToMask, mask its values
+            if (key.equals(queryParamKeyToMask)) {
+                values = values.stream().map(value -> MASKED_VALUE).toList();
+            }
+
+            // Add the (possibly masked) parameters back to the builder
+            for (String value : values) {
+                uriBuilder.queryParam(key, value);
+            }
+        }
+
+        return uriBuilder.build().toUriString();
+    }
+
+    public ActionExecutionRequest populateRequestFields(
+            ActionExecutionRequest existing,
+            boolean isBodySentWithApiRequest,
+            DatasourceConfiguration datasourceConfiguration) {
         final ActionExecutionRequest actionExecutionRequest = new ActionExecutionRequest();
-        actionExecutionRequest.setUrl(request.url().toString());
-        actionExecutionRequest.setHttpMethod(request.method());
-        MultiValueMap<String, String> headers = CollectionUtils.toMultiValueMap(new LinkedCaseInsensitiveMap<>(8, Locale.ENGLISH));
+
+        if (request == null) {
+            // The `request` can be null, if there's another filter function before `this.filter`,
+            // which returns a `Mono.error` instead of the request object.
+            return actionExecutionRequest;
+        }
+
         AtomicBoolean isMultipart = new AtomicBoolean(false);
+
+        String headerToMask = "";
+        String URLString = request.url().toString();
+
+        AuthenticationDTO authentication = datasourceConfiguration.getAuthentication();
+
+        // if authenticationType is api_key then check the addTo method and mask the api_key set by user accordingly.
+        if (authentication instanceof ApiKeyAuth auth) {
+            if (auth.getAddTo() != null) {
+                if (auth.getAddTo().equals(ApiKeyAuth.Type.HEADER)) {
+                    headerToMask = auth.getLabel();
+                }
+                if (auth.getAddTo().equals(ApiKeyAuth.Type.QUERY_PARAMS)) {
+                    URLString = maskQueryParamInURL(request.url(), auth.getLabel());
+                }
+            }
+        }
+        String finalHeaderToMask = headerToMask;
+        MultiValueMap<String, String> headers =
+                CollectionUtils.toMultiValueMap(new LinkedCaseInsensitiveMap<>(8, Locale.ENGLISH));
         request.headers().forEach((header, value) -> {
-            if (HttpHeaders.AUTHORIZATION.equalsIgnoreCase(header) || "api_key".equalsIgnoreCase(header)) {
-                headers.add(header, "****");
+            if (HttpHeaders.AUTHORIZATION.equalsIgnoreCase(header) || finalHeaderToMask.equals(header)) {
+                headers.add(header, MASKED_VALUE);
             } else {
                 headers.addAll(header, value);
             }
-            if (HttpHeaders.CONTENT_TYPE.equalsIgnoreCase(header) && MULTIPART_FORM_DATA_VALUE.equalsIgnoreCase(value.get(0))) {
+            if (HttpHeaders.CONTENT_TYPE.equalsIgnoreCase(header)
+                    && MULTIPART_FORM_DATA_VALUE.equalsIgnoreCase(value.get(0))) {
                 isMultipart.set(true);
             }
         });
-        actionExecutionRequest.setHeaders(objectMapper.valueToTree(headers));
 
+        actionExecutionRequest.setUrl(URLString);
+        actionExecutionRequest.setHeaders(objectMapper.valueToTree(headers));
+        actionExecutionRequest.setHttpMethod(request.method());
         actionExecutionRequest.setRequestParams(existing.getRequestParams());
         actionExecutionRequest.setExecutionParameters(existing.getExecutionParameters());
         actionExecutionRequest.setProperties(existing.getProperties());
 
         // Apart from multipart, refer to the request that was actually sent
         if (!isMultipart.get()) {
-            actionExecutionRequest.setBody(bodyReceiver.receiveValue(this.request.body()));
+            if (isBodySentWithApiRequest) {
+                actionExecutionRequest.setBody(bodyReceiver.receiveValue(this.request.body()));
+            }
         } else {
             actionExecutionRequest.setBody(existing.getBody());
         }
-
         return actionExecutionRequest;
     }
 
-    public static ActionExecutionRequest populateRequestFields(ActionConfiguration actionConfiguration,
-                                                               URI uri,
-                                                               List<Map.Entry<String, String>> insertedParams,
-                                                               ObjectMapper objectMapper) {
+    public static ActionExecutionRequest populateRequestFields(
+            ActionConfiguration actionConfiguration,
+            URI uri,
+            List<Map.Entry<String, String>> insertedParams,
+            ObjectMapper objectMapper) {
 
         ActionExecutionRequest actionExecutionRequest = new ActionExecutionRequest();
 
@@ -100,15 +160,15 @@ public class RequestCaptureFilter implements ExchangeFilterFunction {
         AtomicReference<String> reqContentType = new AtomicReference<>();
 
         if (actionConfiguration.getHeaders() != null) {
-            MultiValueMap<String, String> reqMultiMap = CollectionUtils.toMultiValueMap(new LinkedCaseInsensitiveMap<>(8, Locale.ENGLISH));
+            MultiValueMap<String, String> reqMultiMap =
+                    CollectionUtils.toMultiValueMap(new LinkedCaseInsensitiveMap<>(8, Locale.ENGLISH));
 
-            actionConfiguration.getHeaders()
-                    .forEach(header -> {
-                        if (HttpHeaders.CONTENT_TYPE.equalsIgnoreCase(header.getKey())) {
-                            reqContentType.set((String) header.getValue());
-                        }
-                        reqMultiMap.put(header.getKey(), Arrays.asList((String) header.getValue()));
-                    });
+            actionConfiguration.getHeaders().forEach(header -> {
+                if (HttpHeaders.CONTENT_TYPE.equalsIgnoreCase(header.getKey())) {
+                    reqContentType.set((String) header.getValue());
+                }
+                reqMultiMap.put(header.getKey(), Arrays.asList((String) header.getValue()));
+            });
             actionExecutionRequest.setHeaders(objectMapper.valueToTree(reqMultiMap));
         }
 
@@ -126,7 +186,7 @@ public class RequestCaptureFilter implements ExchangeFilterFunction {
                     .filter(property -> property.getKey() != null)
                     .forEach(property -> bodyDataMap.put(property.getKey(), property.getValue()));
             actionExecutionRequest.setBody(bodyDataMap);
-        } else if (MediaType.MULTIPART_FORM_DATA_VALUE.equals(reqContentType.get())) {
+        } else if (MULTIPART_FORM_DATA_VALUE.equals(reqContentType.get())) {
             final List<Property> bodyFormData = actionConfiguration.getBodyFormData();
             Map<String, Object> bodyDataMap = new HashMap<>();
             bodyFormData

@@ -1,45 +1,53 @@
+import { builderURL } from "ee/RouteBuilder";
 import {
-  ApplicationPayload,
-  ReduxAction,
+  fetchApplication,
+  showReconnectDatasourceModal,
+} from "ee/actions/applicationActions";
+import type { ApplicationPayload } from "entities/Application";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { all, put, takeEvery, call, select, take } from "redux-saga/effects";
-import TemplatesAPI, {
-  ImportTemplateResponse,
-  FetchTemplateResponse,
-  TemplateFiltersResponse,
-} from "api/TemplatesApi";
-import history from "utils/history";
-import { getDefaultPageId } from "./ApplicationSagas";
+} from "ee/constants/ReduxActionConstants";
+import urlBuilder from "ee/entities/URLRedirect/URLAssembly";
+import { findDefaultPage } from "ee/sagas/ApplicationSagas";
+import { fetchPageDSLSaga } from "ee/sagas/PageSagas";
+import { getCurrentWorkspaceId } from "ee/selectors/selectedWorkspaceSelectors";
+import { isAirgapped } from "ee/utils/airgapHelpers";
+import { fetchJSLibraries } from "actions/JSLibraryActions";
+import { fetchDatasources } from "actions/datasourceActions";
+import { fetchJSCollections } from "actions/jsActionActions";
+import { fetchAllPageEntityCompletion, saveLayout } from "actions/pageActions";
+import {
+  executePageLoadActions,
+  fetchActions,
+} from "actions/pluginActionActions";
+import { fetchPluginFormConfigs } from "actions/pluginActions";
 import {
   getAllTemplates,
+  hideTemplatesModal,
   setTemplateNotificationSeenAction,
-  showTemplatesModal,
 } from "actions/templateActions";
+import type {
+  FetchTemplateResponse,
+  ImportTemplateResponse,
+  TemplateFiltersResponse,
+} from "api/TemplatesApi";
+import TemplatesAPI from "api/TemplatesApi";
+import { toast } from "@appsmith/ads";
+import { APP_MODE } from "entities/App";
+import { all, call, put, select, take, takeEvery } from "redux-saga/effects";
+import { getCurrentApplicationId } from "selectors/editorSelectors";
+import history from "utils/history";
 import {
   getTemplateNotificationSeen,
   setTemplateNotificationSeen,
 } from "utils/storage";
 import { validateResponse } from "./ErrorSagas";
-import { builderURL } from "RouteBuilder";
-import { getCurrentApplicationId } from "selectors/editorSelectors";
-import { getCurrentWorkspaceId } from "@appsmith/selectors/workspaceSelectors";
-import { fetchApplication } from "actions/applicationActions";
-import { APP_MODE } from "entities/App";
-import {
-  executePageLoadActions,
-  fetchActions,
-} from "actions/pluginActionActions";
-import { fetchJSCollections } from "actions/jsActionActions";
 import { failFastApiCalls } from "./InitSagas";
-import { Toaster, Variant } from "design-system";
-import { fetchDatasources } from "actions/datasourceActions";
-import { fetchPluginFormConfigs } from "actions/pluginActions";
-import { fetchAllPageEntityCompletion, saveLayout } from "actions/pageActions";
-import { showReconnectDatasourceModal } from "actions/applicationActions";
-import { getAllPageIds } from "./selectors";
-import { fetchPageDSLSaga } from "sagas/PageSagas";
+import { getAllPageIdentities } from "./selectors";
+
+const isAirgappedInstance = isAirgapped();
 
 function* getAllTemplatesSaga() {
   try {
@@ -47,6 +55,7 @@ function* getAllTemplatesSaga() {
       TemplatesAPI.getAllTemplates,
     );
     const isValid: boolean = yield validateResponse(response);
+
     if (isValid) {
       yield put({
         type: ReduxActionTypes.GET_ALL_TEMPLATES_SUCCESS,
@@ -73,13 +82,15 @@ function* importTemplateToWorkspaceSaga(
       action.payload.workspaceId,
     );
     const isValid: boolean = yield validateResponse(response);
+
     if (isValid) {
+      const defaultPage = findDefaultPage(response.data.application.pages);
       const application: ApplicationPayload = {
         ...response.data.application,
-        defaultPageId: getDefaultPageId(
-          response.data.application.pages,
-        ) as string,
+        defaultPageId: defaultPage?.id,
+        defaultBasePageId: defaultPage?.baseId,
       };
+
       yield put({
         type: ReduxActionTypes.IMPORT_TEMPLATE_TO_WORKSPACE_SUCCESS,
         payload: response.data.application,
@@ -96,10 +107,12 @@ function* importTemplateToWorkspaceSaga(
         );
       } else {
         const pageURL = builderURL({
-          pageId: application.defaultPageId,
+          basePageId: application.defaultBasePageId,
         });
+
         history.push(pageURL);
       }
+
       yield put(getAllTemplates());
     }
   } catch (error) {
@@ -119,6 +132,7 @@ function* getSimilarTemplatesSaga(action: ReduxAction<string>) {
       action.payload,
     );
     const isValid: boolean = yield validateResponse(response);
+
     if (isValid) {
       yield put({
         type: ReduxActionTypes.GET_SIMILAR_TEMPLATES_SUCCESS,
@@ -156,6 +170,7 @@ function* getTemplateSaga(action: ReduxAction<string>) {
       action.payload,
     );
     const isValid: boolean = yield validateResponse(response);
+
     if (isValid) {
       yield put({
         type: ReduxActionTypes.GET_TEMPLATE_SUCCESS,
@@ -172,22 +187,25 @@ function* getTemplateSaga(action: ReduxAction<string>) {
   }
 }
 
-function* postPageAdditionSaga(applicationId: string) {
+export function* postPageAdditionSaga(applicationId: string) {
   const afterActionsFetch: boolean = yield failFastApiCalls(
     [
       fetchActions({ applicationId }, []),
       fetchJSCollections({ applicationId }),
       fetchDatasources(),
+      fetchJSLibraries(applicationId),
     ],
     [
       ReduxActionTypes.FETCH_ACTIONS_SUCCESS,
       ReduxActionTypes.FETCH_JS_ACTIONS_SUCCESS,
       ReduxActionTypes.FETCH_DATASOURCES_SUCCESS,
+      ReduxActionTypes.FETCH_JS_LIBRARIES_SUCCESS,
     ],
     [
       ReduxActionErrorTypes.FETCH_ACTIONS_ERROR,
       ReduxActionErrorTypes.FETCH_JS_ACTIONS_ERROR,
       ReduxActionErrorTypes.FETCH_DATASOURCES_ERROR,
+      ReduxActionErrorTypes.FETCH_JS_LIBRARIES_FAILED,
     ],
   );
 
@@ -210,78 +228,28 @@ function* postPageAdditionSaga(applicationId: string) {
 
 function* forkTemplateToApplicationSaga(
   action: ReduxAction<{
+    pageNames?: string[];
     templateId: string;
     templateName: string;
-    pageNames?: string[];
   }>,
 ) {
   try {
-    const pagesToImport = action.payload.pageNames
-      ? action.payload.pageNames
-      : undefined;
-    const applicationId: string = yield select(getCurrentApplicationId);
-    const workspaceId: string = yield select(getCurrentWorkspaceId);
-    const prevPageIds: string[] = yield select(getAllPageIds);
-    const response: ImportTemplateResponse = yield call(
-      TemplatesAPI.importTemplateToApplication,
-      action.payload.templateId,
-      applicationId,
-      workspaceId,
-      pagesToImport,
-    );
-    // To fetch the new set of pages after merging the template into the existing application
-    yield put(
-      fetchApplication({
-        mode: APP_MODE.EDIT,
-        applicationId,
-      }),
-    );
-    const isValid: boolean = yield validateResponse(response);
-    if (isValid) {
-      yield call(postPageAdditionSaga, applicationId);
-      const pages: string[] = yield select(getAllPageIds);
-      const templatePageIds: string[] = pages.filter(
-        (pageId) => !prevPageIds.includes(pageId),
-      );
-      const pageDSLs: unknown = yield all(
-        templatePageIds.map((pageId: string) => {
-          return call(fetchPageDSLSaga, pageId);
-        }),
-      );
-      yield put({
-        type: ReduxActionTypes.UPDATE_PAGE_LIST,
-        payload: pageDSLs,
-      });
-      if (response.data.isPartialImport) {
-        yield put(
-          showReconnectDatasourceModal({
-            application: response.data.application,
-            unConfiguredDatasourceList:
-              response.data.unConfiguredDatasourceList,
-            workspaceId,
-            pageId: pages[0],
-          }),
-        );
-      }
-      history.push(
-        builderURL({
-          pageId: pages[0],
-        }),
-      );
-      yield put(showTemplatesModal(false));
+    const {
+      isValid,
+    }: {
+      isValid: boolean;
+    } = yield call(apiCallForForkTemplateToApplicaion, action);
 
-      yield take(ReduxActionTypes.UPDATE_CANVAS_STRUCTURE);
-      yield put(saveLayout());
-      yield put({
-        type: ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_SUCCESS,
-        payload: response.data.application,
-      });
+    if (isValid) {
+      yield put(hideTemplatesModal());
       yield put(getAllTemplates());
 
-      Toaster.show({
-        text: `Pages from '${action.payload.templateName}' template added successfully`,
-        variant: Variant.success,
-      });
+      toast.show(
+        `Pages from '${action.payload.templateName}' template added successfully`,
+        {
+          kind: "success",
+        },
+      );
     }
   } catch (error) {
     yield put({
@@ -293,12 +261,98 @@ function* forkTemplateToApplicationSaga(
   }
 }
 
+function* apiCallForForkTemplateToApplicaion(
+  action: ReduxAction<{
+    templateId: string;
+    templateName: string;
+    pageNames?: string[] | undefined;
+  }>,
+) {
+  const pagesToImport = action.payload.pageNames
+    ? action.payload.pageNames
+    : undefined;
+  const applicationId: string = yield select(getCurrentApplicationId);
+  const workspaceId: string = yield select(getCurrentWorkspaceId);
+  const prevPages: { pageId: string; basePageId: string }[] =
+    yield select(getAllPageIdentities);
+  const prevPageIds = prevPages.map((page) => page.pageId);
+  const response: ImportTemplateResponse = yield call(
+    TemplatesAPI.importTemplateToApplication,
+    action.payload.templateId,
+    applicationId,
+    workspaceId,
+    pagesToImport,
+  );
+
+  // To fetch the new set of pages after merging the template into the existing application
+  yield put(
+    fetchApplication({
+      mode: APP_MODE.EDIT,
+      applicationId,
+    }),
+  );
+  const isValid: boolean = yield validateResponse(response);
+
+  if (isValid) {
+    yield call(postPageAdditionSaga, applicationId);
+    const pages: { pageId: string; basePageId: string }[] =
+      yield select(getAllPageIdentities);
+    const templatePageIds: string[] = pages
+      .filter((page) => !prevPageIds.includes(page.pageId))
+      .map((page) => page.pageId);
+
+    const pageDSLs: unknown = yield all(
+      templatePageIds.map((pageId: string) => {
+        return call(fetchPageDSLSaga, pageId);
+      }),
+    );
+
+    yield put({
+      type: ReduxActionTypes.FETCH_PAGE_DSLS_SUCCESS,
+      payload: pageDSLs,
+    });
+
+    yield put({
+      type: ReduxActionTypes.UPDATE_PAGE_LIST,
+      payload: pageDSLs,
+    });
+
+    if (response.data.isPartialImport) {
+      yield put(
+        showReconnectDatasourceModal({
+          application: response.data.application,
+          unConfiguredDatasourceList: response.data.unConfiguredDatasourceList,
+          workspaceId,
+          pageId: pages[0].pageId,
+        }),
+      );
+    }
+
+    history.push(
+      builderURL({
+        basePageId: pages[0].basePageId,
+      }),
+    );
+    yield take(ReduxActionTypes.UPDATE_CANVAS_STRUCTURE);
+    yield put(saveLayout());
+    yield put({
+      type: ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_SUCCESS,
+      payload: response.data.application,
+    });
+
+    return { isValid, applicationId, templatePageIds, prevPageIds };
+  }
+
+  return { isValid };
+}
+
 function* getTemplateFiltersSaga() {
   try {
     const response: TemplateFiltersResponse = yield call(
       TemplatesAPI.getTemplateFilters,
     );
     const isValid: boolean = yield validateResponse(response);
+
     if (isValid) {
       yield put({
         type: ReduxActionTypes.GET_TEMPLATE_FILTERS_SUCCESS,
@@ -315,33 +369,129 @@ function* getTemplateFiltersSaga() {
   }
 }
 
+function* forkTemplateToApplicationViaOnboardingFlowSaga(
+  action: ReduxAction<{
+    pageNames?: string[];
+    templateId: string;
+    templateName: string;
+    applicationId: string;
+    workspaceId: string;
+  }>,
+) {
+  try {
+    const response: ImportTemplateResponse = yield call(
+      TemplatesAPI.importTemplateToApplication,
+      action.payload.templateId,
+      action.payload.applicationId,
+      action.payload.workspaceId,
+      action.payload.pageNames,
+    );
+
+    const isValid: boolean = yield validateResponse(response);
+
+    if (isValid) {
+      const application = response.data.application;
+
+      urlBuilder.updateURLParams(
+        {
+          applicationSlug: application.slug,
+          applicationVersion: application.applicationVersion,
+          baseApplicationId: application.baseId,
+        },
+        application.pages.map((page) => ({
+          pageSlug: page.slug,
+          customSlug: page.customSlug,
+          basePageId: page.baseId,
+        })),
+      );
+      history.push(
+        builderURL({
+          basePageId: application.pages[0].id,
+        }),
+      );
+
+      // This is to remove the existing default Page 1 in the new application after template has been imported.
+      // 1. Set new page as default
+      const importedTemplatePages = application.pages.filter(
+        (page) => !page.isDefault,
+      );
+
+      yield put({
+        type: ReduxActionTypes.SET_DEFAULT_APPLICATION_PAGE_INIT,
+        payload: {
+          id: importedTemplatePages[0].id,
+          applicationId: application.id,
+        },
+      });
+
+      yield take(ReduxActionTypes.SET_DEFAULT_APPLICATION_PAGE_SUCCESS);
+
+      const defaultPageId = application.pages.filter(
+        (page) => page.isDefault,
+      )[0].id;
+
+      //2. Delete old default page (Page 1)
+      yield put({
+        type: ReduxActionTypes.DELETE_PAGE_INIT,
+        payload: {
+          id: defaultPageId,
+        },
+      });
+
+      yield put({
+        type: ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_ONBOARDING_FLOW_SUCCESS,
+        payload: response.data.application,
+      });
+      toast.show(
+        `Pages from '${action.payload.templateName}' template added successfully`,
+        {
+          kind: "success",
+        },
+      );
+    }
+  } catch (error) {
+    yield put({
+      type: ReduxActionErrorTypes.IMPORT_TEMPLATE_TO_APPLICATION_ONBOARDING_FLOW_ERROR,
+      payload: {
+        error,
+      },
+    });
+  }
+}
+
+// TODO: Refactor and handle this airgap check in a better way - posssibly in root sagas (sangeeth)
 export default function* watchActionSagas() {
-  yield all([
-    takeEvery(ReduxActionTypes.GET_ALL_TEMPLATES_INIT, getAllTemplatesSaga),
-    takeEvery(ReduxActionTypes.GET_TEMPLATE_INIT, getTemplateSaga),
-    takeEvery(
-      ReduxActionTypes.GET_SIMILAR_TEMPLATES_INIT,
-      getSimilarTemplatesSaga,
-    ),
-    takeEvery(
-      ReduxActionTypes.IMPORT_TEMPLATE_TO_WORKSPACE_INIT,
-      importTemplateToWorkspaceSaga,
-    ),
-    takeEvery(
-      ReduxActionTypes.GET_TEMPLATE_NOTIFICATION_SEEN,
-      getTemplateNotificationSeenSaga,
-    ),
-    takeEvery(
-      ReduxActionTypes.SET_TEMPLATE_NOTIFICATION_SEEN,
-      setTemplateNotificationSeenSaga,
-    ),
-    takeEvery(
-      ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_INIT,
-      forkTemplateToApplicationSaga,
-    ),
-    takeEvery(
-      ReduxActionTypes.GET_TEMPLATE_FILTERS_INIT,
-      getTemplateFiltersSaga,
-    ),
-  ]);
+  if (!isAirgappedInstance)
+    yield all([
+      takeEvery(ReduxActionTypes.GET_ALL_TEMPLATES_INIT, getAllTemplatesSaga),
+      takeEvery(ReduxActionTypes.GET_TEMPLATE_INIT, getTemplateSaga),
+      takeEvery(
+        ReduxActionTypes.GET_SIMILAR_TEMPLATES_INIT,
+        getSimilarTemplatesSaga,
+      ),
+      takeEvery(
+        ReduxActionTypes.IMPORT_TEMPLATE_TO_WORKSPACE_INIT,
+        importTemplateToWorkspaceSaga,
+      ),
+      takeEvery(
+        ReduxActionTypes.GET_TEMPLATE_NOTIFICATION_SEEN,
+        getTemplateNotificationSeenSaga,
+      ),
+      takeEvery(
+        ReduxActionTypes.SET_TEMPLATE_NOTIFICATION_SEEN,
+        setTemplateNotificationSeenSaga,
+      ),
+      takeEvery(
+        ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_INIT,
+        forkTemplateToApplicationSaga,
+      ),
+      takeEvery(
+        ReduxActionTypes.GET_TEMPLATE_FILTERS_INIT,
+        getTemplateFiltersSaga,
+      ),
+      takeEvery(
+        ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_ONBOARDING_FLOW,
+        forkTemplateToApplicationViaOnboardingFlowSaga,
+      ),
+    ]);
 }

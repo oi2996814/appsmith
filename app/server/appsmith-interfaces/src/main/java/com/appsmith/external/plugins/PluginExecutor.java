@@ -2,18 +2,22 @@ package com.appsmith.external.plugins;
 
 import com.appsmith.external.dtos.ExecuteActionDTO;
 import com.appsmith.external.exceptions.pluginExceptions.AppsmithPluginError;
+import com.appsmith.external.exceptions.pluginExceptions.AppsmithPluginException;
 import com.appsmith.external.helpers.MustacheHelper;
 import com.appsmith.external.models.ActionConfiguration;
 import com.appsmith.external.models.ActionExecutionResult;
 import com.appsmith.external.models.DatasourceConfiguration;
+import com.appsmith.external.models.DatasourceStorage;
 import com.appsmith.external.models.DatasourceStructure;
+import com.appsmith.external.models.DatasourceStructure.Template;
 import com.appsmith.external.models.DatasourceTestResult;
 import com.appsmith.external.models.Param;
-import com.appsmith.external.models.Property;
 import com.appsmith.external.models.TriggerRequestDTO;
 import com.appsmith.external.models.TriggerResultDTO;
+import io.micrometer.observation.ObservationRegistry;
 import org.pf4j.ExtensionPoint;
-import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
+import reactor.core.observability.micrometer.Micrometer;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.function.Tuple2;
@@ -21,10 +25,13 @@ import reactor.util.function.Tuple2;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.appsmith.external.constants.spans.ActionSpan.ACTION_EXECUTION_PLUGIN_EXECUTION;
 import static com.appsmith.external.helpers.PluginUtils.getHintMessageForLocalhostUrl;
+import static org.springframework.util.CollectionUtils.isEmpty;
 
 public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
 
@@ -39,7 +46,8 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      * @param actionConfiguration     : These are the configurations which have been used to create an Action from a Datasource.
      * @return ActionExecutionResult  : This object is returned to the user which contains the result values from the execution.
      */
-    Mono<ActionExecutionResult> execute(C connection, DatasourceConfiguration datasourceConfiguration, ActionConfiguration actionConfiguration);
+    Mono<ActionExecutionResult> execute(
+            C connection, DatasourceConfiguration datasourceConfiguration, ActionConfiguration actionConfiguration);
 
     /**
      * This function is responsible for creating the connection to the data source and returning the connection variable
@@ -48,7 +56,34 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      * @param datasourceConfiguration
      * @return Connection object
      */
-    Mono<C> datasourceCreate(DatasourceConfiguration datasourceConfiguration);
+    //    Mono<C> datasourceCreate(DatasourceConfiguration datasourceConfiguration);
+
+    default Mono<C> datasourceCreate(DatasourceConfiguration datasourceConfiguration) {
+        Properties properties = new Properties();
+        return Mono.fromCallable(() -> addAuthParamsToConnectionConfig(datasourceConfiguration, properties))
+                .map(properties1 -> addPluginSpecificProperties(datasourceConfiguration, properties1))
+                .flatMap(properties1 -> createConnectionClient(datasourceConfiguration, properties1))
+                .onErrorResume(error -> {
+                    // We always expect to have an error object, but the error object may not be well-formed
+                    final String errorMessage = error.getMessage();
+                    throw new RuntimeException(errorMessage);
+                })
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    default Mono<C> createConnectionClient(DatasourceConfiguration datasourceConfiguration, Properties properties) {
+        return this.datasourceCreate(datasourceConfiguration);
+    }
+
+    default Properties addPluginSpecificProperties(
+            DatasourceConfiguration datasourceConfiguration, Properties properties) {
+        return properties;
+    }
+
+    default Properties addAuthParamsToConnectionConfig(
+            DatasourceConfiguration datasourceConfiguration, Properties properties) {
+        return properties;
+    }
 
     /**
      * This function is used to bring down/destroy the connection to the data source.
@@ -65,8 +100,8 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      * @param datasourceConfiguration
      * @return boolean
      */
-    default boolean isDatasourceValid(DatasourceConfiguration datasourceConfiguration) {
-        return CollectionUtils.isEmpty(validateDatasource(datasourceConfiguration));
+    default boolean isDatasourceValid(DatasourceConfiguration datasourceConfiguration, boolean isEmbeddedDatasource) {
+        return isEmpty(validateDatasource(datasourceConfiguration, isEmbeddedDatasource));
     }
 
     /**
@@ -82,6 +117,15 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      */
     Set<String> validateDatasource(DatasourceConfiguration datasourceConfiguration);
 
+    default Set<String> validateDatasource(
+            DatasourceConfiguration datasourceConfiguration, boolean isEmbeddedDatasource) {
+        if (!isEmbeddedDatasource) {
+            return this.validateDatasource(datasourceConfiguration);
+        }
+
+        return Set.of();
+    }
+
     /**
      * This function tests the datasource by executing a test query or hitting the endpoint to check the correctness
      * of the values provided in the datasource configuration.
@@ -96,14 +140,18 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
     default Mono<DatasourceTestResult> testDatasource(DatasourceConfiguration datasourceConfiguration) {
         return this.datasourceCreate(datasourceConfiguration)
                 .flatMap(connection -> {
-                    return this.testDatasource(connection)
-                            .doFinally(signal -> this.datasourceDestroy(connection));
+                    return this.testDatasource(connection).doFinally(signal -> this.datasourceDestroy(connection));
                 })
                 .onErrorResume(error -> {
                     // We always expect to have an error object, but the error object may not be well-formed
                     final String errorMessage = error.getMessage() == null
                             ? AppsmithPluginError.PLUGIN_DATASOURCE_TEST_GENERIC_ERROR.getMessage()
                             : error.getMessage();
+                    if (error instanceof AppsmithPluginException
+                            && StringUtils.hasLength(((AppsmithPluginException) error).getDownstreamErrorMessage())) {
+                        return Mono.just(new DatasourceTestResult(
+                                ((AppsmithPluginException) error).getDownstreamErrorMessage(), errorMessage));
+                    }
                     return Mono.just(new DatasourceTestResult(errorMessage));
                 })
                 .subscribeOn(Schedulers.boundedElastic());
@@ -124,6 +172,27 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
     }
 
     /**
+     * This function is being called as a hook before saving a datasource.
+     */
+    default Mono<DatasourceStorage> preSaveHook(DatasourceStorage datasourceStorage) {
+        return Mono.just(datasourceStorage);
+    }
+
+    /**
+     * This function is being called as a hook after deleting a datasource.
+     */
+    default Mono<DatasourceStorage> preDeleteHook(DatasourceStorage datasourceStorage) {
+        return Mono.just(datasourceStorage);
+    }
+
+    /**
+     * This function is being called as a hook after saving a datasource.
+     */
+    default Mono<DatasourceStorage> postSaveHook(DatasourceStorage datasourceStorage) {
+        return Mono.just(datasourceStorage);
+    }
+
+    /**
      * This function fetches the structure of the tables/collections in the datasource. It's used to make query creation
      * easier for the user.
      *
@@ -136,16 +205,17 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
     }
 
     /**
-     * This function executes the DB query to fetch details about the datasource when we don't want to create new action
-     * just to get the information about the datasource
-     * e.g. Get Spreadsheets from Google Drive, Get first row in datasource etc.
+     * This function fetches the structure of the tables/collections in the datasource. It's used to make query creation
+     * easier for the user. This method is specifically for mock datasources
      *
-     * @param pluginSpecifiedTemplates
+     * @param connection
      * @param datasourceConfiguration
+     * @param isMock
      * @return
      */
-    default Mono<ActionExecutionResult> getDatasourceMetadata(List<Property> pluginSpecifiedTemplates, DatasourceConfiguration datasourceConfiguration) {
-        return Mono.empty();
+    default Mono<DatasourceStructure> getStructure(
+            C connection, DatasourceConfiguration datasourceConfiguration, Boolean isMock) {
+        return this.getStructure(connection, datasourceConfiguration);
     }
 
     /**
@@ -163,12 +233,67 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      * @param actionConfiguration     : These are the configurations which have been used to create an Action from a Datasource.
      * @return ActionExecutionResult  : This object is returned to the user which contains the result values from the execution.
      */
-    default Mono<ActionExecutionResult> executeParameterized(C connection,
-                                                             ExecuteActionDTO executeActionDTO,
-                                                             DatasourceConfiguration datasourceConfiguration,
-                                                             ActionConfiguration actionConfiguration) {
+    default Mono<ActionExecutionResult> executeParameterized(
+            C connection,
+            ExecuteActionDTO executeActionDTO,
+            DatasourceConfiguration datasourceConfiguration,
+            ActionConfiguration actionConfiguration) {
         prepareConfigurationsForExecution(executeActionDTO, actionConfiguration, datasourceConfiguration);
         return this.execute(connection, datasourceConfiguration, actionConfiguration);
+    }
+
+    default Mono<ActionExecutionResult> executeParameterizedWithMetrics(
+            C connection,
+            ExecuteActionDTO executeActionDTO,
+            DatasourceConfiguration datasourceConfiguration,
+            ActionConfiguration actionConfiguration,
+            ObservationRegistry observationRegistry) {
+        return this.executeParameterized(connection, executeActionDTO, datasourceConfiguration, actionConfiguration)
+                .tag("plugin", this.getClass().getName())
+                .name(ACTION_EXECUTION_PLUGIN_EXECUTION)
+                .tap(Micrometer.observation(observationRegistry));
+    }
+
+    // TODO: Following methods of executeParameterizedWithFlags, executeParameterizedWithMetricsAndFlags,
+    // triggerWithFlags are added to support feature flags in the plugin modules. Current implementation of
+    // featureFlagService is only available in server module and not available in any of the plugin modules due to
+    // dependencies on SessionUserService, OrganizationService etc. Hence, these methods are added to support feature
+    // flags in the plugin modules.
+    // Ideal solution would be to move featureFlagService and its dependencies to the shared interface module
+    // But this is a bigger change and will be done in future. Current change of passing flags was done to resolve
+    // release blocker
+    // https://github.com/appsmithorg/appsmith/issues/37714
+    // Once thorogh testing of shared drive support is done, we can remove this tech debt of passing feature flags like
+    // this.
+    default Mono<ActionExecutionResult> executeParameterizedWithFlags(
+            C connection,
+            ExecuteActionDTO executeActionDTO,
+            DatasourceConfiguration datasourceConfiguration,
+            ActionConfiguration actionConfiguration,
+            Map<String, Boolean> featureFlagMap) {
+        return this.executeParameterized(connection, executeActionDTO, datasourceConfiguration, actionConfiguration);
+    }
+
+    default Mono<ActionExecutionResult> executeParameterizedWithMetricsAndFlags(
+            C connection,
+            ExecuteActionDTO executeActionDTO,
+            DatasourceConfiguration datasourceConfiguration,
+            ActionConfiguration actionConfiguration,
+            ObservationRegistry observationRegistry,
+            Map<String, Boolean> featureFlagMap) {
+        return this.executeParameterizedWithFlags(
+                        connection, executeActionDTO, datasourceConfiguration, actionConfiguration, featureFlagMap)
+                .tag("plugin", this.getClass().getName())
+                .name(ACTION_EXECUTION_PLUGIN_EXECUTION)
+                .tap(Micrometer.observation(observationRegistry));
+    }
+
+    default Mono<TriggerResultDTO> triggerWithFlags(
+            C connection,
+            DatasourceConfiguration datasourceConfiguration,
+            TriggerRequestDTO request,
+            Map<String, Boolean> featureFlagMap) {
+        return this.trigger(connection, datasourceConfiguration, request);
     }
 
     /**
@@ -178,26 +303,25 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      * @param actionConfiguration
      * @param datasourceConfiguration
      */
-    default void prepareConfigurationsForExecution(ExecuteActionDTO executeActionDTO,
-                                                   ActionConfiguration actionConfiguration,
-                                                   DatasourceConfiguration datasourceConfiguration) {
+    default void prepareConfigurationsForExecution(
+            ExecuteActionDTO executeActionDTO,
+            ActionConfiguration actionConfiguration,
+            DatasourceConfiguration datasourceConfiguration) {
 
         variableSubstitution(actionConfiguration, datasourceConfiguration, executeActionDTO);
-
     }
 
     /**
      * This function replaces the variables in the action and datasource configuration with the actual params
      */
-    default void variableSubstitution(ActionConfiguration actionConfiguration,
-                                      DatasourceConfiguration datasourceConfiguration,
-                                      ExecuteActionDTO executeActionDTO) {
-        //Do variable substitution
-        //Do this only if params have been provided in the execute command
-        if (executeActionDTO != null && !CollectionUtils.isEmpty(executeActionDTO.getParams())) {
-            Map<String, String> replaceParamsMap = executeActionDTO
-                    .getParams()
-                    .stream()
+    default void variableSubstitution(
+            ActionConfiguration actionConfiguration,
+            DatasourceConfiguration datasourceConfiguration,
+            ExecuteActionDTO executeActionDTO) {
+        // Do variable substitution
+        // Do this only if params have been provided in the execute command
+        if (executeActionDTO != null && !isEmpty(executeActionDTO.getParams())) {
+            Map<String, String> replaceParamsMap = executeActionDTO.getParams().stream()
                     .collect(Collectors.toMap(
                             // Trimming here for good measure. If the keys have space on either side,
                             // Mustache won't be able to find the key.
@@ -207,8 +331,7 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
                             p -> p.getKey().trim(), // .replaceAll("[\"\n\\\\]", "\\\\$0"),
                             Param::getValue,
                             // In case of a conflict, we pick the older value
-                            (oldValue, newValue) -> oldValue)
-                    );
+                            (oldValue, newValue) -> oldValue));
 
             MustacheHelper.renderFieldValues(datasourceConfiguration, replaceParamsMap);
             MustacheHelper.renderFieldValues(actionConfiguration, replaceParamsMap);
@@ -229,8 +352,8 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      * @param datasourceConfiguration
      * @return A tuple of datasource and action configuration related hint messages.
      */
-    default Mono<Tuple2<Set<String>, Set<String>>> getHintMessages(ActionConfiguration actionConfiguration,
-                                                                   DatasourceConfiguration datasourceConfiguration) {
+    default Mono<Tuple2<Set<String>, Set<String>>> getHintMessages(
+            ActionConfiguration actionConfiguration, DatasourceConfiguration datasourceConfiguration) {
         Set<String> datasourceHintMessages = new HashSet<>();
         Set<String> actionHintMessages = new HashSet<>();
 
@@ -239,7 +362,8 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
         return Mono.zip(Mono.just(datasourceHintMessages), Mono.just(actionHintMessages));
     }
 
-    default Mono<TriggerResultDTO> trigger(C connection, DatasourceConfiguration datasourceConfiguration, TriggerRequestDTO request) {
+    default Mono<TriggerResultDTO> trigger(
+            C connection, DatasourceConfiguration datasourceConfiguration, TriggerRequestDTO request) {
         return Mono.empty();
     }
 
@@ -254,8 +378,7 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      * @param actionConfiguration
      * @return modified actionConfiguration object after setting the two keys mentioned above in `formData`.
      */
-    default void extractAndSetNativeQueryFromFormData(ActionConfiguration actionConfiguration) {
-    }
+    default void extractAndSetNativeQueryFromFormData(ActionConfiguration actionConfiguration) {}
 
     /**
      * This method returns a set of paths that are expected to contain bindings that refer to the same action
@@ -265,5 +388,40 @@ public interface PluginExecutor<C> extends ExtensionPoint, CrudTemplateService {
      */
     default Set<String> getSelfReferencingDataPaths() {
         return Set.of("prev", "next");
+    }
+
+    default Mono<DatasourceConfiguration> getDatasourceMetadata(DatasourceConfiguration datasourceConfiguration) {
+        return Mono.just(datasourceConfiguration);
+    }
+
+    /**
+     * This method is supposed to provide help with any update required to template queries that are used to create
+     * the actual select, updated, insert etc. queries as part of the generate CRUD page feature. Any plugin that
+     * needs special handling should override this method. e.g. in case of the S3 plugin some special handling is
+     * required because (a) it uses UQI config form (b) it has concept of bucket instead of table.
+     */
+    default Mono<Void> sanitizeGenerateCRUDPageTemplateInfo(
+            List<ActionConfiguration> actionConfigurationList, Object... args) {
+        return Mono.empty();
+    }
+
+    /*
+     * This method returns ActionConfiguration required in order to fetch preview data,
+     * that needs to be shown on datasource review page.
+     */
+    default ActionConfiguration getSchemaPreviewActionConfig(Template queryTemplate, Boolean isMock) {
+        return null;
+    }
+
+    /*
+     * This method returns rate limit identifier required in order to apply rate limit on datasource test api
+     * and will also be used when creating connections during query execution.
+     * For more details: https://github.com/appsmithorg/appsmith/issues/22868
+     */
+    default Mono<String> getEndpointIdentifierForRateLimit(DatasourceConfiguration datasourceConfiguration) {
+        // In case of endpoint identifier as empty string, no rate limiting will be applied
+        // Currently this function is overridden only by postgresPlugin class, in future it will be done for all plugins
+        // wherever applicable.
+        return Mono.just("");
     }
 }

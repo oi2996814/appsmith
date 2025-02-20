@@ -1,11 +1,9 @@
-import React, { ReactElement } from "react";
-import {
-  Field,
-  WrappedFieldMetaProps,
-  WrappedFieldInputProps,
-} from "redux-form";
-import { TagInput } from "design-system";
-import { Intent } from "constants/DefaultTheme";
+import type { ReactElement } from "react";
+import React from "react";
+import type { WrappedFieldMetaProps, WrappedFieldInputProps } from "redux-form";
+import { Field } from "redux-form";
+import { TagInput } from "@appsmith/ads-old";
+import type { Intent } from "constants/DefaultTheme";
 
 const renderComponent = (
   componentProps: TagListFieldProps & {
@@ -16,8 +14,9 @@ const renderComponent = (
   return <TagInput {...componentProps} />;
 };
 
-type TagListFieldProps = {
+interface TagListFieldProps {
   autofocus?: boolean;
+  className?: string;
   name: string;
   placeholder: string;
   type: string;
@@ -26,7 +25,7 @@ type TagListFieldProps = {
   customError: (err: string, values?: string[]) => void;
   suggestions?: { id: string; name: string; icon?: string }[];
   suggestionLeftIcon?: ReactElement;
-};
+}
 
 function TagListField(props: TagListFieldProps) {
   return <Field component={renderComponent} {...props} />;

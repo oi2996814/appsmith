@@ -1,41 +1,50 @@
-import { Dropdown, DropdownOption, RenderOption } from "design-system";
+import type { SelectOptionProps } from "@appsmith/ads";
+import { Text, Option, Select } from "@appsmith/ads";
 import React, { useEffect, useState } from "react";
-import { DropdownOnSelect } from "./SelectField";
+import type { DropdownOnSelect } from "./SelectField";
 
-type DropdownWrapperProps = {
+interface DropdownWrapperProps {
   allowDeselection?: boolean;
   placeholder: string;
   input?: {
     value?: string;
-    onChange?: (value?: string | DropdownOption[]) => void;
+    onChange?: (value?: string | Partial<SelectOptionProps>[]) => void;
   };
-  options: DropdownOption[];
+  options: Partial<SelectOptionProps>[];
   isMultiSelect?: boolean;
   onOptionSelect?: (
     value?: string,
-    option?: DropdownOption[] | DropdownOption,
+    option?: Partial<SelectOptionProps>[] | Partial<SelectOptionProps>,
   ) => void;
   removeSelectedOption?: DropdownOnSelect;
-  selected?: DropdownOption | DropdownOption[];
+  selected?: Partial<SelectOptionProps> | Partial<SelectOptionProps>[];
   showLabelOnly?: boolean;
-  labelRenderer?: (selected: Partial<DropdownOption>[]) => JSX.Element;
+  labelRenderer?: (selected: Partial<SelectOptionProps>[]) => JSX.Element;
   fillOptions?: boolean;
   disabled?: boolean;
-  renderOption?: RenderOption;
   dropdownMaxHeight?: string;
   enableSearch?: boolean;
-};
+  testId?: string;
+}
 
 function DropdownWrapper(props: DropdownWrapperProps) {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedOption, setSelectedOption] = useState<any>([
     {
       value: props.placeholder,
     },
   ]);
 
-  const onSelectHandler = (value?: string, option?: DropdownOption) => {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onSelectHandler = (value?: any, option?: any) => {
     if (props?.isMultiSelect) {
-      const updatedItems: DropdownOption[] = [...selectedOption, option];
+      const updatedItems: Partial<SelectOptionProps>[] = [
+        ...selectedOption,
+        option,
+      ];
+
       props.input && props.input.onChange && props.input.onChange(updatedItems);
       props.onOptionSelect && props.onOptionSelect(value, updatedItems);
     } else {
@@ -44,10 +53,15 @@ function DropdownWrapper(props: DropdownWrapperProps) {
     }
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onRemoveOptions = (value: any) => {
     const updatedItems = selectedOption.filter(
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (option: any) => option.value !== value,
     );
+
     props.input && props.input.onChange && props.input.onChange(updatedItems);
     props.removeSelectedOption && props.removeSelectedOption(updatedItems);
   };
@@ -65,22 +79,26 @@ function DropdownWrapper(props: DropdownWrapperProps) {
   }, [props.input, props.placeholder, props.selected]);
 
   return (
-    <Dropdown
-      allowDeselection={props.allowDeselection}
-      disabled={props.disabled}
-      dropdownMaxHeight={props.dropdownMaxHeight}
-      enableSearch={props.enableSearch}
-      fillOptions={props.fillOptions}
+    <Select
+      data-testid={props.testId}
+      defaultValue={props.isMultiSelect ? selectedOption : selectedOption[0]}
+      isDisabled={props.disabled}
       isMultiSelect={props.isMultiSelect}
-      labelRenderer={props.labelRenderer}
+      onDeselect={onRemoveOptions}
       onSelect={onSelectHandler}
-      options={props.options}
       placeholder={props.placeholder}
-      removeSelectedOption={onRemoveOptions}
-      renderOption={props?.renderOption}
-      selected={props.isMultiSelect ? selectedOption : selectedOption[0]}
-      showLabelOnly={props.showLabelOnly}
-    />
+      showSearch={props.enableSearch}
+      value={props.isMultiSelect ? selectedOption : selectedOption[0]}
+    >
+      {props.options.map((option: Partial<SelectOptionProps>) => (
+        <Option key={option.value} value={option.id}>
+          {props.showLabelOnly ? null : (
+            <Text renderAs="p">{option.value}</Text>
+          )}
+          {option.label && <Text renderAs="p">{option.label}</Text>}
+        </Option>
+      ))}
+    </Select>
   );
 }
 

@@ -1,4 +1,4 @@
-import { ColumnProperties } from "./Constants";
+import type { ColumnProperties } from "./Constants";
 import { reorderColumns } from "./TableHelpers";
 import { getCurrentRowBinding } from "widgets/TableWidget/constants";
 const MOCK_COLUMNS: Record<string, ColumnProperties> = {
@@ -184,6 +184,7 @@ const MOCK_COLUMNS: Record<string, ColumnProperties> = {
     verticalAlignment: "CENTER",
   },
 };
+
 describe("Validate Helpers", () => {
   it("correctly reorders columns", () => {
     const columnOrder = [
@@ -587,6 +588,7 @@ describe("Validate Helpers", () => {
     };
 
     const result = reorderColumns(MOCK_COLUMNS, columnOrder);
+
     expect(expected).toEqual(result);
   });
 });

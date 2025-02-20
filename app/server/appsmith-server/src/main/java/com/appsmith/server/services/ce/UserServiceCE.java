@@ -2,26 +2,24 @@ package com.appsmith.server.services.ce;
 
 import com.appsmith.server.acl.AclPermission;
 import com.appsmith.server.domains.User;
-import com.appsmith.server.domains.Workspace;
+import com.appsmith.server.dtos.ResendEmailVerificationDTO;
 import com.appsmith.server.dtos.ResetUserPasswordDTO;
 import com.appsmith.server.dtos.UserProfileDTO;
 import com.appsmith.server.dtos.UserSignupDTO;
 import com.appsmith.server.dtos.UserUpdateDTO;
 import com.appsmith.server.services.CrudService;
+import org.springframework.data.mongodb.core.query.UpdateDefinition;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.Map;
 import java.util.Set;
 
 public interface UserServiceCE extends CrudService<User, String> {
 
     Mono<User> findByEmail(String email);
 
-    Mono<User> findByEmailAndTenantId(String email, String tenantId);
-
-    Mono<User> switchCurrentWorkspace(String workspaceId);
+    Mono<User> findByEmailAndOrganizationId(String email, String organizationId);
 
     Mono<Boolean> forgotPasswordTokenGenerate(ResetUserPasswordDTO resetUserPasswordDTO);
 
@@ -29,16 +27,13 @@ public interface UserServiceCE extends CrudService<User, String> {
 
     Mono<Boolean> resetPasswordAfterForgotPassword(String token, User user);
 
-    Mono<UserSignupDTO> createUserAndSendEmail(User user, String originHeader);
+    Mono<UserSignupDTO> createUser(User user);
 
     Mono<User> userCreate(User user, boolean isAdminUser);
 
-    Mono<? extends User> createNewUserAndSendInviteEmail(String email, String originHeader,
-                                                         Workspace workspace, User inviter, String role);
+    Mono<Integer> updateWithoutPermission(String id, UpdateDefinition updateObj);
 
     Mono<User> updateCurrentUser(UserUpdateDTO updates, ServerWebExchange exchange);
-
-    Map<String, String> getEmailParams(Workspace workspace, User inviterUser, String inviteUrl, boolean isNewUser);
 
     Mono<Boolean> isUsersEmpty();
 
@@ -46,7 +41,11 @@ public interface UserServiceCE extends CrudService<User, String> {
 
     Flux<User> getAllByEmails(Set<String> emails, AclPermission permission);
 
-    Mono<Map<String, String>> updateTenantLogoInParams(Map<String, String> params);
+    Mono<User> signupIfAllowed(User user);
 
     Mono<User> updateWithoutPermission(String id, User update);
+
+    Mono<Boolean> resendEmailVerification(ResendEmailVerificationDTO resendEmailVerificationDTO, String redirectUrl);
+
+    Mono<Void> verifyEmailVerificationToken(ServerWebExchange exchange);
 }

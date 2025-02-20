@@ -1,33 +1,32 @@
 import EditableText, {
   EditInteractionKind,
 } from "components/editorComponents/EditableText";
-import { TooltipComponent } from "design-system";
 import { Colors } from "constants/Colors";
 
 import React, { forwardRef, useEffect, useMemo, useRef, useState } from "react";
-import { Classes } from "@blueprintjs/core";
 import styled from "styled-components";
 import { isEllipsisActive, removeSpecialChars } from "utils/helpers";
 
-import { TOOLTIP_HOVER_ON_DELAY } from "constants/AppConstants";
-import { ReactComponent as BetaIcon } from "assets/icons/menu/beta.svg";
+import { TOOLTIP_HOVER_ON_DELAY_IN_S } from "constants/AppConstants";
 import NameEditorComponent from "components/utils/NameEditorComponent";
-import { ENTITY_EXPLORER_ACTION_NAME_CONFLICT_ERROR } from "@appsmith/constants/messages";
+import {
+  ACTION_ID_NOT_FOUND_IN_URL,
+  ENTITY_EXPLORER_ACTION_NAME_CONFLICT_ERROR,
+} from "ee/constants/messages";
+import { Tooltip } from "@appsmith/ads";
+import { useSelector } from "react-redux";
+import { getSavingStatusForActionName } from "selectors/actionSelectors";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import type { SaveActionNameParams } from "PluginActionEditor";
 
 export const searchHighlightSpanClassName = "token";
 export const searchTokenizationDelimiter = "!!";
 
 const Container = styled.div`
-  .${Classes.POPOVER_TARGET} {
-    display: initial;
-  }
   overflow: hidden;
 `;
 
 const Wrapper = styled.div`
-  .${Classes.POPOVER_TARGET} {
-    display: initial;
-  }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -60,8 +59,10 @@ export const replace = (
   keyIndex = 1,
 ): JSX.Element[] => {
   const occurrenceIndex = str.indexOf(delimiter);
+
   if (occurrenceIndex === -1)
     return [<span key={`notokenize-${keyIndex}`}>{str}</span>];
+
   const sliced = str.slice(occurrenceIndex + delimiter.length);
   const nextOccurenceIndex = sliced.indexOf(delimiter);
   const rest = str.slice(
@@ -77,6 +78,7 @@ export const replace = (
       {token}
     </span>,
   ].concat(replace(rest, delimiter, className, keyIndex + 1));
+
   return final;
 };
 
@@ -84,7 +86,7 @@ export interface EntityNameProps {
   name: string;
   isEditing?: boolean;
   onChange?: (name: string) => void;
-  updateEntityName: (name: string) => void;
+  updateEntityName: (name: string) => ReduxAction<SaveActionNameParams>;
   entityId: string;
   searchKeyword?: string;
   className?: string;
@@ -93,6 +95,7 @@ export interface EntityNameProps {
   nameTransformFn?: (input: string, limit?: number) => string;
   isBeta?: boolean;
 }
+
 export const EntityName = React.memo(
   forwardRef((props: EntityNameProps, ref: React.Ref<HTMLDivElement>) => {
     const { name, searchKeyword, updateEntityName } = props;
@@ -108,6 +111,7 @@ export const EntityName = React.memo(
     // Check to show tooltip on hover
     const nameWrapperRef = useRef<HTMLDivElement | null>(null);
     const [showTooltip, setShowTooltip] = useState(false);
+
     useEffect(() => {
       setShowTooltip(!!isEllipsisActive(nameWrapperRef.current));
     }, [updatedName, name]);
@@ -115,7 +119,7 @@ export const EntityName = React.memo(
     const searchHighlightedName = useMemo(() => {
       if (searchKeyword) {
         const regex = new RegExp(searchKeyword, "gi");
-        const delimited = updatedName.replace(regex, function(str) {
+        const delimited = updatedName.replace(regex, function (str) {
           return (
             searchTokenizationDelimiter + str + searchTokenizationDelimiter
           );
@@ -126,21 +130,27 @@ export const EntityName = React.memo(
           searchTokenizationDelimiter,
           searchHighlightSpanClassName,
         );
+
         return final;
       }
+
       return updatedName;
     }, [searchKeyword, updatedName]);
+
+    const saveStatus = useSelector((state) =>
+      getSavingStatusForActionName(state, props.entityId || ""),
+    );
 
     if (!props.isEditing)
       return (
         <Container ref={ref}>
-          <TooltipComponent
-            boundary={"viewport"}
+          <Tooltip
             content={updatedName}
-            disabled={!showTooltip}
-            hoverOpenDelay={TOOLTIP_HOVER_ON_DELAY}
-            modifiers={{ arrow: { enabled: false } }}
-            position="top-left"
+            isDisabled={!showTooltip}
+            mouseEnterDelay={TOOLTIP_HOVER_ON_DELAY_IN_S}
+            placement="topLeft"
+            showArrow={false}
+            {...(!showTooltip ? { visible: false } : {})}
           >
             <Wrapper
               className={`${
@@ -150,16 +160,18 @@ export const EntityName = React.memo(
               ref={nameWrapperRef}
             >
               {searchHighlightedName}
-              {props.isBeta ? <BetaIcon className="beta-icon" /> : ""}
             </Wrapper>
-          </TooltipComponent>
+          </Tooltip>
         </Container>
       );
 
     return (
       <NameEditorComponent
-        currentActionConfig={{ id: props.entityId, name: updatedName }}
-        dispatchAction={handleUpdateName}
+        id={props.entityId}
+        idUndefinedErrorMessage={ACTION_ID_NOT_FOUND_IN_URL}
+        name={updatedName}
+        onSaveName={handleUpdateName}
+        saveStatus={saveStatus}
         suffixErrorMessage={ENTITY_EXPLORER_ACTION_NAME_CONFLICT_ERROR}
       >
         {({

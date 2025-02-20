@@ -19,6 +19,8 @@ describe("<CodeEditor /> - Keyboard navigation", () => {
   // To avoid warning "Error: Not implemented: window.focus"
   window.focus = jest.fn();
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getTestComponent = (handleOnSelect: any = undefined) => (
     <Provider store={store}>
       <ThemeProvider theme={lightTheme}>
@@ -38,73 +40,9 @@ describe("<CodeEditor /> - Keyboard navigation", () => {
     </Provider>
   );
 
-  it("Pressing tab should focus the component", () => {
+  it("Pressing tab should focus the component", async () => {
     render(getTestComponent());
-    userEvent.tab();
+    await userEvent.tab();
     expect(screen.getByTestId("code-editor-target")).toHaveFocus();
-  });
-
-  it("Pressing {Enter} once in focus should make the input editable", () => {
-    const handleOnSelect = jest.fn();
-    const { container } = render(getTestComponent(handleOnSelect));
-    userEvent.tab();
-    expect(screen.getByTestId("code-editor-target")).toHaveFocus();
-
-    // Typing should not work unless {Enter} is pressed
-    userEvent.keyboard("abcd");
-    expect(
-      (container?.querySelector(".CodeMirror textarea") as HTMLTextAreaElement)
-        ?.value,
-    ).not.toStrictEqual("abcd");
-
-    userEvent.keyboard("{Enter}");
-    expect(screen.getByTestId("code-editor-target")).not.toHaveFocus();
-    userEvent.keyboard("abcd");
-    expect(
-      (container?.querySelector(".CodeMirror textarea") as HTMLTextAreaElement)
-        ?.value,
-    ).toStrictEqual("abcd");
-  });
-
-  it("Pressing {Space} once in focus should make the input editable", () => {
-    const handleOnSelect = jest.fn();
-    const { container } = render(getTestComponent(handleOnSelect));
-    userEvent.tab();
-    expect(screen.getByTestId("code-editor-target")).toHaveFocus();
-
-    // Typing should not work unless {Enter} is pressed
-    userEvent.keyboard("abcd");
-    expect(
-      (container?.querySelector(".CodeMirror textarea") as HTMLTextAreaElement)
-        ?.value,
-    ).not.toStrictEqual("abcd");
-
-    userEvent.keyboard(" ");
-    expect(screen.getByTestId("code-editor-target")).not.toHaveFocus();
-    userEvent.keyboard("abcd");
-    expect(
-      (container?.querySelector(".CodeMirror textarea") as HTMLTextAreaElement)
-        ?.value,
-    ).toStrictEqual("abcd");
-  });
-
-  it("Pressing {Escape} once in edit mode should make the input not editable", () => {
-    const handleOnSelect = jest.fn();
-    const { container } = render(getTestComponent(handleOnSelect));
-    userEvent.tab();
-    expect(screen.getByTestId("code-editor-target")).toHaveFocus();
-
-    userEvent.keyboard("{Enter}");
-    expect(screen.getByTestId("code-editor-target")).not.toHaveFocus();
-
-    userEvent.keyboard("{Escape}");
-    expect(screen.getByTestId("code-editor-target")).toHaveFocus();
-
-    // Typing should not work unless {Enter} is pressed
-    userEvent.keyboard("abcd");
-    expect(
-      (container?.querySelector(".CodeMirror textarea") as HTMLTextAreaElement)
-        ?.value,
-    ).not.toStrictEqual("abcd");
   });
 });

@@ -1,10 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import { ControlProps } from "components/formControls/BaseControl";
-import {
-  EvaluationError,
-  PropertyEvaluationErrorType,
-} from "utils/DynamicBindingUtils";
-import { TooltipComponent as Tooltip } from "design-system";
+import type { ControlProps } from "components/formControls/BaseControl";
+import type { EvaluationError } from "utils/DynamicBindingUtils";
+import { PropertyEvaluationErrorType } from "utils/DynamicBindingUtils";
 import {
   FormLabel,
   FormInputHelperText,
@@ -14,24 +11,26 @@ import {
   FormSubtitleText,
   FormEncrytedSection,
 } from "components/editorComponents/form/fields/StyledFormComponents";
-import { FormIcons } from "icons/FormIcons";
-import { FormControlProps } from "./FormControl";
+import type { FormControlProps } from "./FormControl";
 import { ToggleComponentToJsonHandler } from "components/editorComponents/form/ToggleComponentToJson";
 import styled from "styled-components";
 import { useDispatch, useSelector } from "react-redux";
 import { identifyEntityFromPath } from "navigation/FocusEntity";
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import {
   getPropertyControlFocusElement,
   shouldFocusOnPropertyControl,
 } from "utils/editorContextUtils";
 import { getIsInputFieldFocused } from "selectors/editorContextSelectors";
 import { setFocusableInputField } from "actions/editorContextActions";
+import { Icon, Tooltip } from "@appsmith/ads";
 
 const FlexWrapper = styled.div`
   display: flex;
   width: fit-content;
-  margin-right: 16px;
+  margin-right: 5px;
+  min-height: 21px;
+
   & .t--js-toggle {
     margin-bottom: 0px;
   }
@@ -39,6 +38,13 @@ const FlexWrapper = styled.div`
 
 const LabelWrapper = styled.div`
   display: flex;
+  .label-icon-wrapper {
+    &.help {
+      cursor: help;
+      text-decoration: underline dashed var(--ads-v2-color-border) from-font;
+      text-underline-position: under;
+    }
+  }
 `;
 
 const LabelIconWrapper = styled.span`
@@ -46,7 +52,7 @@ const LabelIconWrapper = styled.span`
 `;
 
 const RequiredFieldWrapper = styled.span`
-  color: var(--appsmith-color-red-500);
+  color: var(--ads-v2-color-fg-error);
 `;
 
 // TODO: replace condition with props.config.dataType === "TOGGLE"
@@ -63,17 +69,21 @@ interface FormConfigProps extends FormControlProps {
   configErrors: EvaluationError[];
   changesViewType: boolean;
 }
-// top contains label, subtitle, urltext, tooltip, dispaly type
+
+const controlsWithSubtitleInTop = [
+  "ARRAY_FIELD",
+  "WHERE_CLAUSE",
+  "QUERY_DYNAMIC_TEXT",
+];
+
+// top contains label, subtitle, urltext, tooltip, display type
 // bottom contains the info and error text
 // props.children will render the form element
 export default function FormConfig(props: FormConfigProps) {
   let top, bottom;
   const controlRef = useRef<HTMLDivElement | null>(null);
   const dispatch = useDispatch();
-  const entityInfo = identifyEntityFromPath(
-    window.location.pathname,
-    window.location.hash,
-  );
+  const entityInfo = identifyEntityFromPath(window.location.pathname);
 
   const handleOnFocus = () => {
     if (props.config.configProperty) {
@@ -101,6 +111,7 @@ export default function FormConfig(props: FormConfigProps) {
           const focusableElement = getPropertyControlFocusElement(
             controlRef.current,
           );
+
           focusableElement?.scrollIntoView({
             block: "center",
             behavior: "smooth",
@@ -110,6 +121,7 @@ export default function FormConfig(props: FormConfigProps) {
       }, 0);
     }
   }, [shouldFocusPropertyPath]);
+
   if (props.multipleConfig?.length) {
     top = (
       <div style={{ display: "flex" }}>
@@ -125,6 +137,7 @@ export default function FormConfig(props: FormConfigProps) {
     bottom = props.multipleConfig?.map((config) => {
       return renderFormConfigBottom({ config });
     });
+
     return (
       <>
         {top}
@@ -168,12 +181,14 @@ export default function FormConfig(props: FormConfigProps) {
     </div>
   );
 }
+
 function renderFormConfigTop(props: {
   config: ControlProps;
   formName: string;
   changesViewType: boolean;
 }) {
   const {
+    controlType,
     encrypted,
     isRequired,
     label,
@@ -183,27 +198,33 @@ function renderFormConfigTop(props: {
     url,
     urlText,
   } = { ...props.config };
+  const shouldRenderSubtitle =
+    subtitle && controlsWithSubtitleInTop.includes(controlType);
+
   return (
     <div className="form-config-top" key={props.config.label}>
       {!nestedFormControl && // if the form control is a nested form control hide its label
-        (label?.length > 0 || encrypted || tooltipText || subtitle) && (
+        (label?.length > 0 || encrypted || shouldRenderSubtitle) && (
           <>
             <FlexWrapper>
               <FormLabel
+                className="form-label"
                 config={props.config}
                 extraStyles={{
-                  marginBottom: !!subtitle && "0px",
+                  marginBottom: (shouldRenderSubtitle || !subtitle) && "0px",
                   minWidth: !!props.changesViewType && "unset",
                 }}
               >
                 <LabelWrapper>
                   <Tooltip
                     content={tooltipText as string}
-                    disabled={!tooltipText}
-                    hoverOpenDelay={200}
-                    underline={!!tooltipText}
+                    isDisabled={!tooltipText}
                   >
-                    <p className="label-icon-wrapper">{label}</p>
+                    <p
+                      className={`label-icon-wrapper ${tooltipText && "help"}`}
+                    >
+                      {label}
+                    </p>
                   </Tooltip>
                   <LabelIconWrapper>
                     {isRequired && (
@@ -213,10 +234,10 @@ function renderFormConfigTop(props: {
                     )}
                     {encrypted && (
                       <FormEncrytedSection>
-                        <FormIcons.LOCK_ICON
-                          height={12}
-                          keepColors
-                          width={12}
+                        <Icon
+                          color="var(--ads-v2-color-fg-success)"
+                          name="lock-2-line"
+                          size="sm"
                         />
                         <FormSubtitleText config={props.config}>
                           Encrypted
@@ -233,7 +254,7 @@ function renderFormConfigTop(props: {
                 />
               )}
             </FlexWrapper>
-            {subtitle && (
+            {shouldRenderSubtitle && (
               <FormInfoText config={props.config}>{subtitle}</FormInfoText>
             )}
           </>
@@ -251,9 +272,13 @@ function renderFormConfigBottom(props: {
   config: ControlProps;
   configErrors?: EvaluationError[];
 }) {
-  const { controlType, info } = { ...props.config };
+  const { controlType, info, subtitle } = { ...props.config };
+
   return (
     <>
+      {subtitle && !controlsWithSubtitleInTop.includes(controlType) && (
+        <FormInfoText config={props.config}>{subtitle}</FormInfoText>
+      )}
       {info && (
         <FormInputHelperText
           addMarginTop={controlType === "CHECKBOX" ? "8px" : "2px"} // checkboxes need a higher margin top than others form control types

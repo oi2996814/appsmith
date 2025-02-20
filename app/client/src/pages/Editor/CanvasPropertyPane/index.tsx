@@ -1,52 +1,44 @@
-import React from "react";
-import styled from "styled-components";
-import { useDispatch } from "react-redux";
 import * as Sentry from "@sentry/react";
-import { PopoverPosition } from "@blueprintjs/core";
-import { TooltipComponent, Button, Size, Category } from "design-system";
 
-import { Colors } from "constants/Colors";
-import { MainContainerLayoutControl } from "../MainContainerLayoutControl";
-import { openAppSettingsPaneAction } from "actions/appSettingsPaneActions";
+import React from "react";
+import ConversionButton from "../CanvasLayoutConversion/ConversionButton";
+import styled from "styled-components";
+import {
+  LayoutSystemFeatures,
+  useLayoutSystemFeatures,
+} from "../../../layoutSystems/common/useLayoutSystemFeatures";
+import { MainContainerWidthToggles } from "../MainContainerWidthToggles";
 
 const Title = styled.p`
-  color: ${Colors.GRAY_800};
+  color: var(--ads-v2-color-fg);
+`;
+const MainHeading = styled.h3`
+  color: var(--ads-v2-color-fg-emphasis);
 `;
 
 export function CanvasPropertyPane() {
-  const dispatch = useDispatch();
-
-  const openAppSettingsPane = () => {
-    dispatch(openAppSettingsPaneAction());
-  };
+  const checkLayoutSystemFeatures = useLayoutSystemFeatures();
+  const [enableLayoutControl, enableLayoutConversion] =
+    checkLayoutSystemFeatures([
+      LayoutSystemFeatures.ENABLE_CANVAS_LAYOUT_CONTROL,
+      LayoutSystemFeatures.ENABLE_LAYOUT_CONVERSION,
+    ]);
 
   return (
     <div className="relative ">
-      <h3 className="px-4 py-3 text-sm font-medium uppercase">Properties</h3>
+      <MainHeading className="px-4 py-3 text-sm font-medium">
+        Properties
+      </MainHeading>
 
       <div className="mt-3 space-y-6">
         <div className="px-4 space-y-2">
-          <Title className="text-sm">Canvas Size</Title>
-          <MainContainerLayoutControl />
-
-          <TooltipComponent
-            content={
-              <>
-                <p className="text-center">Update your app theme, URL</p>
-                <p className="text-center">and other settings</p>
-              </>
-            }
-            position={PopoverPosition.BOTTOM}
-          >
-            <Button
-              category={Category.secondary}
-              fill
-              id="t--app-settings-cta"
-              onClick={openAppSettingsPane}
-              size={Size.medium}
-              text="App Settings"
-            />
-          </TooltipComponent>
+          {enableLayoutControl && (
+            <>
+              <Title className="text-sm">Canvas size</Title>
+              <MainContainerWidthToggles />
+            </>
+          )}
+          {enableLayoutConversion && <ConversionButton />}
         </div>
       </div>
     </div>

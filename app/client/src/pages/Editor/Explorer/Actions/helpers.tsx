@@ -1,34 +1,73 @@
-import React, { ReactNode, useMemo } from "react";
-import { dbQueryIcon, ApiMethodIcon, EntityIcon } from "../ExplorerIcons";
-import { isGraphqlPlugin, PluginType } from "entities/Action";
-import { generateReactKey } from "utils/generators";
+import type { ReactNode } from "react";
+import React from "react";
+import {
+  dbQueryIcon,
+  ApiMethodIcon,
+  EntityIcon,
+  ENTITY_ICON_SIZE,
+} from "../ExplorerIcons";
+import { isGraphqlPlugin } from "entities/Action";
+import { type Plugin, PluginPackageName, PluginType } from "entities/Plugin";
 
-import { Plugin } from "api/PluginApi";
-import { useSelector } from "react-redux";
-import { AppState } from "@appsmith/reducers";
-import { groupBy } from "lodash";
-import { ActionData } from "reducers/entityReducers/actionsReducer";
-import { getNextEntityName } from "utils/AppsmithUtils";
+import { generateReactKey } from "utils/generators";
 import {
   apiEditorIdURL,
   queryEditorIdURL,
   saasEditorApiIdURL,
-} from "RouteBuilder";
+} from "ee/RouteBuilder";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
 
 // TODO [new_urls] update would break for existing paths
 // using a common todo, this needs to be fixed
-export type ActionGroupConfig = {
+export interface ActionGroupConfig {
   groupName: string;
   types: PluginType[];
   icon: JSX.Element;
   key: string;
   getURL: (
-    pageId: string,
-    id: string,
+    parentEntityId: string,
+    baseId: string,
     pluginType: PluginType,
     plugin?: Plugin,
   ) => string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getIcon: (action: any, plugin: Plugin, remoteIcon?: boolean) => ReactNode;
+}
+
+export interface ResolveActionURLProps {
+  plugin?: Plugin;
+  baseParentEntityId: string;
+  pluginType: PluginType;
+  baseId: string;
+}
+
+export const resolveActionURL = ({
+  baseId,
+  baseParentEntityId,
+  pluginType,
+}: ResolveActionURLProps) => {
+  if (pluginType === PluginType.SAAS) {
+    return saasEditorApiIdURL({
+      baseParentEntityId,
+      // It is safe to assume at this date, that only Google Sheets uses and will use PluginType.SAAS
+      pluginPackageName: PluginPackageName.GOOGLE_SHEETS,
+      baseApiId: baseId,
+    });
+  } else if (
+    pluginType === PluginType.DB ||
+    pluginType === PluginType.REMOTE ||
+    pluginType === PluginType.AI ||
+    pluginType === PluginType.INTERNAL ||
+    pluginType === PluginType.EXTERNAL_SAAS
+  ) {
+    return queryEditorIdURL({
+      baseParentEntityId,
+      baseQueryId: baseId,
+    });
+  } else {
+    return apiEditorIdURL({ baseParentEntityId, baseApiId: baseId });
+  }
 };
 
 // When we have new action plugins, we can just add it to this map
@@ -37,35 +76,35 @@ export type ActionGroupConfig = {
 export const ACTION_PLUGIN_MAP: Array<ActionGroupConfig | undefined> = [
   {
     groupName: "Datasources",
-    types: [PluginType.API, PluginType.SAAS, PluginType.DB, PluginType.REMOTE],
+    types: [
+      PluginType.API,
+      PluginType.SAAS,
+      PluginType.DB,
+      PluginType.REMOTE,
+      PluginType.AI,
+      PluginType.INTERNAL,
+      PluginType.EXTERNAL_SAAS,
+    ],
     icon: dbQueryIcon,
     key: generateReactKey(),
     getURL: (
-      pageId: string,
-      id: string,
+      baseParentEntityId: string,
+      baseId: string,
       pluginType: PluginType,
       plugin?: Plugin,
     ) => {
-      if (!!plugin && pluginType === PluginType.SAAS) {
-        return saasEditorApiIdURL({
-          pageId,
-          pluginPackageName: plugin.packageName,
-          apiId: id,
-        });
-      } else if (
-        pluginType === PluginType.DB ||
-        pluginType === PluginType.REMOTE
-      ) {
-        return queryEditorIdURL({
-          pageId,
-          queryId: id,
-        });
-      } else {
-        return apiEditorIdURL({ pageId, apiId: id });
-      }
+      return resolveActionURL({
+        pluginType,
+        plugin,
+        baseId,
+        baseParentEntityId,
+      });
     },
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     getIcon: (action: any, plugin: Plugin, remoteIcon?: boolean) => {
       const isGraphql = isGraphqlPlugin(plugin);
+
       if (
         plugin &&
         plugin.type === PluginType.API &&
@@ -73,12 +112,17 @@ export const ACTION_PLUGIN_MAP: Array<ActionGroupConfig | undefined> = [
         !isGraphql
       ) {
         const method = action?.actionConfiguration?.httpMethod;
-        if (method) return <ApiMethodIcon type={method} />;
+
+        if (method) return ApiMethodIcon(method);
       }
+
       if (plugin && plugin.iconLocation)
         return (
-          <EntityIcon>
-            <img alt="entityIcon" src={plugin.iconLocation} />
+          <EntityIcon
+            height={`${ENTITY_ICON_SIZE}px`}
+            width={`${ENTITY_ICON_SIZE}px`}
+          >
+            <img alt="entityIcon" src={getAssetUrl(plugin.iconLocation)} />
           </EntityIcon>
         );
       else if (plugin && plugin.type === PluginType.DB) return dbQueryIcon;
@@ -90,33 +134,3 @@ export const getActionConfig = (type: PluginType) =>
   ACTION_PLUGIN_MAP.find((configByType: ActionGroupConfig | undefined) =>
     configByType?.types.includes(type),
   );
-
-export const useNewActionName = () => {
-  // This takes into consideration only the current page widgets
-  // If we're moving to a different page, there could be a widget
-  // with the same name as the generated API name
-  // TODO: Figure out how to handle this scenario
-  const actions = useSelector((state: AppState) => state.entities.actions);
-  const groupedActions = useMemo(() => {
-    return groupBy(actions, "config.pageId");
-  }, [actions]);
-  return (
-    name: string,
-    destinationPageId: string,
-    isCopyOperation?: boolean,
-  ) => {
-    const pageActions = groupedActions[destinationPageId];
-    // Get action names of the destination page only
-    const actionNames = pageActions
-      ? pageActions.map((action: ActionData) => action.config.name)
-      : [];
-
-    return actionNames.indexOf(name) > -1
-      ? getNextEntityName(
-          isCopyOperation ? `${name}Copy` : name,
-          actionNames,
-          true,
-        )
-      : name;
-  };
-};

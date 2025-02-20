@@ -1,4 +1,5 @@
-import { ColumnTypes, TableWidgetProps } from "widgets/TableWidgetV2/constants";
+import type { TableWidgetProps } from "widgets/TableWidgetV2/constants";
+import { ColumnTypes } from "widgets/TableWidgetV2/constants";
 import {
   getColumnPath,
   hideByColumnType,
@@ -15,6 +16,7 @@ export default [
     isTriggerProperty: false,
     hidden: (props: TableWidgetProps, propertyPath: string) => {
       const path = getColumnPath(propertyPath);
+
       return hideByColumnType(props, path, [ColumnTypes.DATE], true);
     },
     dependencies: ["primaryColumns"],
@@ -29,6 +31,7 @@ export default [
     isTriggerProperty: false,
     hidden: (props: TableWidgetProps, propertyPath: string) => {
       const path = getColumnPath(propertyPath);
+
       return hideByColumnType(props, path, [ColumnTypes.DATE], true);
     },
     dependencies: ["primaryColumns"],

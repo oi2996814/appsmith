@@ -1,17 +1,34 @@
+import type { ReduxAction, ReduxActionWithCallbacks } from "./ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-  ReduxActionWithCallbacks,
-} from "@appsmith/constants/ReduxActionConstants";
-import { ConnectToGitPayload } from "api/GitSyncAPI";
-import { GitConfig, GitSyncModalTab, MergeStatus } from "entities/GitSync";
-import { GitApplicationMetadata } from "api/ApplicationApi";
-import { GitStatusData } from "reducers/uiReducers/gitSyncReducer";
-import { ResponseMeta } from "api/ApiResponses";
+} from "ee/constants/ReduxActionConstants";
+import type {
+  ConnectToGitPayload,
+  GitAutocommitProgressResponse,
+} from "api/GitSyncAPI";
+import type { GitConfig, GitSyncModalTab, MergeStatus } from "entities/GitSync";
+import type { GitApplicationMetadata } from "ee/api/ApplicationApi";
+import {
+  type GitStatusData,
+  GitSettingsTab,
+} from "reducers/uiReducers/gitSyncReducer";
+import type { ResponseMeta } from "api/ApiResponses";
+
+export interface GitStatusParams {
+  compareRemote?: boolean;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onSuccessCallback?: (data: any) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onErrorCallback?: (error: Error, response?: any) => void;
+}
 
 export const setIsGitSyncModalOpen = (payload: {
   isOpen: boolean;
   tab?: GitSyncModalTab;
+  isDeploying?: boolean;
 }) => {
   return {
     type: ReduxActionTypes.SET_IS_GIT_SYNC_MODAL_OPEN,
@@ -46,21 +63,29 @@ export const clearCommitErrorState = () => ({
   type: ReduxActionTypes.CLEAR_COMMIT_ERROR_STATE,
 });
 
-export type ConnectToGitResponse = {
-  gitApplicationMetadata: GitApplicationMetadata;
-};
+export const clearDiscardErrorState = () => ({
+  type: ReduxActionTypes.CLEAR_DISCARD_ERROR_STATE,
+});
 
-type ConnectToGitRequestParams = {
+export interface ConnectToGitResponse {
+  gitApplicationMetadata: GitApplicationMetadata;
+}
+
+interface ConnectToGitRequestParams {
   payload: ConnectToGitPayload;
   onSuccessCallback?: (payload: ConnectToGitResponse) => void;
-  onErrorCallback?: (error: string) => void;
-};
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onErrorCallback?: (error: any, response?: any) => void;
+}
 
-export type ConnectToGitReduxAction = ReduxActionWithCallbacks<
-  ConnectToGitPayload,
-  ConnectToGitResponse,
-  string
->;
+export interface ConnectToGitReduxAction
+  extends ReduxAction<ConnectToGitPayload> {
+  onSuccessCallback?: (response: ConnectToGitResponse) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onErrorCallback?: (error: Error, response?: any) => void;
+}
 
 export const connectToGitInit = ({
   onErrorCallback,
@@ -131,6 +156,8 @@ export const fetchBranchesInit = (payload?: { pruneBranches: boolean }) => ({
   payload,
 });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const fetchBranchesSuccess = (payload: any) => ({
   type: ReduxActionTypes.FETCH_BRANCHES_SUCCESS,
   payload,
@@ -156,9 +183,9 @@ export const fetchLocalGitConfigSuccess = (payload: GitConfig) => ({
   payload,
 });
 
-export const fetchGitStatusInit = () => ({
+export const fetchGitStatusInit = (payload?: GitStatusParams) => ({
   type: ReduxActionTypes.FETCH_GIT_STATUS_INIT,
-  payload: null,
+  payload,
 });
 
 export const fetchGitStatusSuccess = (payload: GitStatusData) => ({
@@ -166,15 +193,22 @@ export const fetchGitStatusSuccess = (payload: GitStatusData) => ({
   payload,
 });
 
-export const discardChanges = () => ({
+export const discardChanges = (
+  payload: { successToastMessage?: string } | undefined | null = {},
+) => ({
   type: ReduxActionTypes.GIT_DISCARD_CHANGES,
+  payload,
 });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const discardChangesSuccess = (payload: any) => ({
   type: ReduxActionTypes.GIT_DISCARD_CHANGES_SUCCESS,
   payload,
 });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const discardChangesFailure = (payload: any) => ({
   type: ReduxActionErrorTypes.GIT_DISCARD_CHANGES_ERROR,
   payload: { error: payload.error, show: false },
@@ -185,7 +219,10 @@ export const updateBranchLocally = (payload: string) => ({
   payload,
 });
 
-type MergeBranchPayload = { sourceBranch: string; destinationBranch: string };
+interface MergeBranchPayload {
+  sourceBranch: string;
+  destinationBranch: string;
+}
 
 export const mergeBranchInit = (params: {
   payload: { sourceBranch: string; destinationBranch: string };
@@ -280,22 +317,22 @@ export const importAppFromGit = ({
 
 type ErrorPayload = string;
 
-export type SSHKeyType = {
+export interface SSHKeyType {
   keySize: number;
   platFormSupported: string;
   protocolName: string;
-};
+}
 
-export type GetSSHKeyResponseData = {
+export interface GetSSHKeyResponseData {
   gitSupportedSSHKeyType: SSHKeyType[];
   docUrl: string;
   publicKey?: string;
-};
+}
 
-export type GenerateSSHKeyPairResponsePayload<T> = {
+export interface GenerateSSHKeyPairResponsePayload<T> {
   responseMeta: ResponseMeta;
   data: T;
-};
+}
 
 export type GenerateSSHKeyPairReduxAction = ReduxActionWithCallbacks<
   { keyType?: string } | undefined,
@@ -303,13 +340,13 @@ export type GenerateSSHKeyPairReduxAction = ReduxActionWithCallbacks<
   ErrorPayload
 >;
 
-export type GenerateKeyParams = {
+export interface GenerateKeyParams {
   onErrorCallback?: (payload: ErrorPayload) => void;
   onSuccessCallback?: (
     payload: GenerateSSHKeyPairResponsePayload<GetSSHKeyResponseData>,
   ) => void;
   payload?: { keyType?: string };
-};
+}
 
 export const generateSSHKeyPair = ({
   onErrorCallback,
@@ -331,10 +368,10 @@ export const generateSSHKeyPairSuccess = (
   };
 };
 
-export type GetSSHKeyPairResponsePayload<T> = {
+export interface GetSSHKeyPairResponsePayload<T> {
   responseMeta: ResponseMeta;
   data: T;
-};
+}
 
 export type GetSSHKeyPairReduxAction = ReduxActionWithCallbacks<
   undefined,
@@ -342,13 +379,13 @@ export type GetSSHKeyPairReduxAction = ReduxActionWithCallbacks<
   ErrorPayload
 >;
 
-export type GetKeyParams = {
+export interface GetKeyParams {
   onErrorCallback?: (payload: ErrorPayload) => void;
   onSuccessCallback?: (
     payload: GetSSHKeyPairResponsePayload<GetSSHKeyResponseData>,
   ) => void;
   payload?: undefined;
-};
+}
 
 export const getSSHKeyPair = ({
   onErrorCallback,
@@ -394,6 +431,8 @@ export const importAppViaGitStatusReset = () => ({
 });
 
 // todo define type
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const importAppViaGitError = (error: any) => ({
   type: ReduxActionTypes.IMPORT_APPLICATION_FROM_GIT_ERROR,
   payload: error,
@@ -403,27 +442,146 @@ export const resetSSHKeys = () => ({
   type: ReduxActionTypes.RESET_SSH_KEY_PAIR,
 });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const deleteBranchInit = (payload: any) => ({
   type: ReduxActionTypes.DELETE_BRANCH_INIT,
   payload,
 });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const deleteBranchSuccess = (payload: any) => ({
   type: ReduxActionTypes.DELETE_BRANCH_SUCCESS,
   payload,
 });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const deleteBranchError = (payload: any) => ({
   type: ReduxActionErrorTypes.DELETE_BRANCH_ERROR,
   payload,
 });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const deleteBranchWarning = (payload: any) => ({
   type: ReduxActionErrorTypes.DELETE_BRANCH_WARNING,
   payload,
 });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const deletingBranch = (payload: any) => ({
   type: ReduxActionTypes.DELETING_BRANCH,
   payload,
+});
+
+export const updateGitDefaultBranch = (payload: { branchName: string }) => {
+  return {
+    type: ReduxActionTypes.GIT_UPDATE_DEFAULT_BRANCH_INIT,
+    payload,
+  };
+};
+
+export const fetchGitProtectedBranchesInit = () => {
+  return {
+    type: ReduxActionTypes.GIT_FETCH_PROTECTED_BRANCHES_INIT,
+  };
+};
+
+export const updateGitProtectedBranchesInit = (payload: {
+  protectedBranches: string[];
+}) => {
+  return {
+    type: ReduxActionTypes.GIT_UPDATE_PROTECTED_BRANCHES_INIT,
+    payload,
+  };
+};
+
+export const setShowBranchPopupAction = (show: boolean) => {
+  return {
+    type: ReduxActionTypes.GIT_SHOW_BRANCH_POPUP,
+    payload: { show },
+  };
+};
+
+// START autocommit
+export const toggleAutocommitEnabledInit = () => ({
+  type: ReduxActionTypes.GIT_TOGGLE_AUTOCOMMIT_ENABLED_INIT,
+});
+
+export const setIsAutocommitModalOpen = (isAutocommitModalOpen: boolean) => ({
+  type: ReduxActionTypes.GIT_SET_IS_AUTOCOMMIT_MODAL_OPEN,
+  payload: { isAutocommitModalOpen },
+});
+
+export const triggerAutocommitInitAction = () => ({
+  type: ReduxActionTypes.GIT_AUTOCOMMIT_TRIGGER_INIT,
+});
+
+export const triggerAutocommitSuccessAction = () => ({
+  type: ReduxActionTypes.GIT_AUTOCOMMIT_TRIGGER_SUCCESS,
+});
+
+export interface TriggerAutocommitErrorActionPayload {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  error: any;
+  show: boolean;
+}
+
+export const triggerAutocommitErrorAction = (
+  payload: TriggerAutocommitErrorActionPayload,
+) => ({
+  type: ReduxActionErrorTypes.GIT_AUTOCOMMIT_TRIGGER_ERROR,
+  payload,
+});
+
+export const startAutocommitProgressPollingAction = () => ({
+  type: ReduxActionTypes.GIT_AUTOCOMMIT_START_PROGRESS_POLLING,
+});
+
+export const stopAutocommitProgressPollingAction = () => ({
+  type: ReduxActionTypes.GIT_AUTOCOMMIT_STOP_PROGRESS_POLLING,
+});
+
+export type SetAutocommitActionPayload = GitAutocommitProgressResponse;
+
+export const setAutocommitProgressAction = (
+  payload: SetAutocommitActionPayload,
+) => ({
+  type: ReduxActionTypes.GIT_SET_AUTOCOMMIT_PROGRESS,
+  payload,
+});
+
+export const resetAutocommitProgressAction = () => ({
+  type: ReduxActionTypes.GIT_RESET_AUTOCOMMIT_PROGRESS,
+});
+
+export interface AutocommitProgressErrorActionPayload {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  error: any;
+  show: boolean;
+}
+
+export const autoCommitProgressErrorAction = (
+  payload: AutocommitProgressErrorActionPayload,
+) => ({
+  type: ReduxActionErrorTypes.GIT_AUTOCOMMIT_PROGRESS_POLLING_ERROR,
+  payload,
+});
+// END autocommit
+
+export const getGitMetadataInitAction = () => ({
+  type: ReduxActionTypes.GIT_GET_METADATA_INIT,
+});
+
+export const setGitSettingsModalOpenAction = (payload: {
+  open: boolean;
+  tab?: GitSettingsTab;
+}) => ({
+  type: ReduxActionTypes.GIT_SET_SETTINGS_MODAL_OPEN,
+  payload: { open: payload.open, tab: payload.tab || GitSettingsTab.GENERAL },
 });

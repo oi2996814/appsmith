@@ -1,13 +1,13 @@
-import { DataTree } from "entities/DataTree/dataTreeFactory";
+import type { DataTree } from "entities/DataTree/dataTreeTypes";
 import { createSelector } from "reselect";
-import WidgetFactory from "utils/WidgetFactory";
-import { FlattenedWidgetProps } from "widgets/constants";
-import { TJSLibrary } from "workers/common/JSLibrary";
+import WidgetFactory from "WidgetProvider/factory";
+import type { FlattenedWidgetProps } from "WidgetProvider/constants";
+import type { JSLibrary } from "workers/common/JSLibrary";
 import { getDataTree } from "./dataTreeSelectors";
 import {
   getExistingPageNames,
   selectInstalledLibraries,
-} from "./entitiesSelector";
+} from "ee/selectors/entitiesSelector";
 import {
   getErrorForApiName,
   getErrorForJSObjectName,
@@ -25,18 +25,23 @@ export const getUsedActionNames = createSelector(
   getParentWidget,
   selectInstalledLibraries,
   (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pageNames: Record<string, any>,
     dataTree: DataTree,
     parentWidget: FlattenedWidgetProps | undefined,
-    installedLibraries: TJSLibrary[],
+    installedLibraries: JSLibrary[],
   ) => {
     const map: Record<string, boolean> = {};
+
     // The logic has been copied from Explorer/Entity/Name.tsx Component.
     // Todo(abhinav): abstraction leak
     if (
       parentWidget &&
       parentWidget.type === WidgetFactory.widgetTypes.TABS_WIDGET
     ) {
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Object.values(parentWidget.tabsObj).forEach((tab: any) => {
         map[tab.label] = true;
       });
@@ -50,6 +55,7 @@ export const getUsedActionNames = createSelector(
       const libAccessors = ([] as string[]).concat(
         ...installedLibraries.map((lib) => lib.accessor),
       );
+
       for (const accessor of libAccessors) {
         map[accessor] = true;
       }

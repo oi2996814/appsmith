@@ -6,15 +6,14 @@ import React, {
   useCallback,
 } from "react";
 import styled from "styled-components";
+import { Switch } from "@appsmith/ads";
 import {
   Popover,
   InputGroup,
   PopoverInteractionKind,
   Classes,
 } from "@blueprintjs/core";
-import { ReactComponent as ColorPickerIcon } from "assets/icons/control/color-picker.svg";
 import { debounce, get } from "lodash";
-import { Colors } from "constants/Colors";
 import { useSelector } from "react-redux";
 import { getSelectedAppThemeProperties } from "selectors/appThemingSelectors";
 import {
@@ -22,12 +21,17 @@ import {
   getThemePropertyBinding,
 } from "constants/ThemeConstants";
 import { getWidgets } from "sagas/selectors";
-import { extractColorsFromString } from "utils/helpers";
+import {
+  extractColorsFromString,
+  isEmptyOrNill,
+  isValidColor,
+} from "utils/helpers";
 import { TAILWIND_COLORS } from "constants/ThemeConstants";
 import useDSEvent from "utils/hooks/useDSEvent";
 import { DSEventTypes } from "utils/AppsmithUtils";
-import { getBrandColors } from "@appsmith/selectors/tenantSelectors";
-const FocusTrap = require("focus-trap-react");
+import { getBrandColors } from "ee/selectors/organizationSelectors";
+import FocusTrap from "focus-trap-react";
+import { createMessage, FULL_COLOR_PICKER_LABEL } from "ee/constants/messages";
 
 const MAX_COLS = 10;
 
@@ -46,6 +50,9 @@ interface ColorPickerProps {
   isOpen?: boolean;
   placeholderText?: string;
   portalContainer?: HTMLElement;
+  onPopupClosed?: () => void;
+  isFullColorPicker?: boolean;
+  setFullColorPicker?: (value: boolean) => void;
 }
 
 /**
@@ -64,33 +71,41 @@ const ColorIcon = styled.div<{ color: string }>`
   background: ${(props) => (props.color ? props.color : "transparent")};
 `;
 
-const ColorPickerIconContainer = styled.div`
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  height: 24px;
-  width: 24px;
-  z-index: 1;
-`;
-
-const StyledInputGroup = styled(InputGroup)`
+export const StyledInputGroup = styled(InputGroup)<{
+  $isValid?: boolean;
+  $isFullColorPicker?: boolean;
+}>`
   .${Classes.INPUT} {
     box-shadow: none;
-    border-radius: 0;
+    border: 1px solid var(--ads-v2-color-border);
+    border-radius: var(--ads-v2-border-radius);
     &:focus {
       box-shadow: none;
     }
   }
   &&& input {
-    padding-left: 36px;
+    padding: ${({ $isFullColorPicker }) =>
+      $isFullColorPicker ? "0px 2px" : "0 10px 0 36px"};
     height: 36px;
-    border: 1px solid ${Colors.GREY_5};
+    border: ${({ $isValid }) =>
+      $isValid
+        ? "1px solid var(--ads-v2-color-border)"
+        : "1px solid var(--ads-v2-color-border-error)"};
     background: ${(props) =>
       props.theme.colors.propertyPane.multiDropdownBoxHoverBg};
     color: ${(props) => props.theme.colors.propertyPane.label};
 
-    &:focus {
-      border: 1px solid ${Colors.GREY_9};
+    &:focus-visible {
+      outline: var(--ads-v2-border-width-outline) solid
+        var(--ads-v2-color-outline);
+      outline-offset: var(--ads-v2-offset-outline);
+    }
+
+    &:hover {
+      border-color: ${({ $isValid }) =>
+        $isValid
+          ? "var(--ads-v2-color-border-emphasis)"
+          : "var(--ads-v2-color-border-error)"};
     }
   }
 `;
@@ -107,14 +122,19 @@ interface ColorPickerPopupProps {
   showApplicationColors?: boolean;
 }
 
+const PopupContainer = styled.div`
+  padding: 0.75rem;
+  border-radius: var(--ads-v2-border-radius);
+  border: 1px solid var(--ads-v2-color-border);
+`;
+
 function ColorPickerPopup(props: ColorPickerPopupProps) {
   const themeColors = useSelector(getSelectedAppThemeProperties).colors;
   const brandColors = useSelector(getBrandColors);
   const widgets = useSelector(getWidgets);
-  const DSLStringified = JSON.stringify(widgets);
   const applicationColors = useMemo(() => {
-    return extractColorsFromString(DSLStringified);
-  }, [DSLStringified]);
+    return extractColorsFromString(widgets);
+  }, []);
   const {
     changeColor,
     color,
@@ -141,8 +161,8 @@ function ColorPickerPopup(props: ColorPickerPopupProps) {
   }
 
   const popup = (
-    <div
-      className="p-3 space-y-2 w-72"
+    <PopupContainer
+      className="space-y-2"
       data-testid="color-picker"
       onClick={handleClick}
       onFocus={handleFocus}
@@ -154,7 +174,7 @@ function ColorPickerPopup(props: ColorPickerPopupProps) {
           <h2 className="pb-2 font-semibold border-b">Color Styles</h2>
           <section className="space-y-2">
             <h3 className="text-xs">Theme Colors</h3>
-            <div className="grid grid-cols-10 gap-2">
+            <div className="grid grid-cols-5 gap-2">
               {Object.keys(themeColors).map((colorKey, colorIndex) => (
                 <div
                   className={`${COLOR_BOX_CLASSES} ${
@@ -184,7 +204,7 @@ function ColorPickerPopup(props: ColorPickerPopupProps) {
       {brandColors && Object.keys(brandColors).length > 0 && (
         <section className="space-y-2">
           <h3 className="text-xs">Brand Colors</h3>
-          <div className="grid grid-cols-10 gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {Object.keys(brandColors).map(
               (colorKey: string, colorIndex: number) => (
                 <div
@@ -208,7 +228,7 @@ function ColorPickerPopup(props: ColorPickerPopupProps) {
       {showApplicationColors && applicationColors.length > 0 && (
         <section className="space-y-2">
           <h3 className="text-xs">Application Colors</h3>
-          <div className="grid grid-cols-10 gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {Object.values(applicationColors).map(
               (colorCode: string, colorIndex) => (
                 <div
@@ -231,8 +251,15 @@ function ColorPickerPopup(props: ColorPickerPopupProps) {
       )}
 
       <section className="space-y-2">
-        <h3 className="text-xs">All Colors</h3>
-        <div className="grid grid-cols-10 gap-2 t--tailwind-colors">
+        {(showThemeColors ||
+          (brandColors && Object.keys(brandColors).length > 0) ||
+          (showApplicationColors && applicationColors.length > 0)) && (
+          <h3 className="text-xs">All Colors</h3>
+        )}
+        <div
+          className="grid grid-cols-5 gap-2 t--tailwind-colors"
+          data-testid="t--all-colors"
+        >
           {Object.keys(TAILWIND_COLORS).map((colorKey, rowIndex) =>
             Object.keys(get(TAILWIND_COLORS, `${colorKey}`)).map(
               (singleColorKey, colIndex) => (
@@ -260,30 +287,9 @@ function ColorPickerPopup(props: ColorPickerPopupProps) {
               ),
             ),
           )}
-
-          <div
-            className={`${COLOR_BOX_CLASSES}  ${
-              color === "#fff" ? "ring-1" : ""
-            }`}
-            onClick={(e) => {
-              setColor("#fff");
-              changeColor("#fff", !e.isTrusted);
-            }}
-            tabIndex={-1}
-          />
-          <div
-            className={`${COLOR_BOX_CLASSES}  diagnol-cross ${
-              color === "transparent" ? "ring-1" : ""
-            }`}
-            onClick={(e) => {
-              setColor("transparent");
-              changeColor("transparent", !e.isTrusted);
-            }}
-            tabIndex={-1}
-          />
         </div>
       </section>
-    </div>
+    </PopupContainer>
   );
 
   return (
@@ -313,20 +319,19 @@ interface LeftIconProps {
   handleInputClick?: () => void;
 }
 
-function LeftIcon(props: LeftIconProps) {
-  return props.color ? (
+export function LeftIcon(props: LeftIconProps) {
+  return isValidColor(props.color) && !isEmptyOrNill(props.color) ? (
     <ColorIcon
       className="rounded-full cursor-pointer"
       color={props.color}
       onClick={props.handleInputClick}
     />
   ) : (
-    <ColorPickerIconContainer
-      className="cursor-pointer"
+    <ColorIcon
+      className="rounded-full cursor-pointer"
+      color="white"
       onClick={props.handleInputClick}
-    >
-      <ColorPickerIcon />
-    </ColorPickerIconContainer>
+    />
   );
 }
 
@@ -338,8 +343,15 @@ const POPOVER_MODFIER = {
 };
 
 const ColorPickerComponent = React.forwardRef(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (props: ColorPickerProps, containerRef: any) => {
-    const { isOpen: isOpenProp = false, placeholderText } = props;
+    const {
+      isFullColorPicker: defaultFullColorPickerValue = false,
+      isOpen: isOpenProp = false,
+      placeholderText,
+      setFullColorPicker: setDefaultFullColorPickerValue,
+    } = props;
     const popupRef = useRef<HTMLDivElement>(null);
     const inputGroupRef = useRef<HTMLInputElement>(null);
     // isClick is used to track whether the input field is in focus by mouse click or by keyboard
@@ -350,12 +362,15 @@ const ColorPickerComponent = React.forwardRef(
       props.evaluatedColorValue || props.color,
     );
 
-    const debouncedOnChange = React.useCallback(
-      debounce((color: string, isUpdatedViaKeyboard: boolean) => {
-        props.changeColor(color, isUpdatedViaKeyboard);
-      }, DEBOUNCE_TIMER),
-      [],
+    const [isFullColorPicker, setFullColorPicker] = React.useState(
+      defaultFullColorPickerValue,
     );
+
+    const debouncedOnChange = useMemo(() => {
+      return debounce((color: string, isUpdatedViaKeyboard: boolean) => {
+        props.changeColor(color, isUpdatedViaKeyboard);
+      }, DEBOUNCE_TIMER);
+    }, [props]);
 
     useEffect(() => {
       setIsOpen(isOpenProp);
@@ -379,6 +394,8 @@ const ColorPickerComponent = React.forwardRef(
     );
 
     const handleKeydown = (e: KeyboardEvent) => {
+      if (isFullColorPicker) return;
+
       if (isOpen) {
         switch (e.key) {
           case "Escape":
@@ -392,18 +409,24 @@ const ColorPickerComponent = React.forwardRef(
           case "Tab":
             emitKeyPressEvent(`${e.shiftKey ? "Shift+" : ""}${e.key}`);
             currentFocus.current = 0;
+
             if (document.activeElement === inputGroupRef.current) {
               setTimeout(() => {
                 const firstElement = popupRef.current?.querySelectorAll(
                   "[tabindex='0']",
+                  // TODO: Fix this the next time the file is edited
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 )?.[0] as any;
+
                 firstElement?.focus();
               });
             }
+
             break;
           case "Enter":
-          case " ":
             emitKeyPressEvent(e.key);
+            // TODO: Fix this the next time the file is edited
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (document.activeElement as any)?.click();
             setTimeout(() => {
               inputGroupRef.current?.focus();
@@ -414,7 +437,9 @@ const ColorPickerComponent = React.forwardRef(
             emitKeyPressEvent(e.key);
             const totalColors =
               document.activeElement?.parentElement?.childElementCount ?? 0;
+
             currentFocus.current = currentFocus.current + 1;
+
             if (
               currentFocus.current % MAX_COLS === 0 ||
               currentFocus.current >= totalColors
@@ -423,58 +448,88 @@ const ColorPickerComponent = React.forwardRef(
                 currentFocus.current % MAX_COLS === 0
                   ? currentFocus.current - MAX_COLS
                   : totalColors - (totalColors % MAX_COLS);
-            (document.activeElement?.parentElement?.childNodes[
-              currentFocus.current
-            ] as any).focus();
+
+            (
+              document.activeElement?.parentElement?.childNodes[
+                currentFocus.current
+                // TODO: Fix this the next time the file is edited
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ] as any
+            ).focus();
             break;
           }
           case "ArrowLeft": {
             emitKeyPressEvent(e.key);
             const totalColors =
               document.activeElement?.parentElement?.childElementCount ?? 0;
+
             currentFocus.current = currentFocus.current - 1;
+
             if (
               currentFocus.current < 0 ||
               currentFocus.current % MAX_COLS === MAX_COLS - 1
             ) {
               currentFocus.current = currentFocus.current + MAX_COLS;
+
               if (currentFocus.current > totalColors)
                 currentFocus.current = totalColors - 1;
             }
-            (document.activeElement?.parentElement?.childNodes[
-              currentFocus.current
-            ] as any).focus();
+
+            (
+              document.activeElement?.parentElement?.childNodes[
+                currentFocus.current
+                // TODO: Fix this the next time the file is edited
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ] as any
+            ).focus();
             break;
           }
           case "ArrowDown": {
             emitKeyPressEvent(e.key);
             const totalColors =
               document.activeElement?.parentElement?.childElementCount ?? 0;
+
             if (totalColors < MAX_COLS) break;
+
             currentFocus.current = currentFocus.current + MAX_COLS;
+
             if (currentFocus.current >= totalColors)
               currentFocus.current = currentFocus.current % MAX_COLS;
-            (document.activeElement?.parentElement?.childNodes[
-              currentFocus.current
-            ] as any).focus();
+
+            (
+              document.activeElement?.parentElement?.childNodes[
+                currentFocus.current
+                // TODO: Fix this the next time the file is edited
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ] as any
+            ).focus();
             break;
           }
           case "ArrowUp": {
             emitKeyPressEvent(e.key);
             const totalColors =
               document.activeElement?.parentElement?.childElementCount ?? 0;
+
             if (totalColors < MAX_COLS) break;
+
             currentFocus.current = currentFocus.current - MAX_COLS;
+
             if (currentFocus.current < 0) {
               const factor = Math.floor(totalColors / MAX_COLS) * MAX_COLS;
               const nextIndex = factor + currentFocus.current + MAX_COLS;
+
               if (nextIndex >= totalColors)
                 currentFocus.current = nextIndex - MAX_COLS;
               else currentFocus.current = nextIndex;
             }
-            (document.activeElement?.parentElement?.childNodes[
-              currentFocus.current
-            ] as any).focus();
+
+            (
+              document.activeElement?.parentElement?.childNodes[
+                currentFocus.current
+                // TODO: Fix this the next time the file is edited
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ] as any
+            ).focus();
             break;
           }
         }
@@ -485,7 +540,10 @@ const ColorPickerComponent = React.forwardRef(
             setIsOpen(true);
             const firstElement = popupRef.current?.querySelectorAll(
               "[tabindex='0']",
+              // TODO: Fix this the next time the file is edited
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
             )?.[0] as any;
+
             firstElement?.focus();
             break;
           case "Escape":
@@ -500,16 +558,24 @@ const ColorPickerComponent = React.forwardRef(
 
     useEffect(() => {
       document.body.addEventListener("keydown", handleKeydown);
+
       return () => {
         document.body.removeEventListener("keydown", handleKeydown);
       };
     }, [handleKeydown]);
 
-    const handleChangeColor = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const value = event.target.value;
-      debouncedOnChange(value, true);
-      setColor(value);
-    };
+    const handleChangeColor = useCallback(
+      (event: React.ChangeEvent<HTMLInputElement>) => {
+        const value = event.target.value || "";
+
+        if (isValidColor(value)) {
+          debouncedOnChange(value, true);
+        }
+
+        setColor(value);
+      },
+      [debouncedOnChange],
+    );
 
     // if props.color changes and state color is different,
     // sets the state color to props color
@@ -520,13 +586,26 @@ const ColorPickerComponent = React.forwardRef(
     }, [props.color]);
 
     const handleInputClick = () => {
-      isClick.current = true;
+      if (isFullColorPicker && isOpen) {
+        setIsOpen(false);
+      } else {
+        isClick.current = true;
+      }
+    };
+
+    const handleFullColorPickerClick = (value: boolean) => {
+      setFullColorPicker(value);
+      setDefaultFullColorPickerValue && setDefaultFullColorPickerValue(value);
+      setIsOpen(false);
     };
 
     const handleOnInteraction = (nextOpenState: boolean) => {
+      if (isFullColorPicker && !isOpen) return;
+
       if (isOpen !== nextOpenState) {
         if (isClick.current) setIsOpen(true);
         else setIsOpen(nextOpenState);
+
         isClick.current = false;
       }
     };
@@ -544,18 +623,26 @@ const ColorPickerComponent = React.forwardRef(
           isOpen={isOpen}
           minimal
           modifiers={POPOVER_MODFIER}
+          onClosed={props.onPopupClosed}
           onInteraction={handleOnInteraction}
+          popoverClassName="color-picker-input"
           portalContainer={props.portalContainer}
         >
           <StyledInputGroup
+            $isFullColorPicker={isFullColorPicker}
+            $isValid={isValidColor(color)}
             autoFocus={props.autoFocus}
+            data-testid="t--color-picker-input"
             inputRef={inputGroupRef}
             leftIcon={
-              <LeftIcon color={color} handleInputClick={handleInputClick} />
+              !isFullColorPicker ? (
+                <LeftIcon color={color} handleInputClick={handleInputClick} />
+              ) : null
             }
             onChange={handleChangeColor}
             onClick={handleInputClick}
             placeholder={placeholderText || "enter color name or hex"}
+            type={isFullColorPicker ? "color" : "text"}
             value={color}
           />
 
@@ -569,6 +656,14 @@ const ColorPickerComponent = React.forwardRef(
             showThemeColors={props.showThemeColors}
           />
         </Popover>
+        <div className="mt-2">
+          <Switch
+            isSelected={isFullColorPicker}
+            onChange={handleFullColorPickerClick}
+          >
+            {createMessage(FULL_COLOR_PICKER_LABEL)}
+          </Switch>
+        </div>
       </div>
     );
   },

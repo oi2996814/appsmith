@@ -1,32 +1,212 @@
-import React from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import { TextSize, WidgetType } from "constants/WidgetConstants";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import type { TextSize } from "constants/WidgetConstants";
+import React from "react";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
 import DatePickerComponent from "../component";
 
 import { ValidationTypes } from "constants/WidgetValidation";
-import { DerivedPropertiesMap } from "utils/WidgetFactory";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
 
-import derivedProperties from "./parseDerivedProperties";
-import { DatePickerType, TimePrecision } from "../constants";
-import { LabelPosition } from "components/constants";
 import { Alignment } from "@blueprintjs/core";
-import { GRID_DENSITY_MIGRATION_V1 } from "widgets/constants";
+import { LabelPosition } from "components/constants";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import {
+  isAutoHeightEnabledForWidget,
+  DefaultAutocompleteDefinitions,
+  isCompactMode,
+} from "widgets/WidgetUtils";
+import type { DatePickerType } from "../constants";
+import { TimePrecision } from "../constants";
 import { DateFormatOptions } from "./constants";
-import { Stylesheet } from "entities/AppTheming";
-import { isAutoHeightEnabledForWidget } from "widgets/WidgetUtils";
+import derivedProperties from "./parseDerivedProperties";
+import { isAutoLayout } from "layoutSystems/autolayout/utils/flexWidgetUtils";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import moment from "moment";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import { DynamicHeight } from "utils/WidgetFeatures";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import type {
+  SnipingModeProperty,
+  PropertyUpdates,
+} from "WidgetProvider/constants";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function allowedRange(value: any) {
   const allowedValues = [0, 1, 2, 3, 4, 5, 6];
   const isValid = allowedValues.includes(Number(value));
+
   return {
     isValid: isValid,
     parsed: isValid ? Number(value) : 0,
-    messages: isValid ? [] : ["Number should be between 0-6."],
+    messages: isValid
+      ? [
+          {
+            name: "",
+            message: "",
+          },
+        ]
+      : [
+          {
+            name: "RangeError",
+            message: "Number should be between 0-6.",
+          },
+        ],
   };
 }
+
 class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
+  static type = "DATE_PICKER_WIDGET2";
+
+  static getConfig() {
+    return {
+      name: "DatePicker",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.INPUTS],
+      needsMeta: true,
+      searchTags: ["calendar"],
+    };
+  }
+
+  static getFeatures() {
+    return {
+      dynamicHeight: {
+        sectionIndex: 3,
+        defaultValue: DynamicHeight.FIXED,
+        active: true,
+      },
+    };
+  }
+
+  static getDefaults() {
+    return {
+      isDisabled: false,
+      datePickerType: "DATE_PICKER",
+      rows: 7,
+      label: "Label",
+      labelPosition: LabelPosition.Top,
+      labelAlignment: Alignment.LEFT,
+      labelWidth: 5,
+      labelTextSize: "0.875rem",
+      dateFormat: "YYYY-MM-DD HH:mm",
+      columns: 20,
+      widgetName: "DatePicker",
+      defaultDate: moment().toISOString(),
+      minDate: "1920-12-31T18:30:00.000Z",
+      maxDate: "2121-12-31T18:29:00.000Z",
+      version: 2,
+      isRequired: false,
+      closeOnSelection: true,
+      shortcuts: false,
+      firstDayOfWeek: 0,
+      timePrecision: TimePrecision.MINUTE,
+      animateLoading: true,
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "defaultDate",
+            propertyValue: propValueMap.data,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      disabledPropsDefaults: {
+        labelPosition: LabelPosition.Top,
+        labelTextSize: "0.875rem",
+      },
+      defaults: {
+        rows: 6.6,
+      },
+      autoDimension: {
+        height: true,
+      },
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "120px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        vertical: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: {},
+        minWidth: { base: "120px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Datepicker is used to capture the date and time from a user. It can be used to filter data base on the input date range as well as to capture personal information such as date of birth",
+      "!url": "https://docs.appsmith.com/widget-reference/datepicker",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      selectedDate: "string",
+      formattedDate: "string",
+      isDisabled: "bool",
+    };
+  }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+        setRequired: {
+          path: "isRequired",
+          type: "boolean",
+        },
+        setValue: {
+          path: "defaultDate",
+          type: "string",
+          accessor: "selectedDate",
+        },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return [
       {
@@ -35,7 +215,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
           {
             helpText: "Sets the format of the selected date",
             propertyName: "dateFormat",
-            label: "Date Format",
+            label: "Date format",
             controlType: "DROP_DOWN",
             isJSConvertible: true,
             optionWidth: "340px",
@@ -72,8 +252,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
               params: {
                 fn: allowedRange,
                 expected: {
-                  type:
-                    "0 : sunday\n1 : monday\n2 : tuesday\n3 : wednesday\n4 : thursday\n5 : friday\n6 : saturday",
+                  type: "0 : sunday\n1 : monday\n2 : tuesday\n3 : wednesday\n4 : thursday\n5 : friday\n6 : saturday",
                   example: "0",
                   autocompleteDataType: AutocompleteDataType.STRING,
                 },
@@ -136,6 +315,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
             label: "Position",
             controlType: "ICON_TABS",
             fullWidth: true,
+            hidden: isAutoLayout,
             options: [
               { label: "Auto", value: LabelPosition.Auto },
               { label: "Left", value: LabelPosition.Left },
@@ -151,13 +331,14 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
             propertyName: "labelAlignment",
             label: "Alignment",
             controlType: "LABEL_ALIGNMENT_OPTIONS",
+            fullWidth: false,
             options: [
               {
-                icon: "LEFT_ALIGN",
+                startIcon: "align-left",
                 value: Alignment.LEFT,
               },
               {
-                icon: "RIGHT_ALIGN",
+                startIcon: "align-right",
                 value: Alignment.RIGHT,
               },
             ],
@@ -262,7 +443,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -300,8 +481,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
           {
             propertyName: "onDateSelected",
             label: "onDateSelected",
-            helpText:
-              "Triggers an action when a date is selected in the calendar",
+            helpText: "when a date is selected in the calendar",
             controlType: "ACTION_SELECTOR",
             isJSConvertible: true,
             isBindProperty: true,
@@ -310,7 +490,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
           {
             propertyName: "onFocus",
             label: "onFocus",
-            helpText: "Triggers an action when the date picker receives focus",
+            helpText: "when the date picker receives focus",
             controlType: "ACTION_SELECTOR",
             isJSConvertible: true,
             isBindProperty: true,
@@ -319,7 +499,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
           {
             propertyName: "onBlur",
             label: "onBlur",
-            helpText: "Triggers an action when the date picker loses focus",
+            helpText: "when the date picker loses focus",
             controlType: "ACTION_SELECTOR",
             isJSConvertible: true,
             isBindProperty: true,
@@ -333,11 +513,11 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
   static getPropertyPaneStyleConfig() {
     return [
       {
-        sectionName: "Label Styles",
+        sectionName: "Label styles",
         children: [
           {
             propertyName: "labelTextColor",
-            label: "Font Color",
+            label: "Font color",
             helpText: "Control the color of the label associated",
             controlType: "COLOR_PICKER",
             isJSConvertible: true,
@@ -347,10 +527,11 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
           },
           {
             propertyName: "labelTextSize",
-            label: "Font Size",
+            label: "Font size",
             helpText: "Control the font size of the label associated",
             controlType: "DROP_DOWN",
             defaultValue: "0.875rem",
+            hidden: isAutoLayout,
             options: [
               {
                 label: "S",
@@ -395,11 +576,11 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
             controlType: "BUTTON_GROUP",
             options: [
               {
-                icon: "BOLD_FONT",
+                icon: "text-bold",
                 value: "BOLD",
               },
               {
-                icon: "ITALICS_FONT",
+                icon: "text-italic",
                 value: "ITALIC",
               },
             ],
@@ -411,11 +592,11 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
         ],
       },
       {
-        sectionName: "Border and Shadow",
+        sectionName: "Border and shadow",
         children: [
           {
             propertyName: "accentColor",
-            label: "Accent Color",
+            label: "Accent color",
             controlType: "COLOR_PICKER",
             isJSConvertible: true,
             isBindProperty: true,
@@ -425,7 +606,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
           },
           {
             propertyName: "borderRadius",
-            label: "Border Radius",
+            label: "Border radius",
             helpText:
               "Rounds the corners of the icon button's outer border edge",
             controlType: "BORDER_RADIUS_OPTIONS",
@@ -436,7 +617,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
           },
           {
             propertyName: "boxShadow",
-            label: "Box Shadow",
+            label: "Box shadow",
             helpText:
               "Enables you to cast a drop shadow from the frame of the widget",
             controlType: "BOX_SHADOW_OPTIONS",
@@ -464,6 +645,8 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       value: undefined,
@@ -488,7 +671,9 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
     }
   }
 
-  getPageView() {
+  getWidgetView() {
+    const { componentHeight } = this.props;
+
     return (
       <DatePickerComponent
         accentColor={this.props.accentColor}
@@ -496,13 +681,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
         borderRadius={this.props.borderRadius}
         boxShadow={this.props.boxShadow}
         closeOnSelection={this.props.closeOnSelection}
-        compactMode={
-          !(
-            (this.props.bottomRow - this.props.topRow) /
-              GRID_DENSITY_MIGRATION_V1 >
-            1
-          )
-        }
+        compactMode={isCompactMode(componentHeight)}
         dateFormat={this.props.dateFormat}
         datePickerType="DATE_PICKER"
         firstDayOfWeek={this.props.firstDayOfWeek}
@@ -517,7 +696,7 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
         labelTextColor={this.props.labelTextColor}
         labelTextSize={this.props.labelTextSize}
         labelTooltip={this.props.labelTooltip}
-        labelWidth={this.getLabelWidth()}
+        labelWidth={this.props.labelComponentWidth}
         maxDate={this.props.maxDate}
         minDate={this.props.minDate}
         onBlur={this.onBlur}
@@ -566,10 +745,6 @@ class DatePickerWidget extends BaseWidget<DatePickerWidget2Props, WidgetState> {
         },
       });
   };
-
-  static getWidgetType(): WidgetType {
-    return "DATE_PICKER_WIDGET2";
-  }
 }
 
 export interface DatePickerWidget2Props extends WidgetProps {
@@ -601,6 +776,7 @@ export interface DatePickerWidget2Props extends WidgetProps {
   timePrecision: TimePrecision;
   onFocus?: string;
   onBlur?: string;
+  labelComponentWidth?: number;
 }
 
 export default DatePickerWidget;

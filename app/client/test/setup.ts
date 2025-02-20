@@ -1,20 +1,72 @@
 import { setupServer } from "msw/node";
 import { handlers } from "./__mocks__/apiHandlers";
+import "../src/polyfills/requestIdleCallback";
+import { Crypto } from "@peculiar/webcrypto";
+
+// since global crypto is immutable, we need to first delete it and then use the
+// peculiar crypto lisrc/sagas/helper.test.tsb
+delete global['crypto'];
+global.crypto = new Crypto();
+
 export const server = setupServer(...handlers);
+
+jest.mock("api/Api", () => ({
+  __esModule: true,
+  default: class Api { },
+}));
 
 window.scrollTo = jest.fn();
 Element.prototype.scrollIntoView = jest.fn();
 Element.prototype.scrollBy = jest.fn();
-const mockObserveFn = () => {
-  return {
-    observe: jest.fn(),
-    unobserve: jest.fn(),
-    disconnect: jest.fn(),
-  };
-};
 
-window.IntersectionObserver = jest.fn().mockImplementation(mockObserveFn);
-window.ResizeObserver = jest.fn().mockImplementation(mockObserveFn);
+jest.mock("../src/api/Api.ts", () => ({
+  __esModule: true,
+  default: class Api { },
+}));
+
+// Polyfill for `structuredClone` if not available
+// This is needed for eslint jest tests
+if (typeof global.structuredClone === "undefined") {
+  global.structuredClone = (obj) => {
+    return JSON.parse(JSON.stringify(obj));
+  };
+}
+
+beforeAll(() => {
+  window.IntersectionObserver = jest
+    .fn()
+    .mockImplementation((fn: (entry: any) => any) => {
+      return {
+        observe: () => {
+          fn([
+            {
+              isIntersecting: true,
+              boundingClientRect: {
+                top: 64,
+                left: 293,
+              },
+              intersectionRect: {
+                width: 1296,
+                height: 424,
+                top: 64,
+                left: 293,
+              },
+            },
+          ]);
+        },
+        unobserve: jest.fn(),
+        disconnect: jest.fn(),
+      };
+    });
+
+  window.ResizeObserver = jest.fn().mockImplementation(() => {
+    return {
+      observe: jest.fn(),
+      unobserve: jest.fn(),
+      disconnect: jest.fn(),
+    };
+  });
+});
 
 // establish API mocking before all tests
 beforeAll(() => server.listen());
@@ -42,7 +94,7 @@ document.createRange = () => {
 };
 
 // jest events doesnt seem to be handling scrollTo
-Element.prototype.scrollTo = () => {};
+Element.prototype.scrollTo = () => { };
 
 class WorkerStub {
   url: string;
@@ -50,7 +102,7 @@ class WorkerStub {
   constructor(stringUrl: string) {
     this.url = stringUrl;
     // eslint-disable-next-line @typescript-eslint/no-empty-function
-    this.onmessage = () => {};
+    this.onmessage = () => { };
   }
 
   postMessage(msg) {

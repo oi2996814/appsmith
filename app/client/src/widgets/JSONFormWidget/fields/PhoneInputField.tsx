@@ -1,12 +1,10 @@
 import React, { useContext, useState } from "react";
 import { parseIncompletePhoneNumber } from "libphonenumber-js";
 
-import BaseInputField, {
-  BaseInputComponentProps,
-  parseRegex,
-} from "./BaseInputField";
+import type { BaseInputComponentProps } from "./BaseInputField";
+import BaseInputField, { parseRegex } from "./BaseInputField";
 import FormContext from "../FormContext";
-import { BaseFieldComponentProps } from "../constants";
+import type { BaseFieldComponentProps } from "../constants";
 import { RenderModes } from "constants/WidgetConstants";
 import ISDCodeDropdown, {
   getDefaultISDCode,
@@ -21,17 +19,16 @@ type PhoneInputComponentProps = BaseInputComponentProps & {
   dialCode: string;
 };
 
-export type PhoneInputFieldProps = BaseFieldComponentProps<
-  PhoneInputComponentProps
->;
+export type PhoneInputFieldProps =
+  BaseFieldComponentProps<PhoneInputComponentProps>;
 
-type ISDCodeDropdownComponentProps = {
+interface ISDCodeDropdownComponentProps {
   allowDialCodeChange: boolean;
   dialCode: string;
   fieldName: string;
   isDisabled: boolean;
   propertyPath: string;
-};
+}
 
 const COMPONENT_DEFAULT_VALUES: PhoneInputComponentProps = {
   allowDialCodeChange: false,
@@ -69,6 +66,7 @@ export const isValid = (
 
 const transformValue = (value: string) => {
   const parsedValue = parseIncompletePhoneNumber(value);
+
   return {
     text: parsedValue,
     value: parsedValue,

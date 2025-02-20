@@ -1,52 +1,61 @@
+import type { ActionPattern } from "redux-saga/effects";
 import {
   call,
   take,
   select,
   put,
   actionChannel,
-  ActionPattern,
+  all,
+  takeLatest,
 } from "redux-saga/effects";
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import log from "loglevel";
 import * as Sentry from "@sentry/react";
 import { getFormEvaluationState } from "selectors/formSelectors";
 import { evalFormConfig } from "./EvaluationsSaga";
-import {
+import type {
   ConditionalOutput,
   DynamicValues,
   FormEvaluationState,
 } from "reducers/evaluationReducers/formEvaluationReducer";
-import { FORM_EVALUATION_REDUX_ACTIONS } from "actions/evaluationActions";
-import { Action, ActionConfig } from "entities/Action";
-import { FormConfigType } from "components/formControls/BaseControl";
+import { FORM_EVALUATION_REDUX_ACTIONS } from "ee/actions/evaluationActionsList";
+import type { Action, ActionConfig } from "entities/Action";
+import type { FormConfigType } from "components/formControls/BaseControl";
 import PluginsApi from "api/PluginApi";
-import { ApiResponse } from "api/ApiResponses";
-import { getAction } from "selectors/entitiesSelector";
+import type { ApiResponse } from "api/ApiResponses";
+import { getAction, getPlugin } from "ee/selectors/entitiesSelector";
 import { getDataTreeActionConfigPath } from "entities/Action/actionProperties";
 import { getDataTree } from "selectors/dataTreeSelectors";
 import { getDynamicBindings, isDynamicValue } from "utils/DynamicBindingUtils";
 import get from "lodash/get";
-import { klona } from "klona/lite";
-import { DataTree } from "entities/DataTree/dataTreeFactory";
+import type { DataTree } from "entities/DataTree/dataTreeTypes";
 import {
   extractFetchDynamicValueFormConfigs,
   extractQueueOfValuesToBeFetched,
 } from "./helper";
-import { Action as ReduxActionType } from "redux";
+import type { DatasourceConfiguration } from "entities/Datasource";
+import { buffers } from "redux-saga";
+import type { Plugin } from "entities/Plugin";
+import {
+  doesPluginRequireDatasource,
+  type ActionParentEntityTypeInterface,
+} from "ee/entities/Engine/actionHelpers";
+import { klonaLiteWithTelemetry } from "utils/helpers";
+import { objectKeys } from "@appsmith/utils";
 
-export type FormEvalActionPayload = {
+export interface FormEvalActionPayload {
   formId: string;
   datasourceId?: string;
   pluginId?: string;
+  editorContextType: ActionParentEntityTypeInterface;
   actionConfiguration?: ActionConfig;
   editorConfig?: FormConfigType[];
   settingConfig?: FormConfigType[];
   actionDiffPath?: string;
   hasRouteChanged?: boolean;
-};
+  datasourceConfiguration?: DatasourceConfiguration;
+}
 
 // This value holds an array of values that needs to be dynamically fetched
 // when we run form evaluations we store dynamic values to be fetched in this array
@@ -54,6 +63,8 @@ export type FormEvalActionPayload = {
 
 function* setFormEvaluationSagaAsync(
   action: ReduxAction<FormEvalActionPayload>,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any {
   try {
     // Get current state from redux
@@ -70,16 +81,22 @@ function* setFormEvaluationSagaAsync(
       const fetchDynamicValueFormConfigs = extractFetchDynamicValueFormConfigs(
         workerResponse[action?.payload?.formId],
       );
+
       yield put({
         type: ReduxActionTypes.INIT_TRIGGER_VALUES,
         payload: {
-          [action?.payload?.formId]: klona(fetchDynamicValueFormConfigs),
+          [action?.payload?.formId]: klonaLiteWithTelemetry(
+            fetchDynamicValueFormConfigs,
+            "FormEvaluationSaga.setFormEvaluationSagaAsync",
+          ),
         },
       });
     }
+
     // RUN_FORM_EVALUATION shouldn't be called before INIT_FORM_EVALUATION has been called with
     // the same `formId` else `extractQueueOfValuesToBeFetched` will be sent an undefined value.
     let queueOfValuesToBeFetched;
+
     if (
       action?.type === ReduxActionTypes.RUN_FORM_EVALUATION &&
       workerResponse[action?.payload?.formId]
@@ -96,10 +113,12 @@ function* setFormEvaluationSagaAsync(
         payload: workerResponse,
       });
     }
+
     // If there are any actions in the queue, run them
     // Once all the actions are done, extract the actions that need to be fetched dynamically
     const formId = action.payload.formId;
     const evalOutput = workerResponse[formId];
+
     if (evalOutput && typeof evalOutput === "object") {
       if (queueOfValuesToBeFetched) {
         yield put({
@@ -132,7 +151,7 @@ export function* fetchDynamicValuesSaga(
   datasourceId: string,
   pluginId: string,
 ) {
-  for (const key of Object.keys(queueOfValuesToBeFetched)) {
+  for (const key of objectKeys(queueOfValuesToBeFetched)) {
     queueOfValuesToBeFetched[key].fetchDynamicValues = yield call(
       fetchDynamicValueSaga,
       queueOfValuesToBeFetched[key],
@@ -143,7 +162,6 @@ export function* fetchDynamicValuesSaga(
       formId,
       datasourceId,
       pluginId,
-      key,
     );
   }
 
@@ -157,24 +175,70 @@ export function* fetchDynamicValuesSaga(
   });
 }
 
+function* fetchPaginatedDynamicValuesSaga(
+  action: ReduxAction<{
+    value: ConditionalOutput;
+    dynamicFetchedValues: DynamicValues;
+    actionId: string;
+    datasourceId: string;
+    pluginId: string;
+    identifier: string;
+  }>,
+) {
+  try {
+    const {
+      actionId,
+      datasourceId,
+      dynamicFetchedValues,
+      identifier,
+      pluginId,
+      value,
+    } = action.payload;
+
+    const nextPageResponse: DynamicValues = yield call(
+      fetchDynamicValueSaga,
+      value,
+      Object.assign({}, dynamicFetchedValues),
+      actionId,
+      datasourceId,
+      pluginId,
+    );
+
+    // Set the values to the state once all values are fetched
+    yield put({
+      type: ReduxActionTypes.FETCH_FORM_DYNAMIC_VAL_NEXT_PAGE_SUCCESS,
+      payload: {
+        actionId,
+        identifier,
+        value: nextPageResponse,
+      },
+    });
+  } catch (e) {
+    log.error(e);
+  }
+}
+
 function* fetchDynamicValueSaga(
   value: ConditionalOutput,
   dynamicFetchedValues: DynamicValues,
   actionId: string,
   datasourceId: string,
   pluginId: string,
-  configProperty: string,
 ) {
   try {
-    const {
-      config,
-      evaluatedConfig,
-    } = value.fetchDynamicValues as DynamicValues;
+    const { config, evaluatedConfig } =
+      value.fetchDynamicValues as DynamicValues;
     const { params } = evaluatedConfig;
 
     dynamicFetchedValues.hasStarted = true;
 
+    const plugin: Plugin = yield select(getPlugin, pluginId);
+
     let url = PluginsApi.defaultDynamicTriggerURL(datasourceId);
+
+    if (!doesPluginRequireDatasource(plugin)) {
+      url = PluginsApi.dynamicTriggerURLForInternalPlugins(pluginId);
+    }
 
     if (
       "url" in evaluatedConfig &&
@@ -184,6 +248,8 @@ function* fetchDynamicValueSaga(
       url = evaluatedConfig.url;
 
     // Eval Action is the current action as it is stored in the dataTree
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let evalAction: any;
     // Evaluated params is the object that will hold the evaluated values of the parameters as computed in the dataTree
     let evaluatedParams;
@@ -191,6 +257,7 @@ function* fetchDynamicValueSaga(
     let substitutedParameters = {};
 
     const action: Action = yield select(getAction, actionId);
+    const { workspaceId } = action;
     const dataTree: DataTree = yield select(getDataTree);
 
     if (!!action) {
@@ -203,15 +270,21 @@ function* fetchDynamicValueSaga(
         // we extract the action diff path of the param value from the dynamic binding i.e. actionConfiguration.formData.sheetUrl.data
         const dynamicBindingValue = getDynamicBindings(value as string)
           ?.jsSnippets[0];
-        // we convert this action Diff path into the same format as it is stored in the dataTree i.e. config.formData.sheetUrl.data
-        const dataTreeActionConfigPath = getDataTreeActionConfigPath(
-          dynamicBindingValue,
-        );
-        // then we get the value of the current parameter from the evaluatedValues in the action object stored in the dataTree.
-        const evaluatedValue = get(
-          evalAction?.__evaluation__?.evaluatedValues,
-          dataTreeActionConfigPath,
-        );
+        let evaluatedValue = value as string;
+
+        if (dynamicBindingValue) {
+          // we convert this action Diff path into the same format as it is stored in the dataTree i.e. config.formData.sheetUrl.data
+          const dataTreeActionConfigPath =
+            getDataTreeActionConfigPath(dynamicBindingValue);
+
+          // then we get the value of the current parameter from the evaluatedValues in the action object stored in the dataTree.
+          // TODOD: Find a better way to pass the workspaceId
+          evaluatedValue = get(
+            { ...evalAction, workspaceId },
+            dataTreeActionConfigPath,
+          );
+        }
+
         // if it exists, we store it in the substituted params object.
         // we check if that value is enclosed in dynamic bindings i.e the value has not been evaluated or somehow still contains a js expression
         // if it is, we return an empty string since we don't want to send dynamic bindings to the server.
@@ -241,21 +314,19 @@ function* fetchDynamicValueSaga(
     }
 
     // Call the API to fetch the dynamic values
-    const response: ApiResponse = yield call(
+    const response: ApiResponse<{ trigger?: unknown }> = yield call(
       PluginsApi.fetchDynamicFormValues,
       url,
       {
         actionId,
-        configProperty,
         datasourceId,
-        pluginId,
         ...evaluatedParams,
       },
     );
+
     dynamicFetchedValues.isLoading = false;
-    // @ts-expect-error: we don't know what the response will be
+
     if (response.responseMeta.status === 200 && "trigger" in response.data) {
-      // @ts-expect-error: we don't know what the response will be
       dynamicFetchedValues.data = response.data.trigger;
       dynamicFetchedValues.hasFetchFailed = false;
     } else {
@@ -268,23 +339,34 @@ function* fetchDynamicValueSaga(
     dynamicFetchedValues.isLoading = false;
     dynamicFetchedValues.data = [];
   }
+
   return dynamicFetchedValues;
 }
 
 function* formEvaluationChangeListenerSaga() {
-  const formEvalChannel: ActionPattern<ReduxActionType<
-    FormEvalActionPayload
-  >> = yield actionChannel(FORM_EVALUATION_REDUX_ACTIONS);
+  const buffer = buffers.fixed();
+  const formEvalChannel: ActionPattern<ReduxAction<FormEvalActionPayload>> =
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    yield actionChannel(FORM_EVALUATION_REDUX_ACTIONS, buffer as any);
+
   while (true) {
-    const action: ReduxAction<FormEvalActionPayload> = yield take(
-      formEvalChannel,
-    );
+    if (buffer.isEmpty()) {
+      yield put({
+        type: ReduxActionTypes.FORM_EVALUATION_EMPTY_BUFFER,
+      });
+    }
+
+    const action: ReduxAction<FormEvalActionPayload> =
+      yield take(formEvalChannel);
+
     yield call(setFormEvaluationSagaAsync, action);
   }
 }
 
 export default function* formEvaluationChangeListener() {
   yield take(ReduxActionTypes.START_EVALUATION);
+
   while (true) {
     try {
       yield call(formEvaluationChangeListenerSaga);
@@ -293,4 +375,13 @@ export default function* formEvaluationChangeListener() {
       Sentry.captureException(e);
     }
   }
+}
+
+export function* formEvaluationSagas() {
+  yield all([
+    takeLatest(
+      ReduxActionTypes.FETCH_FORM_DYNAMIC_VAL_NEXT_PAGE_INIT,
+      fetchPaginatedDynamicValuesSaga,
+    ),
+  ]);
 }

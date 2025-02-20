@@ -2,15 +2,11 @@ package com.appsmith.server.acl;
 
 import lombok.Getter;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Set;
 
 import static com.appsmith.server.acl.AclPermission.DELETE_WORKSPACES;
-import static com.appsmith.server.acl.AclPermission.MANAGE_APPLICATIONS;
-import static com.appsmith.server.acl.AclPermission.MANAGE_TENANT;
+import static com.appsmith.server.acl.AclPermission.MANAGE_ORGANIZATION;
 import static com.appsmith.server.acl.AclPermission.MANAGE_WORKSPACES;
-import static com.appsmith.server.acl.AclPermission.READ_APPLICATIONS;
 import static com.appsmith.server.acl.AclPermission.READ_WORKSPACES;
 import static com.appsmith.server.acl.AclPermission.WORKSPACE_CREATE_APPLICATION;
 import static com.appsmith.server.acl.AclPermission.WORKSPACE_CREATE_DATASOURCE;
@@ -32,21 +28,41 @@ import static com.appsmith.server.constants.FieldName.WORKSPACE_VIEWER_DESCRIPTI
 
 @Getter
 public enum AppsmithRole {
-    APPLICATION_ADMIN("Application Administrator", "", Set.of(MANAGE_APPLICATIONS)),
-    APPLICATION_VIEWER("Application Viewer", "", Set.of(READ_APPLICATIONS)),
-    ORGANIZATION_ADMIN(ADMINISTRATOR, WORKSPACE_ADMINISTRATOR_DESCRIPTION,
-            Set.of(MANAGE_WORKSPACES, WORKSPACE_INVITE_USERS, WORKSPACE_EXPORT_APPLICATIONS, WORKSPACE_CREATE_APPLICATION, WORKSPACE_CREATE_DATASOURCE,
-                    WORKSPACE_DELETE_DATASOURCES, WORKSPACE_DELETE_APPLICATIONS, DELETE_WORKSPACES)),
-    ORGANIZATION_DEVELOPER(DEVELOPER, WORKSPACE_DEVELOPER_DESCRIPTION,
-            Set.of(READ_WORKSPACES, WORKSPACE_MANAGE_APPLICATIONS, WORKSPACE_MANAGE_DATASOURCES, WORKSPACE_READ_APPLICATIONS,
-                    WORKSPACE_PUBLISH_APPLICATIONS, WORKSPACE_INVITE_USERS, WORKSPACE_CREATE_APPLICATION, WORKSPACE_CREATE_DATASOURCE,
-                    WORKSPACE_DELETE_DATASOURCES, WORKSPACE_DELETE_APPLICATIONS)),
-    ORGANIZATION_VIEWER(
+    WORKSPACE_ADMIN(
+            ADMINISTRATOR,
+            WORKSPACE_ADMINISTRATOR_DESCRIPTION,
+            Set.of(
+                    MANAGE_WORKSPACES,
+                    WORKSPACE_INVITE_USERS,
+                    WORKSPACE_EXPORT_APPLICATIONS,
+                    WORKSPACE_CREATE_APPLICATION,
+                    WORKSPACE_CREATE_DATASOURCE,
+                    WORKSPACE_DELETE_DATASOURCES,
+                    WORKSPACE_DELETE_APPLICATIONS,
+                    DELETE_WORKSPACES)),
+    WORKSPACE_DEVELOPER(
+            DEVELOPER,
+            WORKSPACE_DEVELOPER_DESCRIPTION,
+            Set.of(
+                    READ_WORKSPACES,
+                    WORKSPACE_MANAGE_APPLICATIONS,
+                    WORKSPACE_MANAGE_DATASOURCES,
+                    WORKSPACE_READ_APPLICATIONS,
+                    WORKSPACE_PUBLISH_APPLICATIONS,
+                    WORKSPACE_INVITE_USERS,
+                    WORKSPACE_CREATE_APPLICATION,
+                    WORKSPACE_CREATE_DATASOURCE,
+                    WORKSPACE_DELETE_DATASOURCES,
+                    WORKSPACE_DELETE_APPLICATIONS)),
+    WORKSPACE_VIEWER(
             VIEWER,
             WORKSPACE_VIEWER_DESCRIPTION,
-            Set.of(READ_WORKSPACES, WORKSPACE_READ_APPLICATIONS, WORKSPACE_INVITE_USERS, WORKSPACE_EXECUTE_DATASOURCES)
-    ),
-    TENANT_ADMIN("", "", Set.of(MANAGE_TENANT)),
+            Set.of(
+                    READ_WORKSPACES,
+                    WORKSPACE_READ_APPLICATIONS,
+                    WORKSPACE_INVITE_USERS,
+                    WORKSPACE_EXECUTE_DATASOURCES)),
+    TENANT_ADMIN("", "", Set.of(MANAGE_ORGANIZATION)),
     ;
 
     private Set<AclPermission> permissions;
@@ -57,15 +73,5 @@ public enum AppsmithRole {
         this.name = name;
         this.description = description;
         this.permissions = permissions;
-    }
-
-    public static AppsmithRole generateAppsmithRoleFromName(String name) {
-        List<AppsmithRole> appsmithRoles = Arrays.asList(AppsmithRole.values());
-        for (AppsmithRole role : appsmithRoles) {
-            if (role.getName().equals(name)) {
-                return role;
-            }
-        }
-        return null;
     }
 }

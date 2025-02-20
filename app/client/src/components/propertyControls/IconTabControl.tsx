@@ -1,12 +1,35 @@
 import React from "react";
-import BaseControl, { ControlData, ControlProps } from "./BaseControl";
-import { ButtonGroup, ButtonGroupOption } from "design-system";
+import styled from "styled-components";
+import type { ControlData, ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
+import type { SegmentedControlOption } from "@appsmith/ads";
+import { SegmentedControl } from "@appsmith/ads";
+import type { DSEventDetail } from "utils/AppsmithUtils";
 import {
-  DSEventDetail,
   DSEventTypes,
   DS_EVENT,
   emitInteractionAnalyticsEvent,
 } from "utils/AppsmithUtils";
+
+const StyledSegmentedControl = styled(SegmentedControl)`
+  &.ads-v2-segmented-control {
+    gap: 0;
+  }
+
+  > .ads-v2-segmented-control__segments-container {
+    flex: 1 1 auto;
+  }
+
+  > .ads-v2-segmented-control__segments-container:has(.ads-v2-text) span {
+    padding: 0;
+  }
+`;
+
+export interface IconTabControlProps extends ControlProps {
+  options: SegmentedControlOption[];
+  defaultValue: string;
+  fullWidth: boolean;
+}
 
 class IconTabControl extends BaseControl<IconTabControlProps> {
   componentRef = React.createRef<HTMLDivElement>();
@@ -38,26 +61,19 @@ class IconTabControl extends BaseControl<IconTabControlProps> {
   };
 
   selectOption = (value: string, isUpdatedViaKeyboard = false) => {
-    const { defaultValue, propertyValue } = this.props;
-    if (propertyValue === value) {
-      this.updateProperty(
-        this.props.propertyName,
-        defaultValue,
-        isUpdatedViaKeyboard,
-      );
-    } else {
+    if (this.props.propertyValue !== value) {
       this.updateProperty(this.props.propertyName, value, isUpdatedViaKeyboard);
     }
   };
+
   render() {
-    const { fullWidth, options, propertyValue } = this.props;
     return (
-      <ButtonGroup
-        fullWidth={fullWidth}
-        options={options}
+      <StyledSegmentedControl
+        isFullWidth={this.props.fullWidth}
+        onChange={this.selectOption}
+        options={this.props.options}
         ref={this.componentRef}
-        selectButton={this.selectOption}
-        values={[propertyValue]}
+        value={this.props.propertyValue || this.props.defaultValue}
       />
     );
   }
@@ -66,6 +82,8 @@ class IconTabControl extends BaseControl<IconTabControlProps> {
     return "ICON_TABS";
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     if (
       (config as IconTabControlProps)?.options
@@ -73,14 +91,9 @@ class IconTabControl extends BaseControl<IconTabControlProps> {
         .includes(value)
     )
       return true;
+
     return false;
   }
-}
-
-export interface IconTabControlProps extends ControlProps {
-  options: ButtonGroupOption[];
-  defaultValue: string;
-  fullWidth: boolean;
 }
 
 export default IconTabControl;

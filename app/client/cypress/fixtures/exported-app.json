@@ -98,7 +98,7 @@
                           "parentColumnSpace": 34.6875,
                           "imageShape": "RECTANGLE",
                           "leftColumn": 6,
-                          "defaultImage": "https://res.cloudinary.com/drako999/image/upload/v1589196259/default.png"
+                          "defaultImage": "http://host.docker.internal:4200/clouddefaultImage.png"
                         }
                       ]
                     }
@@ -247,7 +247,7 @@
                           "parentRowSpace": 38,
                           "isVisible": true,
                           "type": "TEXT_WIDGET",
-                          "parentId": "bxekwxgc1i",
+                          "parentId": "7vm5mdu8ey",
                           "isLoading": false,
                           "parentColumnSpace": 34.6875,
                           "leftColumn": 3,

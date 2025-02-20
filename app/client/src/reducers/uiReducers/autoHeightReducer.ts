@@ -1,16 +1,14 @@
 import { createImmerReducer } from "utils/ReducerUtils";
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 
-export type AutoHeightUIStatePayload = {
+export interface AutoHeightUIStatePayload {
   isAutoHeightWithLimitsChanging: boolean;
-};
+}
 
-export type AutoHeightUIState = {
+export interface AutoHeightUIState {
   isAutoHeightWithLimitsChanging: boolean;
-};
+}
 
 const initialState: AutoHeightUIState = {
   isAutoHeightWithLimitsChanging: false,

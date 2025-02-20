@@ -2,11 +2,12 @@ import { processDiff, TOASTS, FOCUSES, UPDATES, WIDGETS } from "../replayUtils";
 
 describe("check processDiff from replayUtils for type of update", () => {
   const dsl = {
-    "0": {},
+    0: {},
     abcde: {
       widgetName: "abcde",
     },
   };
+
   describe("check diff of kind 'N' and 'D'", () => {
     it("should create toasts on creation of widgets on Undo", () => {
       const replay = {};

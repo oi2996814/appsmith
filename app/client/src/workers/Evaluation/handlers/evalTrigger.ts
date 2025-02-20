@@ -1,8 +1,9 @@
 import { dataTreeEvaluator } from "./evalTree";
-import { EvalWorkerASyncRequest } from "../types";
-import { createUnEvalTreeForEval } from "@appsmith/workers/Evaluation/dataTreeUtils";
+import type { EvalWorkerASyncRequest } from "../types";
+import ExecutionMetaData from "../fns/utils/ExecutionMetaData";
+import { evaluateAndPushResponse } from "../evalTreeWithChanges";
 
-export default async function(request: EvalWorkerASyncRequest) {
+export default async function (request: EvalWorkerASyncRequest) {
   const { data } = request;
   const {
     callbackData,
@@ -10,29 +11,36 @@ export default async function(request: EvalWorkerASyncRequest) {
     eventType,
     globalContext,
     triggerMeta,
-    unEvalTree: __unEvalTree__,
+    unEvalTree,
   } = data;
+
   if (!dataTreeEvaluator) {
     return { triggers: [], errors: [] };
   }
-  const unEvalTree = createUnEvalTreeForEval(__unEvalTree__);
-  const {
-    evalOrder,
-    nonDynamicFieldValidationOrder,
-    unEvalUpdates,
-  } = dataTreeEvaluator.setupUpdateTree(unEvalTree);
-  dataTreeEvaluator.evalAndValidateSubTree(
-    evalOrder,
-    nonDynamicFieldValidationOrder,
-    unEvalUpdates,
-  );
-  const evalTree = dataTreeEvaluator.evalTree;
-  const resolvedFunctions = dataTreeEvaluator.resolvedFunctions;
+
+  ExecutionMetaData.setExecutionMetaData({ triggerMeta, eventType });
+
+  if (!triggerMeta.onPageLoad) {
+    const { evalOrder, unEvalUpdates } = dataTreeEvaluator.setupUpdateTree(
+      unEvalTree.unEvalTree,
+      unEvalTree.configTree,
+      undefined,
+      //TODO: the evalTrigger can be optimised to not diff all JS actions
+      { isAllAffected: true, ids: [] },
+    );
+
+    evaluateAndPushResponse(
+      dataTreeEvaluator,
+      { evalOrder, unEvalUpdates, jsUpdates: {} },
+      [],
+      [],
+    );
+  }
 
   return dataTreeEvaluator.evaluateTriggers(
     dynamicTrigger,
-    evalTree,
-    resolvedFunctions,
+    dataTreeEvaluator.getEvalTree(),
+    unEvalTree.configTree,
     callbackData,
     {
       globalContext,

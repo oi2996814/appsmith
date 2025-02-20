@@ -8,13 +8,12 @@ import {
 } from "selectors/appThemingSelectors";
 import { ThemeCard } from "./ThemeCard";
 import { SettingSection } from "./SettingSection";
-import ArrowLeft from "remixicon-react/ArrowLeftSLineIcon";
 import { setAppThemingModeStackAction } from "actions/appThemingActions";
 import styled from "styled-components";
-import { Colors } from "constants/Colors";
+import { Link } from "@appsmith/ads";
 
 const Title = styled.h3`
-  color: ${Colors.GRAY_800};
+  color: var(--ads-v2-color-fg-emphasis);
 `;
 
 function ThemeSelector() {
@@ -33,37 +32,40 @@ function ThemeSelector() {
   /**
    * stores user saved themes
    */
-  const userSavedThemes = themes.filter(
-    (theme) => theme.isSystemTheme === false,
-  );
+  const userSavedThemes = themes
+    .filter((theme) => theme.isSystemTheme === false)
+    .filter((theme) => !theme.config.isDeprecated);
 
   /**
    * stores default system themes
    */
-  const systemThemes = themes.filter((theme) => theme.isSystemTheme === true);
+  const systemThemes = themes
+    .filter((theme) => theme.isSystemTheme === true)
+    .filter((theme) => !theme.config.isDeprecated)
+    .sort((a, b) => a.config.order - b.config.order);
 
   return (
     <div className="relative">
       <section className="sticky top-0 items-center justify-between bg-white z-1 ">
-        <button
-          className="inline-flex items-center px-3 py-2 space-x-1 text-gray-500 cursor-pointer t--theme-select-back-btn"
+        <Link
+          className="px-3 py-2 space-x-1 t--theme-select-back-btn"
+          kind="secondary"
           onClick={onClickBack}
-          type="button"
+          startIcon="back-control"
         >
-          <ArrowLeft className="w-4 h-4 transition-all transform" />
-          <h3 className="text-xs font-medium uppercase">Back</h3>
-        </button>
+          Back
+        </Link>
         <SettingSection
           className="px-4 py-3 border-t border-b"
           isDefaultOpen={false}
-          title="Applied Theme"
+          title="Applied theme"
         >
           <ThemeCard theme={selectedTheme} />
         </SettingSection>
       </section>
       {userSavedThemes.length > 0 && (
         <section className="relative p-4 space-y-3">
-          <Title className="text-sm font-medium capitalize">Your Themes</Title>
+          <Title className="text-sm font-medium">Your themes</Title>
           {userSavedThemes.map((theme) => (
             <ThemeCard
               deletable={!theme.isSystemTheme}
@@ -74,10 +76,11 @@ function ThemeSelector() {
           ))}
         </section>
       )}
-      <section className="relative p-4 space-y-3">
-        <Title className="text-sm font-medium capitalize">
-          Featured Themes
-        </Title>
+      <section
+        className="relative p-4 space-y-3"
+        data-testid="t--featured-themes"
+      >
+        <Title className="text-sm font-medium">Featured themes</Title>
         {systemThemes.map((theme) => (
           <ThemeCard
             deletable={!theme.isSystemTheme}

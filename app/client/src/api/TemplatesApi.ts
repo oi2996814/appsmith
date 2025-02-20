@@ -1,12 +1,12 @@
-import { AxiosPromise } from "axios";
+import type { AxiosPromise } from "axios";
 import Api from "api/Api";
-import { ApiResponse } from "./ApiResponses";
-import { WidgetType } from "constants/WidgetConstants";
-import {
+import type { ApiResponse } from "./ApiResponses";
+import type { WidgetType } from "constants/WidgetConstants";
+import type {
   ApplicationResponsePayload,
   ApplicationPagePayload,
-} from "./ApplicationApi";
-import { Datasource } from "entities/Datasource";
+} from "ee/api/ApplicationApi";
+import type { Datasource } from "entities/Datasource";
 
 export interface Template {
   id: string;
@@ -21,6 +21,9 @@ export interface Template {
   useCases: string[];
   datasources: string[];
   pages: ApplicationPagePayload[];
+  allowPageImport: boolean;
+  templateGridColumnSize?: number;
+  templateGridRowSize?: number;
 }
 
 export type FetchTemplatesResponse = ApiResponse<Template[]>;
@@ -37,50 +40,81 @@ export type ImportTemplateResponse = ApiResponse<{
 export interface TemplateFiltersResponse extends ApiResponse {
   data: {
     functions: string[];
+    useCases?: string[];
   };
 }
+
+export interface PublishCommunityTemplateRequest {
+  applicationId: string;
+  workspaceId: string;
+  branchName: string;
+  title: string;
+  headline: string;
+  description: string;
+  useCases: string[];
+  authorEmail: string;
+}
+
+export type PublishCommunityTemplateResponse = ApiResponse<{
+  isPublic: boolean;
+  forkingEnabled: boolean;
+  isCommunityTemplate: boolean;
+  modifiedAt: string;
+}>;
 
 class TemplatesAPI extends Api {
   static baseUrl = "v1";
 
-  static getAllTemplates(): AxiosPromise<FetchTemplatesResponse> {
+  static async getAllTemplates(): Promise<
+    AxiosPromise<FetchTemplatesResponse>
+  > {
     return Api.get(TemplatesAPI.baseUrl + `/app-templates`);
   }
-  static getTemplateInformation(
+  static async getTemplateInformation(
     templateId: string,
-  ): AxiosPromise<FetchTemplatesResponse> {
+  ): Promise<AxiosPromise<FetchTemplatesResponse>> {
     return Api.get(TemplatesAPI.baseUrl + `/app-templates/${templateId}`);
   }
-  static getSimilarTemplates(
+  static async getSimilarTemplates(
     templateId: string,
-  ): AxiosPromise<FetchTemplatesResponse> {
+  ): Promise<AxiosPromise<FetchTemplatesResponse>> {
     return Api.get(
       TemplatesAPI.baseUrl + `/app-templates/${templateId}/similar`,
     );
   }
-  static importTemplate(
+  static async importTemplate(
     templateId: string,
     workspaceId: string,
-  ): AxiosPromise<ImportTemplateResponse> {
+  ): Promise<AxiosPromise<ImportTemplateResponse>> {
     return Api.post(
       TemplatesAPI.baseUrl +
         `/app-templates/${templateId}/import/${workspaceId}`,
     );
   }
-  static importTemplateToApplication(
+  static async importTemplateToApplication(
     templateId: string,
     applicationId: string,
-    organizationId: string,
+    workspaceId: string,
     body?: string[],
-  ): AxiosPromise<ImportTemplateResponse> {
+  ): Promise<AxiosPromise<ImportTemplateResponse>> {
     return Api.post(
       TemplatesAPI.baseUrl +
-        `/app-templates/${templateId}/merge/${applicationId}/${organizationId}`,
+        `/app-templates/${templateId}/merge/${applicationId}/${workspaceId}`,
       body,
     );
   }
-  static getTemplateFilters(): AxiosPromise<TemplateFiltersResponse> {
+  static async getTemplateFilters(): Promise<
+    AxiosPromise<TemplateFiltersResponse>
+  > {
     return Api.get(TemplatesAPI.baseUrl + `/app-templates/filters`);
+  }
+  static async publishCommunityTemplate(
+    body: PublishCommunityTemplateRequest,
+  ): Promise<AxiosPromise<PublishCommunityTemplateResponse>> {
+    return Api.post(
+      TemplatesAPI.baseUrl + `/app-templates/publish/community-template`,
+      body,
+    );
   }
 }
 

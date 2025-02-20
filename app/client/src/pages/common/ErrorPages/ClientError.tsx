@@ -1,6 +1,6 @@
 import React from "react";
-import { connect } from "react-redux";
-import { Button, Size } from "design-system";
+import { useDispatch } from "react-redux";
+import { Button } from "@appsmith/ads";
 import { flushErrors } from "actions/errorActions";
 
 import Page from "./Page";
@@ -8,30 +8,27 @@ import {
   createMessage,
   PAGE_CLIENT_ERROR_DESCRIPTION,
   PAGE_CLIENT_ERROR_TITLE,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
+import { DISCORD_URL } from "constants/ThirdPartyConstants";
 
-interface Props {
-  flushErrors?: any;
-}
-
-function ClientError(props: Props) {
-  const { flushErrors } = props;
+function ClientError() {
+  const dispatch = useDispatch();
 
   return (
     <Page
       cta={
         <Button
-          category="primary"
           className="button-position"
-          icon="right-arrow"
-          iconAlignment="right"
+          endIcon="right-arrow"
+          kind="primary"
           onClick={() => {
-            flushErrors();
-            window.open("https://discord.gg/rBTTVJp", "_blank");
+            dispatch(flushErrors());
+            window.open(DISCORD_URL, "_blank");
           }}
-          size={Size.large}
-          text="Contact us on discord"
-        />
+          size="md"
+        >
+          Contact us on discord
+        </Button>
       }
       description={createMessage(PAGE_CLIENT_ERROR_DESCRIPTION)}
       title={createMessage(PAGE_CLIENT_ERROR_TITLE)}
@@ -39,6 +36,4 @@ function ClientError(props: Props) {
   );
 }
 
-export default connect(null, {
-  flushErrors,
-})(ClientError);
+export default ClientError;

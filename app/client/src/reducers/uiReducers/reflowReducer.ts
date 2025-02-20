@@ -1,9 +1,7 @@
 import { createReducer } from "utils/ReducerUtils";
-import {
-  ReduxAction,
-  ReflowReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { ReflowedSpaceMap } from "reflow/reflowTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import { type ReduxAction } from "actions/ReduxActionTypes";
+import type { ReflowedSpaceMap } from "reflow/reflowTypes";
 
 const initialState: widgetReflow = {
   isReflowing: false,
@@ -11,12 +9,12 @@ const initialState: widgetReflow = {
 };
 
 export const widgetReflowReducer = createReducer(initialState, {
-  [ReflowReduxActionTypes.STOP_REFLOW]: () => {
+  [ReduxActionTypes.STOP_REFLOW]: () => {
     return {
       isReflowing: false,
     };
   },
-  [ReflowReduxActionTypes.REFLOW_MOVE]: (
+  [ReduxActionTypes.REFLOW_MOVE]: (
     state: widgetReflow,
     action: ReduxAction<{ reflowingWidgets: ReflowedSpaceMap }>,
   ) => {
@@ -27,7 +25,7 @@ export const widgetReflowReducer = createReducer(initialState, {
   },
 });
 
-export type widgetReflow = {
+export interface widgetReflow {
   isReflowing: boolean;
   reflowingWidgets: ReflowedSpaceMap;
-};
+}

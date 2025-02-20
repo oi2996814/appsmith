@@ -1,27 +1,30 @@
 /* eslint-disable no-console */
+import type { ChangeEvent } from "react";
 import React, {
   useEffect,
   useState,
   useCallback,
   useRef,
-  ChangeEvent,
   useMemo,
 } from "react";
-import Select, { SelectProps } from "rc-select";
-import { DraftValueType, LabelInValueType } from "rc-select/lib/Select";
+import type { SelectProps } from "rc-select";
+import Select from "rc-select";
+import type { DraftValueType, LabelInValueType } from "rc-select/lib/Select";
 import MenuItemCheckBox, {
   DropdownStyles,
   MultiSelectContainer,
   StyledCheckbox,
   InputContainer,
+  RTLStyles,
 } from "./index.styled";
-import { RenderMode, TextSize } from "constants/WidgetConstants";
-import { Alignment, Button, Classes, InputGroup } from "@blueprintjs/core";
+import type { RenderMode, TextSize } from "constants/WidgetConstants";
+import type { Alignment } from "@blueprintjs/core";
+import { Button, Classes, InputGroup } from "@blueprintjs/core";
 import { labelMargin, WidgetContainerDiff } from "widgets/WidgetUtils";
 import { Colors } from "constants/Colors";
-import { LabelPosition } from "components/constants";
+import type { LabelPosition } from "components/constants";
 import { uniqBy } from "lodash";
-import { Icon } from "design-system";
+import { Icon } from "@design-system/widgets-old";
 import useDropdown from "widgets/useDropdown";
 import LabelWithTooltip from "widgets/components/LabelWithTooltip";
 
@@ -66,6 +69,7 @@ export interface MultiSelectProps
   onDropdownClose?: () => void;
   renderMode?: RenderMode;
   isDynamicHeightEnabled?: boolean;
+  rtl?: boolean;
 }
 
 const DEBOUNCE_TIMEOUT = 1000;
@@ -99,6 +103,7 @@ function MultiSelectComponent({
   options,
   placeholder,
   renderMode,
+  rtl,
   serverSideFiltering,
   value,
   widgetId,
@@ -113,19 +118,13 @@ function MultiSelectComponent({
   const labelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const {
-    BackDrop,
-    getPopupContainer,
-    isOpen,
-    onKeyDown,
-    onOpen,
-    selectRef,
-  } = useDropdown({
-    inputRef,
-    renderMode,
-    onDropdownOpen,
-    onDropdownClose,
-  });
+  const { BackDrop, getPopupContainer, isOpen, onKeyDown, onOpen, selectRef } =
+    useDropdown({
+      inputRef,
+      renderMode,
+      onDropdownOpen,
+      onDropdownClose,
+    });
 
   // SelectAll if all options are in Value
   useEffect(() => {
@@ -137,6 +136,7 @@ function MultiSelectComponent({
     ) {
       setIsSelectAll(true);
     }
+
     if (isSelectAll && filteredOptions.length !== value.length) {
       setIsSelectAll(false);
     }
@@ -148,6 +148,7 @@ function MultiSelectComponent({
       () => onFilterChange(filter),
       DEBOUNCE_TIMEOUT,
     );
+
     return () => clearTimeout(timeOutId);
   }, [filter]);
 
@@ -157,16 +158,15 @@ function MultiSelectComponent({
       if (serverSideFiltering) {
         return setFilteredOptions(options);
       }
+
       const filtered = options.filter((option) => {
         return (
-          String(option.label)
-            .toLowerCase()
-            .indexOf(filter.toLowerCase()) >= 0 ||
-          String(option.value)
-            .toLowerCase()
-            .indexOf(filter.toLowerCase()) >= 0
+          String(option.label).toLowerCase().indexOf(filter.toLowerCase()) >=
+            0 ||
+          String(option.value).toLowerCase().indexOf(filter.toLowerCase()) >= 0
         );
       });
+
       setFilteredOptions(filtered);
     },
     serverSideFiltering ? [options] : [filter, options],
@@ -196,29 +196,38 @@ function MultiSelectComponent({
           key: val.value,
         }),
       );
+
       onChange(allSelectedOptions);
+
       return;
     }
+
     return onChange([]);
   };
 
   const checkOptionsAndValue = () => {
     const emptyFalseArr = [false];
+
     if (value.length === 0 || filteredOptions.length === 0)
       return emptyFalseArr;
+
     return filteredOptions.map((x) => value.some((y) => y.value === x.value));
   };
 
   useEffect(() => {
     const parentWidth = width - WidgetContainerDiff;
+
     if (compactMode && labelRef.current) {
       const labelWidth = labelRef.current.getBoundingClientRect().width;
       const widthDiff = parentWidth - labelWidth - labelMargin;
+
       setMemoDropDownWidth(
         widthDiff > dropDownWidth ? widthDiff : dropDownWidth,
       );
+
       return;
     }
+
     setMemoDropDownWidth(
       parentWidth > dropDownWidth ? parentWidth : dropDownWidth,
     );
@@ -243,9 +252,11 @@ function MultiSelectComponent({
 
   const dropdownRender = useCallback(
     (
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       menu: React.ReactElement<any, string | React.JSXElementConstructor<any>>,
     ) => (
-      <>
+      <div dir={rtl ? "rtl" : "ltr"}>
         <BackDrop />
         {isFilterable ? (
           <InputGroup
@@ -274,7 +285,7 @@ function MultiSelectComponent({
           ) : null}
           {menu}
         </div>
-      </>
+      </div>
     ),
     [
       isSelectAll,
@@ -284,6 +295,7 @@ function MultiSelectComponent({
       isFilterable,
       filter,
       onQueryChange,
+      rtl,
     ],
   );
 
@@ -297,7 +309,11 @@ function MultiSelectComponent({
       isValid={isValid}
       labelPosition={labelPosition}
       ref={_menu as React.RefObject<HTMLDivElement>}
+      rtl={rtl}
     >
+      {rtl ? (
+        <RTLStyles dropdownContainer={`multi-select-dropdown-${widgetId}`} />
+      ) : null}
       <DropdownStyles
         accentColor={accentColor}
         borderRadius={borderRadius}
@@ -332,7 +348,7 @@ function MultiSelectComponent({
           // autoFocus
           defaultActiveFirstOption={false}
           disabled={disabled}
-          dropdownClassName={`multi-select-dropdown multiselect-popover-width-${widgetId}`}
+          dropdownClassName={`multi-select-dropdown multiselect-popover-width-${widgetId} multi-select-dropdown-${widgetId}`}
           dropdownRender={dropdownRender}
           dropdownStyle={dropdownStyle}
           getPopupContainer={getPopupContainer}

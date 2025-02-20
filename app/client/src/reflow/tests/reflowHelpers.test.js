@@ -15,42 +15,42 @@ import {
 describe("Test reflow helper methods", () => {
   describe("Test getCollisionTree method", () => {
     const occupiedSpacesMap = {
-      "1": {
+      1: {
         top: 30,
         left: 20,
         right: 80,
         bottom: 50,
         id: "1",
       },
-      "2": {
+      2: {
         top: 50,
         left: 40,
         right: 90,
         bottom: 70,
         id: "2",
       },
-      "3": {
+      3: {
         top: 50,
         left: 10,
         right: 40,
         bottom: 70,
         id: "3",
       },
-      "4": {
+      4: {
         top: 75,
         left: 20,
         right: 60,
         bottom: 95,
         id: "4",
       },
-      "5": {
+      5: {
         top: 95,
         left: 20,
         right: 80,
         bottom: 130,
         id: "5",
       },
-      "6": {
+      6: {
         id: "6",
         top: 5,
         left: 70,
@@ -63,6 +63,7 @@ describe("Test reflow helper methods", () => {
       parentColumnSpace: 10,
       maxGridColumns: 200,
     };
+
     it("it should return a collision Tree for multiple directions", () => {
       const newSpacePositions = [
         {
@@ -74,7 +75,7 @@ describe("Test reflow helper methods", () => {
         },
       ];
       const collidingSpacesMap = {
-        "1": {
+        1: {
           top: 30,
           left: 20,
           right: 80,
@@ -84,7 +85,7 @@ describe("Test reflow helper methods", () => {
           collidingId: "0",
           direction: ReflowDirection.BOTTOM,
         },
-        "6": {
+        6: {
           id: "6",
           top: 5,
           left: 70,
@@ -99,7 +100,7 @@ describe("Test reflow helper methods", () => {
         {
           bottom: 50,
           children: {
-            "2": {
+            2: {
               bottom: 70,
               children: {},
               collidingId: "1",
@@ -112,7 +113,7 @@ describe("Test reflow helper methods", () => {
               right: 90,
               top: 50,
             },
-            "3": {
+            3: {
               bottom: 70,
               children: {},
               collidingId: "1",
@@ -146,6 +147,7 @@ describe("Test reflow helper methods", () => {
           direction: ReflowDirection.RIGHT,
         },
       ];
+
       expect(
         getCollisionTree(
           newSpacePositions,
@@ -180,7 +182,7 @@ describe("Test reflow helper methods", () => {
         },
       ];
       const collidingSpacesMap = {
-        "1": {
+        1: {
           top: 30,
           left: 20,
           right: 80,
@@ -195,7 +197,7 @@ describe("Test reflow helper methods", () => {
         {
           bottom: 50,
           children: {
-            "2": {
+            2: {
               bottom: 70,
               children: {},
               collidingId: "1",
@@ -208,7 +210,7 @@ describe("Test reflow helper methods", () => {
               right: 90,
               top: 50,
             },
-            "3": {
+            3: {
               bottom: 70,
               children: {},
               collidingId: "1",
@@ -233,7 +235,7 @@ describe("Test reflow helper methods", () => {
         {
           bottom: 95,
           children: {
-            "5": {
+            5: {
               bottom: 130,
               children: {},
               collidingId: "4",
@@ -258,6 +260,7 @@ describe("Test reflow helper methods", () => {
           top: 75,
         },
       ];
+
       expect(
         getCollisionTree(
           newSpacePositions,
@@ -277,42 +280,42 @@ describe("Test reflow helper methods", () => {
   });
   describe("test getMovementMap method", () => {
     const occupiedSpacesMap = {
-      "1": {
+      1: {
         top: 30,
         left: 20,
         right: 80,
         bottom: 50,
         id: "1",
       },
-      "2": {
+      2: {
         top: 50,
         left: 40,
         right: 90,
         bottom: 70,
         id: "2",
       },
-      "3": {
+      3: {
         top: 50,
         left: 10,
         right: 40,
         bottom: 70,
         id: "3",
       },
-      "4": {
+      4: {
         top: 75,
         left: 20,
         right: 60,
         bottom: 95,
         id: "4",
       },
-      "5": {
+      5: {
         top: 95,
         left: 20,
         right: 80,
         bottom: 130,
         id: "5",
       },
-      "6": {
+      6: {
         id: "6",
         top: 5,
         left: 70,
@@ -329,9 +332,10 @@ describe("Test reflow helper methods", () => {
       X: 20,
       Y: 20,
     };
+
     it("should return movement map", () => {
       const newSpacePositionMap = {
-        "0": {
+        0: {
           id: "0",
           top: 10,
           left: 20,
@@ -340,7 +344,7 @@ describe("Test reflow helper methods", () => {
         },
       };
       const collidingSpacesMap = {
-        "1": {
+        1: {
           top: 30,
           left: 20,
           right: 80,
@@ -350,7 +354,7 @@ describe("Test reflow helper methods", () => {
           collidingId: "0",
           direction: ReflowDirection.BOTTOM,
         },
-        "6": {
+        6: {
           id: "6",
           top: 5,
           left: 70,
@@ -362,7 +366,7 @@ describe("Test reflow helper methods", () => {
         },
       };
       const movementMap = {
-        "1": {
+        1: {
           Y: 50,
           dimensionYBeforeCollision: -5,
           directionY: "BOTTOM",
@@ -372,7 +376,7 @@ describe("Test reflow helper methods", () => {
           verticalEmptySpaces: 0,
           verticalMaxOccupiedSpace: 20,
         },
-        "2": {
+        2: {
           Y: 50,
           dimensionYBeforeCollision: -5,
           directionY: "BOTTOM",
@@ -382,7 +386,7 @@ describe("Test reflow helper methods", () => {
           verticalEmptySpaces: 0,
           verticalMaxOccupiedSpace: 0,
         },
-        "3": {
+        3: {
           Y: 50,
           dimensionYBeforeCollision: -5,
           directionY: "BOTTOM",
@@ -392,7 +396,7 @@ describe("Test reflow helper methods", () => {
           verticalEmptySpaces: 0,
           verticalMaxOccupiedSpace: 0,
         },
-        "6": {
+        6: {
           X: 100,
           dimensionXBeforeCollision: -10,
           directionX: "RIGHT",
@@ -403,6 +407,7 @@ describe("Test reflow helper methods", () => {
           width: 400,
         },
       };
+
       expect(
         getMovementMap(
           Object.values(newSpacePositionMap),
@@ -424,35 +429,35 @@ describe("Test reflow helper methods", () => {
   });
   describe("test getModifiedArgumentsForCollisionTree method", () => {
     const occupiedSpacesMap = {
-      "1": {
+      1: {
         top: 30,
         left: 20,
         right: 80,
         bottom: 50,
         id: "1",
       },
-      "2": {
+      2: {
         top: 50,
         left: 40,
         right: 90,
         bottom: 70,
         id: "2",
       },
-      "3": {
+      3: {
         top: 50,
         left: 10,
         right: 40,
         bottom: 70,
         id: "3",
       },
-      "4": {
+      4: {
         top: 75,
         left: 20,
         right: 60,
         bottom: 95,
         id: "4",
       },
-      "5": {
+      5: {
         top: 95,
         left: 20,
         right: 80,
@@ -475,9 +480,11 @@ describe("Test reflow helper methods", () => {
       parentColumnSpace: 10,
       maxGridCOLUMNS: 200,
     };
+
     it("should return the same values if colliding in the same direction as parent", () => {
       const currentAccessors = getAccessor(ReflowDirection.BOTTOM),
         currentDirection = ReflowDirection.BOTTOM;
+
       expect(
         getModifiedArgumentsForCollisionTree(
           collidingSpace,
@@ -499,15 +506,15 @@ describe("Test reflow helper methods", () => {
       const currentAccessors = getAccessor(ReflowDirection.BOTTOM),
         currentDirection = ReflowDirection.BOTTOM;
       const prevMovementMap = {
-        "1": {
+        1: {
           Y: 250,
           height: 200,
         },
-        "3": {
+        3: {
           X: 100,
           width: 300,
         },
-        "5": {
+        5: {
           X: 170,
           Y: 210,
           width: 400,
@@ -516,17 +523,18 @@ describe("Test reflow helper methods", () => {
       };
       const currentOccSpacesMap = {
         ...occupiedSpacesMap,
-        "3": {
+        3: {
           ...occupiedSpacesMap["3"],
           left: 20,
           right: 50,
         },
-        "5": {
+        5: {
           ...occupiedSpacesMap["5"],
           left: 37,
           right: 77,
         },
       };
+
       expect(
         getModifiedArgumentsForCollisionTree(
           collidingSpace,
@@ -567,6 +575,7 @@ describe("Test reflow helper methods", () => {
         X: 20,
         Y: 20,
       };
+
     it("should return Horizontal Movement Metrics", () => {
       expect(
         getHorizontalSpaceMovement(

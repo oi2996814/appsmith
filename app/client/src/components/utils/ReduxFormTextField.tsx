@@ -1,13 +1,11 @@
 import React from "react";
-import {
-  Field,
-  WrappedFieldMetaProps,
-  WrappedFieldInputProps,
-} from "redux-form";
-import { TextInput, InputType } from "design-system";
+import type { WrappedFieldMetaProps, WrappedFieldInputProps } from "redux-form";
+import { Field } from "redux-form";
+import { Input, NumberInput } from "@appsmith/ads";
 
-import { Intent } from "constants/DefaultTheme";
-import { FieldError } from "design-system";
+import type { Intent } from "constants/DefaultTheme";
+import { SettingSubtype } from "ee/pages/AdminSettings/config/types";
+import { omit } from "lodash";
 
 const renderComponent = (
   componentProps: FormTextFieldProps & {
@@ -15,30 +13,59 @@ const renderComponent = (
     input: Partial<WrappedFieldInputProps>;
   },
 ) => {
+  const value = componentProps.input.value || componentProps.defaultValue || "";
   const showError = componentProps.meta.touched && !componentProps.meta.active;
 
-  return (
-    <>
-      <TextInput {...componentProps} {...componentProps.input} fill />
-      {!componentProps.hideErrorMessage &&
+  return componentProps.type === SettingSubtype.NUMBER ? (
+    <NumberInput
+      {...omit(componentProps, "type")}
+      {...componentProps.input}
+      errorMessage={
+        !componentProps.hideErrorMessage && componentProps.meta.error
+      }
+      isDisabled={componentProps.disabled}
+      label={componentProps.label as string}
+      value={value}
+    />
+  ) : (
+    <Input
+      {...componentProps.input}
+      // type prop is omitted as textarea component doesn't support that
+      {...(componentProps.type === "textarea"
+        ? omit(componentProps, "type")
+        : componentProps)}
+      errorMessage={
+        !componentProps.hideErrorMessage &&
         showError &&
-        componentProps.meta.error && (
-          <FieldError error={showError && componentProps.meta.error} />
-        )}
-    </>
+        componentProps.meta.error
+      }
+      isDisabled={componentProps.disabled}
+      renderAs={componentProps.type === "textarea" ? "textarea" : "input"}
+      size="md"
+      value={value}
+    />
   );
 };
 
-export type FormTextFieldProps = {
+export interface FormTextFieldProps {
   name: string;
   placeholder: string;
-  type?: InputType;
-  label?: string;
+  description?: string;
+  type?: "text" | "password" | "number" | "email" | "tel" | "textarea";
+  label?: React.ReactNode;
   intent?: Intent;
   disabled?: boolean;
   autoFocus?: boolean;
   hideErrorMessage?: boolean;
-};
+  isRequired?: boolean;
+  defaultValue?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  format?: (value: any) => any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  parse?: (value: any) => any;
+}
 
 function ReduxFormTextField(props: FormTextFieldProps) {
   return <Field component={renderComponent} {...props} asyncControl />;

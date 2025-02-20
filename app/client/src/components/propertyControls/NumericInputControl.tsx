@@ -1,39 +1,19 @@
 import React from "react";
-import styled from "styled-components";
-import { Classes, INumericInputProps, NumericInput } from "@blueprintjs/core";
+import { NumberInput } from "@appsmith/ads";
 
-import BaseControl, { ControlData, ControlProps } from "./BaseControl";
+import type { ControlData, ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 import { emitInteractionAnalyticsEvent } from "utils/AppsmithUtils";
-import { ThemeProp } from "widgets/constants";
 
-const StyledNumericInput = styled(NumericInput)<ThemeProp & INumericInputProps>`
-  &&& {
-    &.bp3-control-group {
-      .${Classes.INPUT} {
-        &:focus {
-          box-shadow: none;
-          border-radius: 0;
-          border: 1px solid var(--appsmith-input-focus-border-color);
-        }
-      }
-      .bp3-input-group {
-        border-radius: 0;
-        .bp3-input {
-          font-size: 14px;
-        }
-      }
-      .bp3-button-group {
-        .bp3-button {
-          border-radius: 0;
-          &:focus {
-            border: 1px solid var(--appsmith-input-focus-border-color);
-          }
-        }
-      }
-    }
-  }
-`;
-
+export interface NumericInputControlProps extends ControlProps {
+  propertyValue: string;
+  min?: number;
+  max?: number;
+  placeholderText?: string;
+  stepSize?: number;
+  onFocus?: () => void;
+  onBlur?: () => void;
+}
 class NumericInputControl extends BaseControl<NumericInputControlProps> {
   inputElement: HTMLInputElement | null;
 
@@ -56,62 +36,46 @@ class NumericInputControl extends BaseControl<NumericInputControlProps> {
 
   public render() {
     const {
-      majorStepSize,
       max,
       min,
-      minorStepSize,
       onBlur,
       onFocus,
       placeholderText,
       propertyValue,
       stepSize,
     } = this.props;
+
     return (
-      <StyledNumericInput
-        fill
-        inputRef={(elm) => {
-          this.inputElement = elm;
-        }}
-        large
-        majorStepSize={majorStepSize}
+      <NumberInput
         max={max}
         min={min}
-        minorStepSize={minorStepSize}
         onBlur={onBlur}
+        onChange={this.handleValueChange}
         onFocus={onFocus}
-        onKeyDown={this.handleKeydown}
-        onValueChange={this.handleValueChange}
         placeholder={placeholderText}
-        stepSize={stepSize}
+        ref={(element: HTMLInputElement) => {
+          this.inputElement = element;
+        }}
+        scale={stepSize}
         value={propertyValue}
       />
     );
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     return !isNaN(Number(value));
   }
 
-  private handleValueChange = (_v: number, value: string) => {
+  private handleValueChange = (value: string | undefined) => {
     // Update the propertyValue
     this.updateProperty(
       this.props.propertyName,
-      value,
+      value?.toString(),
       document.activeElement === this.inputElement,
     );
   };
-}
-
-export interface NumericInputControlProps extends ControlProps {
-  propertyValue: string;
-  min?: number;
-  max?: number;
-  minorStepSize?: number | null;
-  majorStepSize?: number | null;
-  placeholderText?: string;
-  stepSize?: number;
-  onFocus?: () => void;
-  onBlur?: () => void;
 }
 
 export default NumericInputControl;

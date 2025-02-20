@@ -2,21 +2,27 @@ import React, { Component } from "react";
 import { connect } from "react-redux";
 import { get } from "lodash";
 import * as log from "loglevel";
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import styled from "styled-components";
 
 import { Colors } from "constants/Colors";
-import { ReactTableColumnProps, ReactTableFilter } from "./Constants";
+import type { ReactTableColumnProps, ReactTableFilter } from "./Constants";
 import TableFilterPaneContent from "./TableFilterPaneContent";
-import { ThemeMode, getCurrentThemeMode } from "selectors/themeSelectors";
+import { getCurrentThemeMode, ThemeMode } from "selectors/themeSelectors";
 import { Layers } from "constants/Layers";
 import Popper from "pages/Editor/Popper";
 import { generateClassName } from "utils/generators";
 import { getTableFilterState } from "selectors/tableFilterSelectors";
 import { getWidgetMetaProps } from "sagas/selectors";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import { selectWidgetAction } from "actions/widgetSelectionActions";
-import { ReactComponent as DragHandleIcon } from "assets/icons/ads/app-icons/draghandler.svg";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { WidgetProps } from "widgets/BaseWidget";
+import { selectWidgetInitAction } from "actions/widgetSelectionActions";
+import { SelectionRequestType } from "sagas/WidgetSelectUtils";
+import { importSvg } from "@appsmith/ads-old";
+
+const DragHandleIcon = importSvg(
+  async () => import("assets/icons/ads/app-icons/draghandler.svg"),
+);
 
 const DragBlock = styled.div`
   height: 40px;
@@ -31,6 +37,7 @@ const DragBlock = styled.div`
   align-items: center;
   justify-content: center;
   cursor: pointer;
+
   span {
     padding-left: 8px;
     color: ${Colors.GREY_11};
@@ -60,8 +67,10 @@ class TableFilterPane extends Component<Props> {
     return ThemeMode.LIGHT;
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handlePositionUpdate = (position: any) => {
-    this.props.setPanePoistion(
+    this.props.setPanePosition(
       this.props.tableFilterPane.widgetId as string,
       position,
     );
@@ -87,7 +96,9 @@ class TableFilterPane extends Component<Props> {
       return (
         <Popper
           boundaryParent={boundaryParent || "viewport"}
-          disablePopperEvents={get(this.props, "metaProps.isMoved", false)}
+          disablePopperEvents={
+            get(this.props, "metaProps.isMoved", false) as boolean
+          }
           isDraggable
           isOpen
           onPositionChange={this.handlePositionUpdate}
@@ -117,16 +128,24 @@ class TableFilterPane extends Component<Props> {
 }
 
 const mapStateToProps = (state: AppState, ownProps: TableFilterPaneProps) => {
+  const widgetLikeProps = {
+    widgetId: ownProps.widgetId,
+  } as WidgetProps;
+
   return {
     tableFilterPane: getTableFilterState(state),
     themeMode: getCurrentThemeMode(state),
-    metaProps: getWidgetMetaProps(state, ownProps.widgetId),
+    metaProps: getWidgetMetaProps(state, widgetLikeProps),
   };
 };
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapDispatchToProps = (dispatch: any) => {
   return {
-    setPanePoistion: (widgetId: string, position: any) => {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setPanePosition: (widgetId: string, position: any) => {
       dispatch({
         type: ReduxActionTypes.TABLE_PANE_MOVED,
         payload: {
@@ -134,15 +153,16 @@ const mapDispatchToProps = (dispatch: any) => {
           position,
         },
       });
-      dispatch(selectWidgetAction(widgetId));
+      dispatch(selectWidgetInitAction(SelectionRequestType.One, [widgetId]));
     },
     hideFilterPane: (widgetId: string) => {
       dispatch({
         type: ReduxActionTypes.HIDE_TABLE_FILTER_PANE,
         payload: { widgetId },
       });
-      dispatch(selectWidgetAction(widgetId));
+      dispatch(selectWidgetInitAction(SelectionRequestType.One, [widgetId]));
     },
   };
 };
+
 export default connect(mapStateToProps, mapDispatchToProps)(TableFilterPane);

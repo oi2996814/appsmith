@@ -1,5 +1,5 @@
 import { substituteDynamicBindingWithValues } from "workers/Evaluation/evaluationSubstitution";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
 
 describe("substituteDynamicBindingWithValues", () => {
   describe("template substitution", () => {
@@ -333,6 +333,7 @@ describe("substituteDynamicBindingWithValues", () => {
       const binding = `{{ appsmith }}`;
       const subBindings = ["{{appsmith}}"];
       const subValues = [{ test: "object" }];
+
       expect(() =>
         substituteDynamicBindingWithValues(
           binding,

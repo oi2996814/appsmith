@@ -1,60 +1,7 @@
-import { PluginType } from "entities/Action";
-import { JSCollectionData } from "reducers/entityReducers/jsActionsReducer";
-import {
-  entityDefinitions,
-  getPropsForJSActionEntity,
-} from "@appsmith/utils/autocomplete/EntityDefinitions";
-
-describe("EntityDefinitions", () => {
-  it("it tests list widget selectRow", () => {
-    const listWidgetProps = {
-      widgetId: "yolo",
-      widgetName: "List1",
-      parentId: "123",
-      renderMode: "CANVAS",
-      text: "yo",
-      type: "INPUT_WIDGET_V2",
-      parentColumnSpace: 1,
-      parentRowSpace: 2,
-      leftColumn: 2,
-      rightColumn: 3,
-      topRow: 1,
-      bottomRow: 2,
-      isLoading: false,
-      version: 1,
-      selectedItem: {
-        id: 1,
-        name: "Some random name",
-      },
-    };
-
-    const listWidgetEntityDefinitions = entityDefinitions.LIST_WIDGET(
-      listWidgetProps,
-    );
-
-    const output = {
-      "!doc":
-        "Containers are used to group widgets together to form logical higher order widgets. Containers let you organize your page better and move all the widgets inside them together.",
-      "!url": "https://docs.appsmith.com/widget-reference/list",
-      backgroundColor: {
-        "!type": "string",
-        "!url": "https://docs.appsmith.com/widget-reference/how-to-use-widgets",
-      },
-      isVisible: {
-        "!type": "bool",
-        "!doc": "Boolean value indicating if the widget is in visible state",
-      },
-      selectedItem: { id: "number", name: "string" },
-      gridGap: "number",
-      items: "?",
-      listData: "?",
-      pageNo: "?",
-      pageSize: "?",
-    };
-
-    expect(listWidgetEntityDefinitions).toStrictEqual(output);
-  });
-});
+import { PluginType } from "entities/Plugin";
+import type { JSCollectionData } from "ee/reducers/entityReducers/jsActionsReducer";
+import { getPropsForJSActionEntity } from "ee/pages/Editor/Explorer/Entity/getEntityProperties";
+import type { JSActionEntity } from "ee/entities/DataTree/types";
 
 const jsObject: JSCollectionData = {
   isLoading: false,
@@ -156,8 +103,7 @@ const jsObject: JSCollectionData = {
       },
     ],
     archivedActions: [],
-    body:
-      "export default {\n\tmyVar1: [],\n\tmyVar2: {},\n\tmyFun1: () => {\n\t\t//write code here\n\t},\n\tmyFun2: async () => {\n\t\t//use async-await or promises\n\t}\n}",
+    body: "export default {\n\tmyVar1: [],\n\tmyVar2: {},\n\tmyFun1: () => {\n\t\t//write code here\n\t},\n\tmyFun2: async () => {\n\t\t//use async-await or promises\n\t}\n}",
     variables: [
       {
         name: "myVar1",
@@ -176,6 +122,26 @@ const jsObject: JSCollectionData = {
   isExecuting: {},
 };
 
+jest.mock("store", () => {
+  return {
+    getState: () => ({
+      entities: {
+        jsActions: [jsObject],
+      },
+    }),
+  };
+});
+
+jest.mock("utils/configTree", () => {
+  return {
+    getConfigTree: () => ({
+      JSObject3: {
+        variables: ["myVar1", "myVar2"],
+      },
+    }),
+  };
+});
+
 describe("getPropsForJSActionEntity", () => {
   it("get properties from js collection to show bindings", () => {
     const expectedProperties = {
@@ -186,7 +152,22 @@ describe("getPropsForJSActionEntity", () => {
       "myFun1.data": {},
       "myFun2.data": [],
     };
-    const result = getPropsForJSActionEntity(jsObject);
+
+    const jsObjectEntity = {
+      myVar1: [],
+      myVar2: {},
+      myFun2: "async function () {}",
+      myFun1: 'function () {\n  return "hellonsljns";\n}',
+      body: "export default {\n\tmyVar1: [],\n\tmyVar2: {},\n\tmyFun1 () {\n\t\t//\twrite code here\n\t\t//\tJSObject1.myVar1 = [1,2,3]\n\t\treturn \"hellonsljns\"\n\t},\n\tasync myFun2 () {\n\t\t//\tuse async-await or promises\n\t\t//\tawait storeValue('varName', 'hello world')\n\t}\n}",
+      ENTITY_TYPE: "JSACTION",
+      actionId: "1234",
+    };
+
+    const result = getPropsForJSActionEntity(
+      jsObjectEntity as JSActionEntity,
+      "JSObject3",
+    );
+
     expect(expectedProperties).toStrictEqual(result);
   });
 });

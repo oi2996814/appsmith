@@ -1,37 +1,38 @@
 import React from "react";
 import { isEmail } from "utils/formhelpers";
-import { apiRequestConfig } from "api/Api";
-import UserApi from "@appsmith/api/UserApi";
-import {
+import type {
   AdminConfigType,
+  Setting,
+} from "ee/pages/AdminSettings/config/types";
+import {
+  CategoryType,
   SettingCategories,
   SettingSubtype,
   SettingTypes,
-  Setting,
-} from "@appsmith/pages/AdminSettings/config/types";
+} from "ee/pages/AdminSettings/config/types";
 import BrandingBadge from "pages/AppViewer/BrandingBadge";
-import { TagInput } from "design-system";
-import QuestionFillIcon from "remixicon-react/QuestionFillIcon";
+import { TagInput } from "@appsmith/ads-old";
 import localStorage from "utils/localStorage";
 import isUndefined from "lodash/isUndefined";
+import { AppsmithFrameAncestorsSetting } from "pages/Applications/EmbedSnippet/Constants/constants";
+import { formatEmbedSettings } from "pages/Applications/EmbedSnippet/Utils/utils";
 
 export const APPSMITH_INSTANCE_NAME_SETTING_SETTING: Setting = {
-  id: "APPSMITH_INSTANCE_NAME",
+  id: "instanceName",
   category: SettingCategories.GENERAL,
   controlType: SettingTypes.TEXTINPUT,
   controlSubType: SettingSubtype.TEXT,
-  label: "Instance Name",
+  label: "Instance name",
   placeholder: "appsmith/prod",
 };
 
-export const APPSMITH__ADMIN_EMAILS_SETTING: Setting = {
+export const APPSMITH_ADMIN_EMAILS_SETTING: Setting = {
   id: "APPSMITH_ADMIN_EMAILS",
   category: SettingCategories.GENERAL,
-  controlType: SettingTypes.TEXTINPUT,
+  controlType: SettingTypes.TAGINPUT,
   controlSubType: SettingSubtype.EMAIL,
-  label: "Admin Email",
-  subText:
-    "Emails of the users who can modify instance settings (Comma Separated)",
+  label: "Admin email",
+  subText: "* Emails of the users who can modify instance settings",
   placeholder: "Jane@example.com",
   validate: (value: string) => {
     if (
@@ -45,68 +46,88 @@ export const APPSMITH__ADMIN_EMAILS_SETTING: Setting = {
   },
 };
 
-export const APPSMITH_DOWNLOAD_DOCKER_COMPOSE_FILE_SETTING: Setting = {
-  id: "APPSMITH_DOWNLOAD_DOCKER_COMPOSE_FILE",
-  action: () => {
-    const { host, protocol } = window.location;
-    window.open(
-      `${protocol}//${host}${apiRequestConfig.baseURL}${UserApi.downloadConfigURL}`,
-      "_blank",
-    );
-  },
-  category: SettingCategories.GENERAL,
-  controlType: SettingTypes.BUTTON,
-  label: "Generated Docker Compose File",
-  text: "Download",
-};
-
 export const APPSMITH_DISABLE_TELEMETRY_SETTING: Setting = {
   id: "APPSMITH_DISABLE_TELEMETRY",
+  name: "APPSMITH_DISABLE_TELEMETRY",
   category: SettingCategories.GENERAL,
-  controlType: SettingTypes.TOGGLE,
-  label: "Share anonymous usage data",
-  subText: "Share anonymous usage data to help improve the product",
-  toggleText: (value: boolean) =>
-    value ? "Don't share any data" : "Share Anonymous Telemetry",
+  controlType: SettingTypes.CHECKBOX,
+  label: "Anonymous usage data",
+  text: "Share anonymous usage data to help improve the product",
 };
 
 export const APPSMITH_HIDE_WATERMARK_SETTING: Setting = {
-  id: "APPSMITH_HIDE_WATERMARK",
-  name: "APPSMITH_HIDE_WATERMARK",
+  id: "hideWatermark",
+  name: "hideWatermark",
   category: SettingCategories.GENERAL,
   controlType: SettingTypes.CHECKBOX,
-  label: "Appsmith Watermark",
-  text: "Show Appsmith Watermark",
-  needsUpgrade: true,
+  label: "Appsmith watermark",
+  text: "Hide Appsmith watermark",
+  isFeatureEnabled: false,
   isDisabled: () => true,
   textSuffix: <BrandingBadge />,
-  upgradeLogEventName: "ADMIN_SETTINGS_UPGRADE_WATERMARK",
-  upgradeIntercomMessage:
-    "Hello, I would like to upgrade and remove the watermark.",
 };
 
-export enum AppsmithFrameAncestorsSetting {
-  ALLOW_EMBEDDING_EVERYWHERE = "ALLOW_EMBEDDING_EVERYWHERE",
-  LIMIT_EMBEDDING = "LIMIT_EMBEDDING",
-  DISABLE_EMBEDDING_EVERYWHERE = "DISABLE_EMBEDDING_EVERYWHERE",
-}
+export const APPSMITH_SHOW_ROLES_AND_GROUPS_SETTING: Setting = {
+  id: "showRolesAndGroups",
+  name: "showRolesAndGroups",
+  category: SettingCategories.GENERAL,
+  controlType: SettingTypes.CHECKBOX,
+  label: "Programmatic access control",
+  text: "Access roles and user groups in code for conditional business logic",
+  isFeatureEnabled: false,
+  isDisabled: () => true,
+};
+
+export const APPSMITH_SINGLE_USER_PER_SESSION_SETTING: Setting = {
+  id: "singleSessionPerUserEnabled",
+  name: "singleSessionPerUserEnabled",
+  category: SettingCategories.GENERAL,
+  controlType: SettingTypes.CHECKBOX,
+  label: "User session limit",
+  text: "Limit users to a single active session",
+  isFeatureEnabled: false,
+  isDisabled: () => true,
+};
+
+export const APPSMITH_USER_SESSION_TIMEOUT_SETTING: Setting = {
+  id: "userSessionTimeoutInMinutes",
+  name: "userSessionTimeoutInMinutes",
+  category: SettingCategories.GENERAL,
+  controlType: SettingTypes.TEXTINPUT,
+  label: "Session Timeout",
+  subText:
+    "* Default duration is 30 days. To change, enter the new duration in DD:HH:MM format",
+  helpText:
+    "Users' session will automatically end if there's no activity for the specified duration, requiring them to log in again for security. The duration can be set between 1 minute and 30 days.",
+  isFeatureEnabled: false,
+  isEnterprise: true,
+  isDisabled: () => true,
+};
+
+export const APPSMITH_IS_ATOMIC_PUSH_ALLOWED: Setting = {
+  id: "isAtomicPushAllowed",
+  name: "isAtomicPushAllowed",
+  category: SettingCategories.GENERAL,
+  controlType: SettingTypes.CHECKBOX,
+  label: "Allow atomic pushes",
+  text: "Git operations on this organization should attempt to perform pushes atomically",
+};
+
 export const APPSMITH_ALLOWED_FRAME_ANCESTORS_SETTING: Setting = {
   id: "APPSMITH_ALLOWED_FRAME_ANCESTORS",
   name: "APPSMITH_ALLOWED_FRAME_ANCESTORS",
   category: SettingCategories.GENERAL,
   controlType: SettingTypes.RADIO,
-  label: "Embed Settings",
+  label: "Embed settings",
   controlTypeProps: {
     options: [
       {
-        badge: "NOT RECOMMENDED",
+        badge: "Not recommended",
         tooltip: {
-          icon: <QuestionFillIcon />,
-          text:
-            "Lets all domains, including malicious ones, embed your Appsmith apps. ",
-          linkText: "SEE WHY THIS IS RISKY",
-          link:
-            "https://docs.appsmith.com/getting-started/setup/instance-configuration/frame-ancestors#why-should-i-control-this",
+          icon: "question-line",
+          text: "Lets all domains, including malicious ones, embed your Appsmith apps. ",
+          linkText: "Find out why it's risky",
+          link: "https://docs.appsmith.com/getting-started/setup/instance-configuration/frame-ancestors#why-should-i-control-this",
         },
         label: "Allow embedding everywhere",
         value: AppsmithFrameAncestorsSetting.ALLOW_EMBEDDING_EVERYWHERE,
@@ -125,27 +146,15 @@ export const APPSMITH_ALLOWED_FRAME_ANCESTORS_SETTING: Setting = {
       },
     ],
   },
-  format: (value: string) => {
-    if (value === "*") {
-      return {
-        value: AppsmithFrameAncestorsSetting.ALLOW_EMBEDDING_EVERYWHERE,
-      };
-    } else if (value === "'none'") {
-      return {
-        value: AppsmithFrameAncestorsSetting.DISABLE_EMBEDDING_EVERYWHERE,
-      };
-    } else {
-      return {
-        value: AppsmithFrameAncestorsSetting.LIMIT_EMBEDDING,
-        additionalData: value ? value.replaceAll(" ", ",") : "",
-      };
-    }
-  },
+  format: formatEmbedSettings,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   parse: (value: { value: string; additionalData?: any }) => {
     // Retrieve values from local storage while switching to limit by url option
     const sources = isUndefined(value.additionalData)
       ? localStorage.getItem("ALLOWED_FRAME_ANCESTORS") ?? ""
       : value.additionalData.replaceAll(",", " ");
+
     // If they are one of the other options we don't store it in storage since it will
     // set in the env variable on save
     if (sources !== "*" && sources !== "'none'") {
@@ -172,17 +181,21 @@ export const APPSMITH_ALLOWED_FRAME_ANCESTORS_SETTING: Setting = {
 };
 
 export const config: AdminConfigType = {
-  icon: "settings-2-line",
+  icon: "settings-v3",
   type: SettingCategories.GENERAL,
+  categoryType: CategoryType.GENERAL,
   controlType: SettingTypes.GROUP,
   title: "General",
   canSave: true,
   settings: [
     APPSMITH_INSTANCE_NAME_SETTING_SETTING,
-    APPSMITH__ADMIN_EMAILS_SETTING,
-    APPSMITH_DOWNLOAD_DOCKER_COMPOSE_FILE_SETTING,
+    APPSMITH_ADMIN_EMAILS_SETTING,
     APPSMITH_DISABLE_TELEMETRY_SETTING,
     APPSMITH_HIDE_WATERMARK_SETTING,
+    APPSMITH_SHOW_ROLES_AND_GROUPS_SETTING,
+    APPSMITH_SINGLE_USER_PER_SESSION_SETTING,
+    APPSMITH_USER_SESSION_TIMEOUT_SETTING,
+    APPSMITH_IS_ATOMIC_PUSH_ALLOWED,
     APPSMITH_ALLOWED_FRAME_ANCESTORS_SETTING,
   ],
 } as AdminConfigType;

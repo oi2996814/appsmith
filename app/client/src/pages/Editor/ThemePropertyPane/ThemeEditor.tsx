@@ -1,18 +1,9 @@
 import styled, { createGlobalStyle } from "styled-components";
 import { get, startCase } from "lodash";
-import MoreIcon from "remixicon-react/MoreFillIcon";
 import { useDispatch, useSelector } from "react-redux";
-import React, { useCallback, useState } from "react";
-import Save2LineIcon from "remixicon-react/Save2LineIcon";
-import ArrowGoBackIcon from "remixicon-react/ArrowGoBackFillIcon";
+import React, { useCallback } from "react";
 
 import ThemeCard from "./ThemeCard";
-import {
-  DropdownV2,
-  DropdownList,
-  DropdownItem,
-  DropdownTrigger,
-} from "design-system";
 import {
   AppThemingMode,
   getAppThemingStack,
@@ -24,22 +15,30 @@ import {
   updateSelectedAppThemeAction,
 } from "actions/appThemingActions";
 import SettingSection from "./SettingSection";
-import SaveThemeModal from "./SaveThemeModal";
-import { AppTheme } from "entities/AppTheming";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import type { AppTheme } from "entities/AppTheming";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import ThemeFontControl from "./controls/ThemeFontControl";
 import ThemeColorControl from "./controls/ThemeColorControl";
-import { Button, Category, Classes as CsClasses, Size } from "design-system";
+import { Classes as CsClasses } from "@appsmith/ads-old";
+import {
+  Button,
+  Menu,
+  MenuContent,
+  MenuTrigger,
+  MenuItem,
+} from "@appsmith/ads";
 import ThemeBoxShadowControl from "./controls/ThemeShadowControl";
 import { getCurrentApplicationId } from "selectors/editorSelectors";
 import ThemeBorderRadiusControl from "./controls/ThemeBorderRadiusControl";
-import BetaCard from "components/editorComponents/BetaCard";
-import { Colors } from "constants/Colors";
+import { capitalizeFirstLetter } from "utils/helpers";
 
 const THEMING_BETA_CARD_POPOVER_CLASSNAME = `theming-beta-card-popover`;
 
-const Title = styled.h3`
-  color: ${Colors.GRAY_800};
+const SubText = styled.p`
+  font-size: var(--ads-v2-font-size-4);
+  line-height: 1rem;
+  font-weight: var(--ads-v2-font-weight-normal);
+  color: var(--ads-v2-color-fg);
 `;
 
 const PopoverStyles = createGlobalStyle`
@@ -64,7 +63,6 @@ function ThemeEditor() {
   const applicationId = useSelector(getCurrentApplicationId);
   const selectedTheme = useSelector(getSelectedAppTheme);
   const themingStack = useSelector(getAppThemingStack);
-  const [isSaveModalOpen, setSaveModalOpen] = useState(false);
 
   /**
    * customizes the current theme
@@ -78,7 +76,7 @@ function ThemeEditor() {
 
       dispatch(updateSelectedAppThemeAction({ applicationId, theme }));
     },
-    [updateSelectedAppThemeAction],
+    [applicationId, dispatch],
   );
 
   /**
@@ -93,23 +91,7 @@ function ThemeEditor() {
         AppThemingMode.APP_THEME_SELECTION,
       ]),
     );
-  }, [setAppThemingModeStackAction]);
-
-  /**
-   * open the save modal
-   */
-  const onOpenSaveModal = useCallback(() => {
-    AnalyticsUtil.logEvent("APP_THEMING_SAVE_THEME_START");
-
-    setSaveModalOpen(true);
-  }, [setSaveModalOpen]);
-
-  /**
-   * on close save modal
-   */
-  const onCloseSaveModal = useCallback(() => {
-    setSaveModalOpen(false);
-  }, [setSaveModalOpen]);
+  }, [dispatch, themingStack]);
 
   /**
    * resets theme
@@ -123,38 +105,24 @@ function ThemeEditor() {
       <header className="px-4 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Title className="text-sm font-normal capitalize">
-              Theme Properties
-            </Title>
-            <BetaCard />
+            <SubText>Theme properties</SubText>
           </div>
           <div>
-            <DropdownV2
-              portalContainer={
-                document.getElementById("app-settings-portal") || undefined
-              }
-              position="bottom-right"
-            >
-              <DropdownTrigger>
-                <button className="p-1 hover:bg-gray-100 active:bg-gray-100">
-                  <MoreIcon className="w-5 h-5" />
-                </button>
-              </DropdownTrigger>
-              <DropdownList>
-                <DropdownItem
-                  className="flex items-center"
-                  icon={<Save2LineIcon className="w-4 h-4" />}
-                  onClick={onOpenSaveModal}
-                  text="Save theme"
+            <Menu>
+              <MenuTrigger>
+                <Button
+                  isIconButton
+                  kind="tertiary"
+                  size="md"
+                  startIcon="context-menu"
                 />
-                <DropdownItem
-                  className="flex items-center"
-                  icon={<ArrowGoBackIcon className="w-4 h-4" />}
-                  onClick={onResetTheme}
-                  text="Reset widget styles"
-                />
-              </DropdownList>
-            </DropdownV2>
+              </MenuTrigger>
+              <MenuContent align="end" className="t--save-theme-menu">
+                <MenuItem onClick={onResetTheme} startIcon="arrow-go-back">
+                  Reset widget styles
+                </MenuItem>
+              </MenuContent>
+            </Menu>
           </div>
         </div>
 
@@ -163,12 +131,12 @@ function ThemeEditor() {
             className={`absolute left-0 top-0 bottom-0 right-0 items-center justify-center hidden group-hover:flex  backdrop-filter bg-gray-900 bg-opacity-50 backdrop-blur-sm `}
           >
             <Button
-              category={Category.primary}
               className="t--change-theme-btn"
               onClick={onClickChangeThemeButton}
-              size={Size.medium}
-              text="Change Theme"
-            />
+              size="md"
+            >
+              Change theme
+            </Button>
           </aside>
         </ThemeCard>
       </header>
@@ -179,12 +147,14 @@ function ThemeEditor() {
             (fontFamilySectionName: string, index: number) => {
               return (
                 <section className="space-y-2" key={index}>
-                  <h3>{startCase(fontFamilySectionName)}</h3>
+                  <SubText>
+                    {capitalizeFirstLetter(startCase(fontFamilySectionName))}
+                  </SubText>
                   <ThemeFontControl
                     options={get(
                       selectedTheme,
                       `config.fontFamily.${fontFamilySectionName}`,
-                      {},
+                      [],
                     )}
                     sectionName={fontFamilySectionName}
                     selectedOption={get(
@@ -223,7 +193,9 @@ function ThemeEditor() {
             (borderRadiusSectionName: string, index: number) => {
               return (
                 <section className="space-y-2" key={index}>
-                  <h3>{startCase(borderRadiusSectionName)}</h3>
+                  <SubText>
+                    {capitalizeFirstLetter(startCase(borderRadiusSectionName))}
+                  </SubText>
                   <ThemeBorderRadiusControl
                     options={get(
                       selectedTheme,
@@ -254,7 +226,9 @@ function ThemeEditor() {
             (boxShadowSectionName: string, index: number) => {
               return (
                 <section className="space-y-2" key={index}>
-                  <h3>{startCase(boxShadowSectionName)}</h3>
+                  <SubText>
+                    {capitalizeFirstLetter(startCase(boxShadowSectionName))}
+                  </SubText>
                   <ThemeBoxShadowControl
                     options={get(
                       selectedTheme,
@@ -275,7 +249,6 @@ function ThemeEditor() {
           )}
         </SettingSection>
       </main>
-      <SaveThemeModal isOpen={isSaveModalOpen} onClose={onCloseSaveModal} />
       <PopoverStyles />
     </>
   );

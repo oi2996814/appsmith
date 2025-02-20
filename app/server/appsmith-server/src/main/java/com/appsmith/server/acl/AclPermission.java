@@ -2,14 +2,13 @@ package com.appsmith.server.acl;
 
 import com.appsmith.external.models.BaseDomain;
 import com.appsmith.external.models.Datasource;
-import com.appsmith.server.domains.Action;
+import com.appsmith.server.domains.ActionCollection;
 import com.appsmith.server.domains.Application;
-import com.appsmith.server.domains.Comment;
-import com.appsmith.server.domains.CommentThread;
 import com.appsmith.server.domains.Config;
-import com.appsmith.server.domains.Page;
+import com.appsmith.server.domains.NewAction;
+import com.appsmith.server.domains.NewPage;
+import com.appsmith.server.domains.Organization;
 import com.appsmith.server.domains.PermissionGroup;
-import com.appsmith.server.domains.Tenant;
 import com.appsmith.server.domains.Theme;
 import com.appsmith.server.domains.User;
 import com.appsmith.server.domains.Workspace;
@@ -31,7 +30,7 @@ public enum AclPermission {
     // Does the user have manage workspace permission
     @Deprecated
     USER_MANAGE_WORKSPACES("manage:userWorkspace", User.class),
-    //Does the user have read workspace permissions
+    // Does the user have read workspace permissions
     @Deprecated
     USER_READ_WORKSPACES("read:userWorkspace", User.class),
 
@@ -86,29 +85,28 @@ public enum AclPermission {
 
     APPLICATION_CREATE_PAGES("create:pages", Application.class),
 
-    MANAGE_PAGES("manage:pages", Page.class),
-    READ_PAGES("read:pages", Page.class),
-    DELETE_PAGES("delete:pages", Page.class),
+    /**
+     * This permission would be used to provide delete permission to pages where the user does not have
+     * permission to delete application.
+     */
+    APPLICATION_DELETE_PAGES("delete:applicationPages", Application.class),
 
-    PAGE_CREATE_PAGE_ACTIONS("create:pageActions", Page.class),
+    MANAGE_PAGES("manage:pages", NewPage.class),
+    READ_PAGES("read:pages", NewPage.class),
+    DELETE_PAGES("delete:pages", NewPage.class),
 
-    MANAGE_ACTIONS("manage:actions", Action.class),
-    READ_ACTIONS("read:actions", Action.class),
-    EXECUTE_ACTIONS("execute:actions", Action.class),
-    DELETE_ACTIONS("delete:actions", Action.class),
+    PAGE_CREATE_PAGE_ACTIONS("create:pageActions", NewPage.class),
+
+    MANAGE_ACTIONS("manage:actions", NewAction.class),
+    READ_ACTIONS("read:actions", NewAction.class),
+    EXECUTE_ACTIONS("execute:actions", NewAction.class),
+    DELETE_ACTIONS("delete:actions", NewAction.class),
 
     MANAGE_DATASOURCES("manage:datasources", Datasource.class),
     READ_DATASOURCES("read:datasources", Datasource.class),
     EXECUTE_DATASOURCES("execute:datasources", Datasource.class),
     DELETE_DATASOURCES("delete:datasources", Datasource.class),
     CREATE_DATASOURCE_ACTIONS("create:datasourceActions", Datasource.class),
-
-    COMMENT_ON_THREADS("canComment:commentThreads", CommentThread.class),
-    READ_THREADS("read:commentThreads", CommentThread.class),
-    MANAGE_THREADS("manage:commentThreads", CommentThread.class),
-
-    READ_COMMENTS("read:comments", Comment.class),
-    MANAGE_COMMENTS("manage:comments", Comment.class),
 
     READ_THEMES("read:themes", Theme.class),
     MANAGE_THEMES("manage:themes", Theme.class),
@@ -122,10 +120,16 @@ public enum AclPermission {
     @Deprecated
     READ_PERMISSION_GROUPS("read:permissionGroups", PermissionGroup.class),
 
-    // Manage tenant permissions
-    MANAGE_TENANT("manage:tenants", Tenant.class),
-    ;
+    // Manage organization permissions
+    MANAGE_ORGANIZATION("manage:organization", Organization.class),
+    @Deprecated(forRemoval = true, since = "v1.62")
+    MANAGE_TENANT("manage:tenant", Organization.class),
 
+    CONNECT_TO_GIT("connectToGit:applications", Application.class),
+    MANAGE_PROTECTED_BRANCHES("manageProtectedBranches:applications", Application.class),
+    MANAGE_DEFAULT_BRANCHES("manageDefaultBranches:applications", Application.class),
+    MANAGE_AUTO_COMMIT("manageAutoCommit:applications", Application.class),
+    ;
 
     private final String value;
     private final Class<? extends BaseDomain> entity;
@@ -142,5 +146,24 @@ public enum AclPermission {
             }
         }
         return null;
+    }
+
+    public static boolean isPermissionForEntity(AclPermission aclPermission, Class<?> clazz) {
+        Class<?> entityClass = clazz;
+        /*
+         * NewAction and ActionCollection are similar entities w.r.t. AclPermissions.
+         * Hence, whenever we want to check for any Permission w.r.t. ActionCollection, we use NewAction.
+         */
+        if (entityClass.equals(ActionCollection.class)) {
+            entityClass = NewAction.class;
+        }
+        return aclPermission.getEntity().equals(entityClass);
+    }
+
+    public static AclPermission getPermissionOrNull(AclPermission permission, Boolean operateWithoutPermission) {
+        if (Boolean.TRUE.equals(operateWithoutPermission)) {
+            return null;
+        }
+        return permission;
     }
 }

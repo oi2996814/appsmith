@@ -1,5 +1,5 @@
-import { AppState } from "@appsmith/reducers";
-import { widgetReflow } from "reducers/uiReducers/reflowReducer";
+import type { AppState } from "ee/reducers";
+import type { widgetReflow } from "reducers/uiReducers/reflowReducer";
 import { createSelector } from "reselect";
 import { getIsResizing } from "./widgetSelectors";
 
@@ -14,6 +14,7 @@ export const getReflowSelector = (widgetId: string) => {
     if (reflowState?.reflowingWidgets) {
       return reflowState?.reflowingWidgets[widgetId];
     }
+
     return undefined;
   });
 };

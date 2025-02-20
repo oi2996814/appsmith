@@ -2,21 +2,28 @@ import { Doc, Map, UndoManager } from "yjs";
 import { captureException } from "@sentry/react";
 import { diff as deepDiff, applyChange, revertChange } from "deep-diff";
 
-import { processDiff, DSLDiff, getPathsFromDiff } from "./replayUtils";
-import { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
+import type { DSLDiff } from "./replayUtils";
+import { processDiff, getPathsFromDiff } from "./replayUtils";
+import type { CanvasWidgetsReduxState } from "ee/reducers/entityReducers/canvasWidgetsReducer";
 
 const _DIFF_ = "diff";
+
 type ReplayType = "UNDO" | "REDO";
 
 export default class ReplayDSL {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private diffMap: any;
   private undoManager: UndoManager;
   private dsl: CanvasWidgetsReduxState;
   private prevRedoDiff: Array<DSLDiff> | undefined;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logs: any[] = [];
 
   constructor(widgets: CanvasWidgetsReduxState) {
     const doc = new Doc();
+
     this.diffMap = doc.get("map", Map);
     this.dsl = widgets;
     this.diffMap.set(_DIFF_, []);
@@ -106,11 +113,14 @@ export default class ReplayDSL {
   update(widgets: CanvasWidgetsReduxState) {
     const startTime = performance.now();
     const diffs = deepDiff(this.dsl, widgets);
+
     if (diffs && diffs.length) {
       this.dsl = widgets;
       this.diffMap.set(_DIFF_, diffs);
     }
+
     const endTime = performance.now();
+
     this.logs.push({
       log: "replay updating",
       updateTime: `${endTime - startTime} ms`,
@@ -136,6 +146,7 @@ export default class ReplayDSL {
       if (!Array.isArray(diff.path) || diff.path.length === 0) {
         continue;
       }
+
       try {
         processDiff(this.dsl, diff, replay, isUndo);
         applyDiff(this.dsl, true, diff);

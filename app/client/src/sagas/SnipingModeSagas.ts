@@ -1,32 +1,34 @@
-import { takeLeading, all, put, select, call } from "redux-saga/effects";
-import {
-  ReduxActionTypes,
-  ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
+import { all, call, put, select, takeLeading } from "redux-saga/effects";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { snipingModeBindToSelector } from "selectors/editorSelectors";
-import { ActionData } from "reducers/entityReducers/actionsReducer";
-import { getCanvasWidgets } from "selectors/entitiesSelector";
+import type { ActionData } from "ee/reducers/entityReducers/actionsReducer";
+import { getCanvasWidgets } from "ee/selectors/entitiesSelector";
 import {
-  setWidgetDynamicProperty,
-  updateWidgetPropertyRequest,
+  batchUpdateWidgetDynamicProperty,
+  batchUpdateWidgetProperty,
 } from "actions/controlActions";
-import { Toaster, Variant } from "design-system";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 
 import {
   SNIPING_NOT_SUPPORTED,
   SNIPING_SELECT_WIDGET_AGAIN,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 
-import WidgetFactory from "utils/WidgetFactory";
-import { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
+import WidgetFactory from "WidgetProvider/factory";
+import type { CanvasWidgetsReduxState } from "ee/reducers/entityReducers/canvasWidgetsReducer";
 import { setSnipingMode } from "actions/propertyPaneActions";
-
-const WidgetTypes = WidgetFactory.widgetTypes;
+import { selectWidgetInitAction } from "actions/widgetSelectionActions";
+import { SelectionRequestType } from "sagas/WidgetSelectUtils";
+import { toast } from "@appsmith/ads";
+import type { PropertyUpdates } from "WidgetProvider/constants";
+import type { ModuleInstance } from "ee/constants/ModuleInstanceConstants";
+import { getModuleInstanceById } from "ee/selectors/moduleInstanceSelectors";
 
 export function* bindDataToWidgetSaga(
   action: ReduxAction<{
     widgetId: string;
+    bindingQuery?: string;
   }>,
 ) {
   const queryId: string = yield select(snipingModeBindToSelector);
@@ -35,137 +37,98 @@ export function* bindDataToWidgetSaga(
       (action: ActionData) => action.config.id === queryId,
     ),
   );
+  const currentModuleInstance: ModuleInstance | undefined = yield select(
+    getModuleInstanceById,
+    queryId,
+  );
+
+  const actionName =
+    currentAction?.config.name || currentModuleInstance?.name || "";
+
   const widgetState: CanvasWidgetsReduxState = yield select(getCanvasWidgets);
   const selectedWidget = widgetState[action.payload.widgetId];
 
   if (!selectedWidget || !selectedWidget.type) {
-    Toaster.show({
-      text: SNIPING_SELECT_WIDGET_AGAIN(),
-      variant: Variant.warning,
+    toast.show(SNIPING_SELECT_WIDGET_AGAIN(), {
+      kind: "warning",
     });
+
     return;
   }
+
   const { widgetId } = action.payload;
-  let propertyPath = "";
-  let propertyValue: any = "";
+
   let isValidProperty = true;
 
   // Pranav has an Open PR for this file so just returning for now
-  if (!currentAction) return;
+  if (!actionName) return;
 
-  switch (selectedWidget.type) {
-    case WidgetTypes.BUTTON_WIDGET:
-    case WidgetTypes.FORM_BUTTON_WIDGET:
-      propertyPath = "onClick";
-      propertyValue = `{{${currentAction.config.name}.run()}}`;
-      break;
-    case WidgetTypes.CHECKBOX_WIDGET:
-      propertyPath = "defaultCheckedState";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.DATE_PICKER_WIDGET2:
-      propertyPath = "defaultDate";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.FILE_PICKER_WIDGET:
-      propertyPath = "onFilesSelected";
-      propertyValue = `{{${currentAction.config.name}.run()}}`;
-      break;
-    case WidgetTypes.IFRAME_WIDGET:
-      propertyPath = "source";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.INPUT_WIDGET:
-      propertyPath = "defaultText";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.INPUT_WIDGET_V2:
-      propertyPath = "defaultText";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.LIST_WIDGET:
-      propertyPath = "listData";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.MAP_WIDGET:
-      propertyPath = "defaultMarkers";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.RADIO_GROUP_WIDGET:
-      propertyPath = "options";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.RATE_WIDGET:
-      propertyPath = "onRateChanged";
-      propertyValue = `{{${currentAction.config.name}.run()}}`;
-      break;
-    case WidgetTypes.RICH_TEXT_EDITOR_WIDGET:
-      propertyPath = "defaultText";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.DROP_DOWN_WIDGET:
-      propertyPath = "options";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.SELECT_WIDGET:
-      propertyPath = "options";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.SWITCH_WIDGET:
-      propertyPath = "defaultSwitchState";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.TABLE_WIDGET:
-      propertyPath = "tableData";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.TABLE_WIDGET_V2:
-      propertyPath = "tableData";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.TEXT_WIDGET:
-      propertyPath = "text";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.VIDEO_WIDGET:
-      propertyPath = "url";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    case WidgetTypes.JSON_FORM_WIDGET:
-      propertyPath = "sourceData";
-      propertyValue = `{{${currentAction.config.name}.data}}`;
-      break;
-    default:
-      isValidProperty = false;
-      break;
+  const { getSnipingModeUpdates } = WidgetFactory.getWidgetMethods(
+    selectedWidget.type,
+  );
+
+  let updates: Array<PropertyUpdates> = [];
+
+  const oneClickBindingQuery = `{{${actionName}.data}}`;
+
+  const bindingQuery = action.payload.bindingQuery
+    ? `{{${actionName}.${action.payload.bindingQuery}}}`
+    : oneClickBindingQuery;
+  let isDynamicPropertyPath = true;
+
+  if (
+    bindingQuery === oneClickBindingQuery &&
+    selectedWidget.type !== "TABLE_WIDGET_V2" &&
+    selectedWidget.type !== "SELECT_WIDGET"
+  ) {
+    isDynamicPropertyPath = false;
   }
-  AnalyticsUtil.logEvent("WIDGET_SELECTED_VIA_SNIPING_MODE", {
-    widgetType: selectedWidget.type,
-    actionName: currentAction.config.name,
-    apiId: queryId,
-    propertyPath,
-    propertyValue,
-  });
-  if (queryId && isValidProperty) {
-    // set the property path to dynamic, i.e. enable JS mode
-    yield put(setWidgetDynamicProperty(widgetId, propertyPath, true));
-    yield put(
-      updateWidgetPropertyRequest(widgetId, propertyPath, propertyValue),
-    );
-    yield put({
-      type: ReduxActionTypes.SHOW_PROPERTY_PANE,
-      payload: {
-        widgetId: widgetId,
-        callForDragOrResize: undefined,
-        force: true,
-      },
+
+  if (getSnipingModeUpdates) {
+    updates = getSnipingModeUpdates?.({
+      data: bindingQuery,
+      run: `{{${actionName}.run()}}`,
+      isDynamicPropertyPath,
     });
+
+    AnalyticsUtil.logEvent("WIDGET_SELECTED_VIA_SNIPING_MODE", {
+      widgetType: selectedWidget.type,
+      actionName: actionName,
+      apiId: queryId,
+      propertyPath: updates?.map((update) => update.propertyPath).toString(),
+      propertyValue: updates?.map((update) => update.propertyPath).toString(),
+    });
+  } else {
+    isValidProperty = false;
+  }
+
+  if (queryId && isValidProperty && updates.length > 0) {
+    const updatesMap: Record<string, string> = updates?.reduce(
+      (acc: Record<string, string>, update) => {
+        acc[update.propertyPath] = update.propertyValue as string;
+
+        return acc;
+      },
+      {},
+    );
+
+    const batchUpdateArray = updates.map((update) => {
+      return {
+        propertyPath: update.propertyPath,
+        isDynamic: !!update.isDynamicPropertyPath,
+        skipValidation: true, // Since we are coming up with the dynamic string, we can skip validation
+      };
+    });
+
+    // set the property path to dynamic, i.e. enable JS mode
+    yield put(batchUpdateWidgetDynamicProperty(widgetId, batchUpdateArray));
+    yield put(batchUpdateWidgetProperty(widgetId, { modify: updatesMap }));
     yield call(resetSnipingModeSaga);
+    yield put(selectWidgetInitAction(SelectionRequestType.One, [widgetId]));
   } else {
     queryId &&
-      Toaster.show({
-        text: SNIPING_NOT_SUPPORTED(),
-        variant: Variant.warning,
+      toast.show(SNIPING_NOT_SUPPORTED(), {
+        kind: "warning",
       });
   }
 }

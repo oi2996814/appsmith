@@ -1,13 +1,14 @@
-import { LabelPosition } from "components/constants";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
 import { Alignment } from "@blueprintjs/core";
+import { LabelPosition } from "components/constants";
 import { ValidationTypes } from "constants/WidgetValidation";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import { isAutoLayout } from "layoutSystems/autolayout/utils/flexWidgetUtils";
+import type { CategorySliderWidgetProps } from "..";
 import {
   defaultOptionValidation,
   optionsCustomValidation,
 } from "../../validations";
-import { CategorySliderWidgetProps } from "..";
 
 export default [
   {
@@ -37,7 +38,7 @@ export default [
       {
         helpText: "Sets a default selected option",
         propertyName: "defaultOptionValue",
-        label: "Default Value",
+        label: "Default value",
         placeholderText: "Y",
         controlType: "INPUT_TEXT",
         isBindProperty: true,
@@ -80,6 +81,7 @@ export default [
         label: "Position",
         controlType: "ICON_TABS",
         fullWidth: true,
+        hidden: isAutoLayout,
         options: [
           { label: "Left", value: LabelPosition.Left },
           { label: "Top", value: LabelPosition.Top },
@@ -94,13 +96,14 @@ export default [
         propertyName: "labelAlignment",
         label: "Alignment",
         controlType: "LABEL_ALIGNMENT_OPTIONS",
+        fullWidth: false,
         options: [
           {
-            icon: "LEFT_ALIGN",
+            startIcon: "align-left",
             value: Alignment.LEFT,
           },
           {
-            icon: "RIGHT_ALIGN",
+            startIcon: "align-right",
             value: Alignment.RIGHT,
           },
         ],
@@ -148,7 +151,7 @@ export default [
       {
         propertyName: "showMarksLabel",
         helpText: "Controls the visibility of the marks Label widget",
-        label: "Show Marks",
+        label: "Show marks",
         controlType: "SWITCH",
         isJSConvertible: true,
         isBindProperty: true,
@@ -177,7 +180,7 @@ export default [
       },
       {
         propertyName: "animateLoading",
-        label: "Animate Loading",
+        label: "Animate loading",
         controlType: "SWITCH",
         helpText: "Controls the loading of the widget",
         defaultValue: true,
@@ -192,7 +195,7 @@ export default [
     sectionName: "Events",
     children: [
       {
-        helpText: "Triggers an action when a user changes the slider value",
+        helpText: "when a user changes the slider value",
         propertyName: "onChange",
         label: "onChange",
         controlType: "ACTION_SELECTOR",

@@ -1,17 +1,111 @@
+import { RenderModes } from "constants/WidgetConstants";
 import * as React from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import { WidgetType, RenderModes } from "constants/WidgetConstants";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
 import ImageComponent from "../component";
 
-import { ValidationTypes } from "constants/WidgetValidation";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import { DerivedPropertiesMap } from "utils/WidgetFactory";
-import { Stylesheet } from "entities/AppTheming";
+import { ValidationTypes } from "constants/WidgetValidation";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { ASSETS_CDN_URL } from "constants/ThirdPartyConstants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
+import { FlexVerticalAlignment } from "layoutSystems/common/utils/constants";
 
 class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
   constructor(props: ImageWidgetProps) {
     super(props);
     this.onImageClick = this.onImageClick.bind(this);
+  }
+
+  static type = "IMAGE_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Image",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.MEDIA],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      defaultImage: getAssetUrl(`${ASSETS_CDN_URL}/widgets/default.png`),
+      imageShape: "RECTANGLE",
+      maxZoomLevel: 1,
+      enableRotation: false,
+      enableDownload: false,
+      objectFit: "cover",
+      image: "",
+      rows: 12,
+      columns: 12,
+      widgetName: "Image",
+      version: 1,
+      animateLoading: true,
+      flexVerticalAlignment: FlexVerticalAlignment.Top,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "280px",
+              minHeight: "40px",
+            };
+          },
+        },
+      ],
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "40px" },
+        minWidth: { base: "280px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Image widget is used to display images in your app. Images must be either a URL or a valid base64.",
+      "!url": "https://docs.appsmith.com/widget-reference/image",
+      image: "string",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+    };
+  }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setImage: {
+          path: "image",
+          type: "string",
+        },
+      },
+    };
   }
 
   static getPropertyPaneContentConfig() {
@@ -32,7 +126,7 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
           {
             helpText: "Sets the default image to be displayed when load fails",
             propertyName: "defaultImage",
-            label: "Default Image",
+            label: "Default image",
             controlType: "INPUT_TEXT",
             placeholderText: "URL / Base64",
             isBindProperty: true,
@@ -48,7 +142,7 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
             helpText:
               "Sets how the Image should be resized to fit its container.",
             propertyName: "objectFit",
-            label: "Object Fit",
+            label: "Object fit",
             controlType: "DROP_DOWN",
             defaultValue: "contain",
             options: [
@@ -78,7 +172,7 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
           {
             helpText: "Controls the max zoom of the widget",
             propertyName: "maxZoomLevel",
-            label: "Max Zoom Level",
+            label: "Max zoom level",
             controlType: "DROP_DOWN",
             options: [
               {
@@ -122,7 +216,7 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -134,7 +228,7 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
           {
             helpText: "Controls if the image is allowed to rotate",
             propertyName: "enableRotation",
-            label: "Enable Rotation",
+            label: "Enable rotation",
             controlType: "SWITCH",
             isJSConvertible: false,
             isBindProperty: true,
@@ -144,7 +238,7 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
           {
             helpText: "Controls if the image is allowed to download",
             propertyName: "enableDownload",
-            label: "Enable Download",
+            label: "Enable download",
             controlType: "SWITCH",
             isJSConvertible: false,
             isBindProperty: true,
@@ -157,7 +251,7 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
         sectionName: "Events",
         children: [
           {
-            helpText: "Triggers an action when user clicks on an image",
+            helpText: "when user clicks on an image",
             propertyName: "onClick",
             label: "onClick",
             controlType: "ACTION_SELECTOR",
@@ -173,11 +267,11 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
   static getPropertyPaneStyleConfig() {
     return [
       {
-        sectionName: "Border and Shadow",
+        sectionName: "Border and shadow",
         children: [
           {
             propertyName: "borderRadius",
-            label: "Border Radius",
+            label: "Border radius",
             helpText:
               "Rounds the corners of the icon button's outer border edge",
             controlType: "BORDER_RADIUS_OPTIONS",
@@ -188,7 +282,7 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
           },
           {
             propertyName: "boxShadow",
-            label: "Box Shadow",
+            label: "Box shadow",
             helpText:
               "Enables you to cast a drop shadow from the frame of the widget",
             controlType: "BOX_SHADOW_OPTIONS",
@@ -210,6 +304,8 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
     return {};
   }
   // TODO Find a way to enforce this, (dont let it be set)
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {};
   }
@@ -221,8 +317,9 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
     };
   }
 
-  getPageView() {
+  getWidgetView() {
     const { maxZoomLevel, objectFit } = this.props;
+
     return (
       <ImageComponent
         borderRadius={this.props.borderRadius}
@@ -254,10 +351,6 @@ class ImageWidget extends BaseWidget<ImageWidgetProps, WidgetState> {
         },
       });
     }
-  }
-
-  static getWidgetType(): WidgetType {
-    return "IMAGE_WIDGET";
   }
 }
 

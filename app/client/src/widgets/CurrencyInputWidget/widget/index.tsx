@@ -1,28 +1,21 @@
 import React from "react";
-import { WidgetState } from "widgets/BaseWidget";
-import { WidgetType } from "constants/WidgetConstants";
-import CurrencyInputComponent, {
-  CurrencyInputComponentProps,
-} from "../component";
+import type { WidgetState } from "widgets/BaseWidget";
+import type { CurrencyInputComponentProps } from "../component";
+import CurrencyInputComponent from "../component";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import {
-  ValidationTypes,
-  ValidationResponse,
-} from "constants/WidgetValidation";
-import {
-  createMessage,
-  FIELD_REQUIRED_ERROR,
-} from "@appsmith/constants/messages";
-import { DerivedPropertiesMap } from "utils/WidgetFactory";
+import type { ValidationResponse } from "constants/WidgetValidation";
+import { ValidationTypes } from "constants/WidgetValidation";
+import { createMessage, FIELD_REQUIRED_ERROR } from "ee/constants/messages";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
 import {
   CurrencyDropdownOptions,
   getCountryCodeFromCurrencyCode,
 } from "../component/CurrencyCodeDropdown";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
 import _ from "lodash";
 import derivedProperties from "./parsedDerivedProperties";
 import BaseInputWidget from "widgets/BaseInputWidget";
-import { BaseInputWidgetProps } from "widgets/BaseInputWidget/widget";
+import type { BaseInputWidgetProps } from "widgets/BaseInputWidget/widget";
 import * as Sentry from "@sentry/react";
 import log from "loglevel";
 import {
@@ -30,24 +23,49 @@ import {
   limitDecimalValue,
 } from "../component/utilities";
 import { getLocale, mergeWidgetConfig } from "utils/helpers";
-import { GRID_DENSITY_MIGRATION_V1 } from "widgets/constants";
 import {
   getLocaleDecimalSeperator,
   getLocaleThousandSeparator,
   isAutoHeightEnabledForWidget,
+  DefaultAutocompleteDefinitions,
+  isCompactMode,
 } from "widgets/WidgetUtils";
-import { Stylesheet } from "entities/AppTheming";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
 import { NumberInputStepButtonPosition } from "widgets/BaseInputWidget/constants";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { LabelPosition } from "components/constants";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import { DynamicHeight } from "utils/WidgetFeatures";
+import { getDefaultCurrency } from "../component/CurrencyCodeDropdown";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
 export function defaultValueValidation(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   props: CurrencyInputWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _?: any,
 ): ValidationResponse {
-  const NUMBER_ERROR_MESSAGE = "This value must be number";
-  const DECIMAL_SEPARATOR_ERROR_MESSAGE =
-    "Please use . as the decimal separator for default values.";
-  const EMPTY_ERROR_MESSAGE = "";
+  const NUMBER_ERROR_MESSAGE = {
+    name: "TypeError",
+    message: "This value must be number",
+  };
+  const DECIMAL_SEPARATOR_ERROR_MESSAGE = {
+    name: "ValidationError",
+    message: "Please use . as the decimal separator for default values.",
+  };
+  const EMPTY_ERROR_MESSAGE = {
+    name: "",
+    message: "",
+  };
   const localeLang = navigator.languages?.[0] || "en-US";
 
   function getLocaleDecimalSeperator() {
@@ -55,8 +73,10 @@ export function defaultValueValidation(
       .format(1.1)
       .replace(/\p{Number}/gu, "");
   }
+
   const decimalSeperator = getLocaleDecimalSeperator();
   const defaultDecimalSeperator = ".";
+
   if (_.isObject(value)) {
     return {
       isValid: false,
@@ -65,12 +85,22 @@ export function defaultValueValidation(
     };
   }
 
+  if (_.isBoolean(value) || _.isUndefined(value) || _.isNull(value)) {
+    return {
+      isValid: false,
+      parsed: value,
+      messages: [NUMBER_ERROR_MESSAGE],
+    };
+  }
+
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let parsed: any = Number(value);
   let isValid, messages;
 
   if (_.isString(value) && value.trim() === "") {
     /*
-     *  When value is emtpy string
+     *  When value is empty string
      */
     isValid = true;
     messages = [EMPTY_ERROR_MESSAGE];
@@ -103,7 +133,11 @@ export function defaultValueValidation(
     if (parsed !== Number(parsed.toFixed(props.decimals))) {
       isValid = false;
       messages = [
-        "No. of decimals are higher than the decimals field set. Please update the default or the decimals field",
+        {
+          name: "RangeError",
+          message:
+            "No. of decimals are higher than the decimals field set. Please update the default or the decimals field",
+        },
       ];
     } else {
       isValid = true;
@@ -124,6 +158,138 @@ class CurrencyInputWidget extends BaseInputWidget<
   CurrencyInputWidgetProps,
   WidgetState
 > {
+  static type = "CURRENCY_INPUT_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Currency Input",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.INPUTS],
+      needsMeta: true,
+      searchTags: ["amount", "total"],
+    };
+  }
+
+  static getFeatures() {
+    return {
+      dynamicHeight: {
+        sectionIndex: 3,
+        defaultValue: DynamicHeight.FIXED,
+        active: true,
+      },
+    };
+  }
+
+  static getDefaults() {
+    return {
+      ...BaseInputWidget.getDefaults(),
+      widgetName: "CurrencyInput",
+      version: 1,
+      rows: 7,
+      labelPosition: LabelPosition.Top,
+      allowCurrencyChange: false,
+      defaultCurrencyCode: getDefaultCurrency().currency,
+      decimals: 0,
+      showStepArrows: false,
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      disabledPropsDefaults: {
+        labelPosition: LabelPosition.Top,
+        labelTextSize: "0.875rem",
+      },
+      defaults: {
+        rows: 6.6,
+      },
+      autoDimension: {
+        height: true,
+      },
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "120px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        vertical: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "70px" },
+        minWidth: { base: "120px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "An input text field is used to capture a currency value. Inputs are used in forms and can have custom validations.",
+      "!url": "https://docs.appsmith.com/widget-reference/currency-input",
+      text: {
+        "!type": "string",
+        "!doc": "The formatted text value of the input",
+        "!url": "https://docs.appsmith.com/widget-reference/currency-input",
+      },
+      value: {
+        "!type": "number",
+        "!doc": "The value of the input",
+        "!url": "https://docs.appsmith.com/widget-reference/currency-input",
+      },
+      isValid: "bool",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      isDisabled: "bool",
+      countryCode: {
+        "!type": "string",
+        "!doc": "Selected country code for Currency",
+      },
+      currencyCode: {
+        "!type": "string",
+        "!doc": "Selected Currency code",
+      },
+    };
+  }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+        setRequired: {
+          path: "isRequired",
+          type: "boolean",
+        },
+        setValue: {
+          path: "defaultText",
+          type: "string",
+          accessor: "text",
+        },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return mergeWidgetConfig(
       [
@@ -134,7 +300,7 @@ class CurrencyInputWidget extends BaseInputWidget<
               helpText:
                 "Sets the default text of the widget. The text is updated if the default text changes",
               propertyName: "defaultText",
-              label: "Default Value",
+              label: "Default value",
               controlType: "INPUT_TEXT",
               placeholderText: "100",
               isBindProperty: true,
@@ -161,6 +327,7 @@ class CurrencyInputWidget extends BaseInputWidget<
               controlType: "DROP_DOWN",
               searchPlaceholderText: "Search by code or name",
               options: CurrencyDropdownOptions,
+              virtual: true,
               isJSConvertible: true,
               isBindProperty: true,
               isTriggerProperty: false,
@@ -170,7 +337,7 @@ class CurrencyInputWidget extends BaseInputWidget<
             },
             {
               propertyName: "allowCurrencyChange",
-              label: "Allow Currency Change",
+              label: "Allow currency change",
               helpText: "Search by currency or country",
               controlType: "SWITCH",
               isJSConvertible: true,
@@ -181,7 +348,7 @@ class CurrencyInputWidget extends BaseInputWidget<
             {
               helpText: "No. of decimals in currency input",
               propertyName: "decimals",
-              label: "Decimals Allowed",
+              label: "Decimals allowed",
               controlType: "DROP_DOWN",
               options: [
                 {
@@ -196,6 +363,22 @@ class CurrencyInputWidget extends BaseInputWidget<
                   label: "2",
                   value: 2,
                 },
+                {
+                  label: "3",
+                  value: 3,
+                },
+                {
+                  label: "4",
+                  value: 4,
+                },
+                {
+                  label: "5",
+                  value: 5,
+                },
+                {
+                  label: "6",
+                  value: 6,
+                },
               ],
               isJSConvertible: true,
               isBindProperty: true,
@@ -204,7 +387,7 @@ class CurrencyInputWidget extends BaseInputWidget<
                 type: ValidationTypes.NUMBER,
                 params: {
                   min: 0,
-                  max: 2,
+                  max: 6,
                 },
               },
             },
@@ -245,6 +428,8 @@ class CurrencyInputWidget extends BaseInputWidget<
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return _.merge(super.getMetaPropertiesMap(), {
       text: undefined,
@@ -279,6 +464,7 @@ class CurrencyInputWidget extends BaseInputWidget<
     ) {
       this.formatText();
     }
+
     // If defaultText property has changed, reset isDirty to false
     if (
       this.props.defaultText !== prevProps.defaultText &&
@@ -296,7 +482,7 @@ class CurrencyInputWidget extends BaseInputWidget<
   }
 
   formatText() {
-    if (!!this.props.text) {
+    if (!!this.props.text && !this.isTextFormatted()) {
       try {
         /**
          * Since we are restricting default value to only have "." decimal separator,
@@ -309,6 +495,7 @@ class CurrencyInputWidget extends BaseInputWidget<
           minimumFractionDigits: this.props.decimals,
           maximumFractionDigits: this.props.decimals,
         }).format(floatVal);
+
         this.props.updateWidgetMetaProperty("text", formattedValue);
       } catch (e) {
         log.error(e);
@@ -320,6 +507,7 @@ class CurrencyInputWidget extends BaseInputWidget<
   onValueChange = (value: string) => {
     let formattedValue = "";
     const decimalSeperator = getLocaleDecimalSeperator();
+
     try {
       if (value && value.includes(decimalSeperator)) {
         formattedValue = limitDecimalValue(this.props.decimals, value);
@@ -346,6 +534,10 @@ class CurrencyInputWidget extends BaseInputWidget<
     }
   };
 
+  isTextFormatted = () => {
+    return this.props.text.includes(getLocaleThousandSeparator());
+  };
+
   handleFocusChange = (isFocused?: boolean) => {
     try {
       if (isFocused) {
@@ -354,6 +546,7 @@ class CurrencyInputWidget extends BaseInputWidget<
           new RegExp("\\" + getLocaleThousandSeparator(), "g"),
           "",
         );
+
         this.props.updateWidgetMetaProperty("text", deFormattedValue);
         this.props.updateWidgetMetaProperty("isFocused", isFocused, {
           triggerPropertyName: "onFocus",
@@ -368,8 +561,10 @@ class CurrencyInputWidget extends BaseInputWidget<
             this.props.decimals,
             this.props.text,
           );
+
           this.props.updateWidgetMetaProperty("text", formattedValue);
         }
+
         this.props.updateWidgetMetaProperty("isFocused", isFocused, {
           triggerPropertyName: "onBlur",
           dynamicString: this.props.onBlur,
@@ -407,6 +602,7 @@ class CurrencyInputWidget extends BaseInputWidget<
 
     // Since value is always going to be a number therefore, directly converting it to the current locale
     const formattedValue = Intl.NumberFormat(getLocale()).format(value);
+
     if (!this.props.isDirty) {
       this.props.updateWidgetMetaProperty("isDirty", true);
     }
@@ -420,16 +616,20 @@ class CurrencyInputWidget extends BaseInputWidget<
     });
   };
 
-  getPageView() {
+  getWidgetView() {
     const value = this.props.text ?? "";
     const isInvalid =
       "isValid" in this.props && !this.props.isValid && !!this.props.isDirty;
     const currencyCode = this.props.currencyCode;
     const conditionalProps: Partial<CurrencyInputComponentProps> = {};
+
     conditionalProps.errorMessage = this.props.errorMessage;
+
     if (this.props.isRequired && value.length === 0) {
       conditionalProps.errorMessage = createMessage(FIELD_REQUIRED_ERROR);
     }
+
+    const { componentHeight } = this.props;
 
     if (this.props.showStepArrows) {
       conditionalProps.buttonPosition = NumberInputStepButtonPosition.RIGHT;
@@ -444,13 +644,7 @@ class CurrencyInputWidget extends BaseInputWidget<
         autoFocus={this.props.autoFocus}
         borderRadius={this.props.borderRadius}
         boxShadow={this.props.boxShadow}
-        compactMode={
-          !(
-            (this.props.bottomRow - this.props.topRow) /
-              GRID_DENSITY_MIGRATION_V1 >
-            1
-          )
-        }
+        compactMode={isCompactMode(componentHeight)}
         currencyCode={currencyCode}
         decimals={this.props.decimals}
         defaultValue={this.props.defaultText}
@@ -468,7 +662,7 @@ class CurrencyInputWidget extends BaseInputWidget<
         labelStyle={this.props.labelStyle}
         labelTextColor={this.props.labelTextColor}
         labelTextSize={this.props.labelTextSize}
-        labelWidth={this.getLabelWidth()}
+        labelWidth={this.props.labelComponentWidth}
         onCurrencyTypeChange={this.onCurrencyTypeChange}
         onFocusChange={this.handleFocusChange}
         onKeyDown={this.handleKeyDown}
@@ -483,10 +677,6 @@ class CurrencyInputWidget extends BaseInputWidget<
         {...conditionalProps}
       />
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "CURRENCY_INPUT_WIDGET";
   }
 }
 

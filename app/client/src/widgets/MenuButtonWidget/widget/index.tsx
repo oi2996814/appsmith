@@ -1,18 +1,121 @@
-import React from "react";
-import BaseWidget, { WidgetState } from "widgets/BaseWidget";
-import {
-  EventType,
-  ExecuteTriggerPayload,
-} from "constants/AppsmithActionConstants/ActionConstants";
+import type { ExecuteTriggerPayload } from "constants/AppsmithActionConstants/ActionConstants";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import { isArray, orderBy } from "lodash";
+import { default as React } from "react";
+import type { WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
+import { MinimumPopupWidthInPercentage } from "WidgetProvider/constants";
 import MenuButtonComponent from "../component";
-import { MinimumPopupRows } from "widgets/constants";
-import { MenuButtonWidgetProps, MenuItem, MenuItemsSource } from "../constants";
+import type { MenuButtonWidgetProps, MenuItem } from "../constants";
+import { MenuItemsSource } from "../constants";
 import contentConfig from "./propertyConfig/contentConfig";
 import styleConfig from "./propertyConfig/styleConfig";
-import { isArray, orderBy } from "lodash";
-import { Stylesheet } from "entities/AppTheming";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import { ButtonPlacementTypes, ButtonVariantTypes } from "components/constants";
+import { WIDGET_TAGS, layoutConfigurations } from "constants/WidgetConstants";
 
 class MenuButtonWidget extends BaseWidget<MenuButtonWidgetProps, WidgetState> {
+  static type = "MENU_BUTTON_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Menu button",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.BUTTONS],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      label: "Open Menu",
+      menuVariant: ButtonVariantTypes.PRIMARY,
+      placement: ButtonPlacementTypes.CENTER,
+      isCompact: false,
+      isDisabled: false,
+      isVisible: true,
+      animateLoading: true,
+      menuItemsSource: MenuItemsSource.STATIC,
+      menuItems: {
+        menuItem1: {
+          label: "First Menu Item",
+          id: "menuItem1",
+          widgetId: "",
+          isVisible: true,
+          isDisabled: false,
+          index: 0,
+        },
+        menuItem2: {
+          label: "Second Menu Item",
+          id: "menuItem2",
+          widgetId: "",
+          isVisible: true,
+          isDisabled: false,
+          index: 1,
+        },
+        menuItem3: {
+          label: "Third Menu Item",
+          id: "menuItem3",
+          widgetId: "",
+          isVisible: true,
+          isDisabled: false,
+          index: 2,
+        },
+      },
+      rows: 4,
+      columns: 16,
+      widgetName: "MenuButton",
+      version: 1,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      defaults: {
+        rows: 4,
+        columns: 6.632,
+      },
+      autoDimension: {
+        width: true,
+      },
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "120px",
+              maxWidth: "360px",
+              minHeight: "40px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        vertical: true,
+        horizontal: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: { base: "360px" },
+        minHeight: { base: "40px" },
+        minWidth: { base: "120px" },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return contentConfig;
   }
@@ -26,6 +129,16 @@ class MenuButtonWidget extends BaseWidget<MenuButtonWidgetProps, WidgetState> {
       menuColor: "{{appsmith.theme.colors.primaryColor}}",
       borderRadius: "{{appsmith.theme.borderRadius.appBorderRadius}}",
       boxShadow: "none",
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Menu button widget is used to represent a set of actions in a group.",
+      "!url": "https://docs.appsmith.com/widget-reference/menu-button",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      label: "string",
     };
   }
 
@@ -53,12 +166,9 @@ class MenuButtonWidget extends BaseWidget<MenuButtonWidgetProps, WidgetState> {
   };
 
   getVisibleItems = () => {
-    const {
-      configureMenuItems,
-      menuItems,
-      menuItemsSource,
-      sourceData,
-    } = this.props;
+    const { configureMenuItems, menuItems, menuItemsSource, sourceData } =
+      this.props;
+
     if (menuItemsSource === MenuItemsSource.STATIC) {
       const visibleItems = Object.keys(menuItems)
         .map((itemKey) => menuItems[itemKey])
@@ -106,24 +216,45 @@ class MenuButtonWidget extends BaseWidget<MenuButtonWidgetProps, WidgetState> {
     return [];
   };
 
-  getPageView() {
-    const { componentWidth } = this.getComponentDimensions();
-    const menuDropDownWidth = MinimumPopupRows * this.props.parentColumnSpace;
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+      },
+    };
+  }
+
+  getWidgetView() {
+    const { componentWidth } = this.props;
+    const menuDropDownWidth =
+      (MinimumPopupWidthInPercentage / 100) *
+      (this.props.mainCanvasWidth ?? layoutConfigurations.MOBILE.maxWidth);
 
     return (
       <MenuButtonComponent
         {...this.props}
         getVisibleItems={this.getVisibleItems}
+        maxWidth={this.props.maxWidth}
         menuDropDownWidth={menuDropDownWidth}
+        minHeight={this.props.minHeight}
+        minWidth={this.props.minWidth}
         onItemClicked={this.menuItemClickHandler}
         renderMode={this.props.renderMode}
+        shouldFitContent={this.isAutoLayoutMode}
         width={componentWidth}
       />
     );
   }
 
   static getWidgetType() {
-    return "MENU_BUTTON_WIDGET";
+    return;
   }
 }
 

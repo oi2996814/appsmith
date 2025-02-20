@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import mammoth from "mammoth";
+import mammoth from "mammoth/mammoth.browser";
 import styled from "styled-components";
 import Interweave from "interweave";
 
@@ -9,9 +9,11 @@ const StyledViewer = styled.div`
   background: #fff;
   overflow: auto;
 `;
+
 export default function DocViewer(props: { blob?: Blob }) {
   const [state, setState] = useState({ isLoading: false, isError: false });
   const [htmlContent, setHtmlContent] = useState("");
+
   // when DocViewer gets new Blob of uploaded file convert it to html for preview
   useEffect(() => {
     setState({ isLoading: true, isError: false });
@@ -24,7 +26,7 @@ export default function DocViewer(props: { blob?: Blob }) {
             { arrayBuffer: buffer },
             { includeEmbeddedStyleMap: true, includeDefaultStyleMap: true },
           )
-          .then((result) => {
+          .then((result: { value: string }) => {
             setState({ isLoading: false, isError: false });
             setHtmlContent(result.value);
           })
@@ -38,6 +40,7 @@ export default function DocViewer(props: { blob?: Blob }) {
         setHtmlContent("");
       });
   }, [props.blob]);
+
   return (
     <StyledViewer>
       <Interweave content={htmlContent} />

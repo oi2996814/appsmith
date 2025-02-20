@@ -1,6 +1,9 @@
 package com.appsmith.server.services;
 
+import com.appsmith.server.datasources.base.DatasourceService;
+import com.appsmith.server.datasourcestorages.base.DatasourceStorageService;
 import com.appsmith.server.helpers.PluginExecutorHelper;
+import com.appsmith.server.plugins.base.PluginService;
 import com.appsmith.server.services.ce.DatasourceContextServiceCEImpl;
 import com.appsmith.server.solutions.DatasourcePermission;
 import lombok.extern.slf4j.Slf4j;
@@ -11,12 +14,20 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class DatasourceContextServiceImpl extends DatasourceContextServiceCEImpl implements DatasourceContextService {
 
-    public DatasourceContextServiceImpl(@Lazy DatasourceService datasourceService,
-                                        PluginService pluginService,
-                                        PluginExecutorHelper pluginExecutorHelper,
-                                        ConfigService configService,
-                                        DatasourcePermission datasourcePermission) {
+    public DatasourceContextServiceImpl(
+            @Lazy DatasourceService datasourceService,
+            DatasourceStorageService datasourceStorageService,
+            PluginService pluginService,
+            PluginExecutorHelper pluginExecutorHelper,
+            ConfigService configService,
+            DatasourcePermission datasourcePermission) {
 
-        super(datasourceService, pluginService, pluginExecutorHelper, configService, datasourcePermission);
+        super(
+                datasourceService,
+                datasourceStorageService,
+                pluginService,
+                pluginExecutorHelper,
+                configService,
+                datasourcePermission);
     }
 }

@@ -1,12 +1,6 @@
 import {
-  fetchAppThemesAction,
-  fetchSelectedAppThemeAction,
-} from "actions/appThemingActions";
-import { fetchJSCollectionsForView } from "actions/jsActionActions";
-import {
   fetchAllPageEntityCompletion,
-  fetchPublishedPage,
-  fetchPublishedPageSuccess,
+  setupPublishedPage,
 } from "actions/pageActions";
 import {
   executePageLoadActions,
@@ -15,18 +9,26 @@ import {
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { APP_MODE } from "entities/App";
-import { call, put, select } from "redux-saga/effects";
-import { failFastApiCalls } from "sagas/InitSagas";
-import PerformanceTracker, {
-  PerformanceTransactionName,
-} from "utils/PerformanceTracker";
-import AppEngine, { ActionsNotFoundError, AppEnginePayload } from ".";
+} from "ee/constants/ReduxActionConstants";
+import type { APP_MODE } from "entities/App";
+import { call, put, spawn } from "redux-saga/effects";
+import type { DeployConsolidatedApi } from "sagas/InitSagas";
+import {
+  failFastApiCalls,
+  reportSWStatus,
+  waitForWidgetConfigBuild,
+} from "sagas/InitSagas";
+import type { AppEnginePayload } from ".";
+import AppEngine, { ActionsNotFoundError } from ".";
 import { fetchJSLibraries } from "actions/JSLibraryActions";
-import FeatureFlags from "entities/FeatureFlags";
-import { selectFeatureFlags } from "selectors/usersSelectors";
-import { waitForSegmentInit } from "ce/sagas/userSagas";
+import { waitForFetchUserSuccess } from "ee/sagas/userSagas";
+import { fetchJSCollectionsForView } from "actions/jsActionActions";
+import {
+  fetchAppThemesAction,
+  fetchSelectedAppThemeAction,
+} from "actions/appThemingActions";
+import type { Span } from "instrumentation/types";
+import { endSpan, startNestedSpan } from "instrumentation/generateTraces";
 
 export default class AppViewerEngine extends AppEngine {
   constructor(mode: APP_MODE) {
@@ -43,40 +45,64 @@ export default class AppViewerEngine extends AppEngine {
     return;
   }
 
-  *completeChore() {
+  *completeChore(rootSpan: Span) {
+    const completeChoreSpan = startNestedSpan(
+      "AppViewerEngine.completeChore",
+      rootSpan,
+    );
+
+    yield call(waitForWidgetConfigBuild);
     yield put({
       type: ReduxActionTypes.INITIALIZE_PAGE_VIEWER_SUCCESS,
     });
-    if ("serviceWorker" in navigator) {
-      yield put({
-        type: ReduxActionTypes.FETCH_ALL_PUBLISHED_PAGES,
-      });
-    }
+    yield spawn(reportSWStatus);
+
+    endSpan(completeChoreSpan);
   }
 
-  *setupEngine(payload: AppEnginePayload) {
-    yield call(super.setupEngine.bind(this), payload);
-  }
-
-  startPerformanceTracking() {
-    PerformanceTracker.startAsyncTracking(
-      PerformanceTransactionName.INIT_VIEW_APP,
+  *setupEngine(payload: AppEnginePayload, rootSpan: Span) {
+    const viewerSetupSpan = startNestedSpan(
+      "AppViewerEngine.setupEngine",
+      rootSpan,
     );
+
+    yield call(super.setupEngine.bind(this), payload, rootSpan);
+
+    endSpan(viewerSetupSpan);
   }
 
-  stopPerformanceTracking() {
-    PerformanceTracker.stopAsyncTracking(
-      PerformanceTransactionName.INIT_VIEW_APP,
+  *loadAppEntities(
+    toLoadPageId: string,
+    applicationId: string,
+    allResponses: DeployConsolidatedApi,
+    rootSpan: Span,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): any {
+    const loadAppEntitiesSpan = startNestedSpan(
+      "AppViewerEngine.loadAppEntities",
+      rootSpan,
     );
-  }
 
-  *loadAppEntities(toLoadPageId: string, applicationId: string): any {
+    const {
+      currentTheme,
+      customJSLibraries,
+      pageWithMigratedDsl,
+      publishedActionCollections,
+      publishedActions,
+      themes,
+    } = allResponses;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const initActionsCalls: any = [
-      fetchActionsForView({ applicationId }),
-      fetchJSCollectionsForView({ applicationId }),
-      fetchSelectedAppThemeAction(applicationId),
-      fetchAppThemesAction(applicationId),
-      fetchPublishedPage(toLoadPageId, true, true),
+      fetchActionsForView({ applicationId, publishedActions }),
+      fetchJSCollectionsForView({
+        applicationId,
+        publishedActionCollections,
+      }),
+      fetchSelectedAppThemeAction(applicationId, currentTheme),
+      fetchAppThemesAction(applicationId, themes),
+      setupPublishedPage(toLoadPageId, true, pageWithMigratedDsl),
     ];
 
     const successActionEffects = [
@@ -84,24 +110,19 @@ export default class AppViewerEngine extends AppEngine {
       ReduxActionTypes.FETCH_JS_ACTIONS_VIEW_MODE_SUCCESS,
       ReduxActionTypes.FETCH_APP_THEMES_SUCCESS,
       ReduxActionTypes.FETCH_SELECTED_APP_THEME_SUCCESS,
-      fetchPublishedPageSuccess().type,
+      ReduxActionTypes.SETUP_PUBLISHED_PAGE_SUCCESS,
     ];
     const failureActionEffects = [
       ReduxActionErrorTypes.FETCH_ACTIONS_VIEW_MODE_ERROR,
       ReduxActionErrorTypes.FETCH_JS_ACTIONS_VIEW_MODE_ERROR,
       ReduxActionErrorTypes.FETCH_APP_THEMES_ERROR,
       ReduxActionErrorTypes.FETCH_SELECTED_APP_THEME_ERROR,
-      ReduxActionErrorTypes.FETCH_PUBLISHED_PAGE_ERROR,
+      ReduxActionErrorTypes.SETUP_PUBLISHED_PAGE_ERROR,
     ];
 
-    const featureFlags: FeatureFlags = yield select(selectFeatureFlags);
-    if (featureFlags.CUSTOM_JS_LIBRARY) {
-      initActionsCalls.push(fetchJSLibraries(applicationId));
-      successActionEffects.push(ReduxActionTypes.FETCH_JS_LIBRARIES_SUCCESS);
-      failureActionEffects.push(
-        ReduxActionErrorTypes.FETCH_JS_LIBRARIES_FAILED,
-      );
-    }
+    initActionsCalls.push(fetchJSLibraries(applicationId, customJSLibraries));
+    successActionEffects.push(ReduxActionTypes.FETCH_JS_LIBRARIES_SUCCESS);
+    failureActionEffects.push(ReduxActionErrorTypes.FETCH_JS_LIBRARIES_FAILED);
 
     const resultOfPrimaryCalls: boolean = yield failFastApiCalls(
       initActionsCalls,
@@ -114,7 +135,16 @@ export default class AppViewerEngine extends AppEngine {
         `Unable to fetch actions for the application: ${applicationId}`,
       );
 
-    yield call(waitForSegmentInit, true);
+    const waitForUserSpan = startNestedSpan(
+      "AppViewerEngine.waitForFetchUserSuccess",
+      rootSpan,
+    );
+
+    yield call(waitForFetchUserSuccess);
+    endSpan(waitForUserSpan);
+
     yield put(fetchAllPageEntityCompletion([executePageLoadActions()]));
+
+    endSpan(loadAppEntitiesSpan);
   }
 }

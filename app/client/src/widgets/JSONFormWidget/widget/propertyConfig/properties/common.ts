@@ -1,25 +1,23 @@
-import {
-  ValidationResponse,
-  ValidationTypes,
-} from "constants/WidgetValidation";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
+import type { ValidationResponse } from "constants/WidgetValidation";
+import { ValidationTypes } from "constants/WidgetValidation";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
 import { get } from "lodash";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import type { SchemaItem } from "widgets/JSONFormWidget/constants";
 import {
   ARRAY_ITEM_KEY,
   FIELD_EXPECTING_OPTIONS,
   FIELD_SUPPORTING_FOCUS_EVENTS,
   FieldType,
-  SchemaItem,
 } from "widgets/JSONFormWidget/constants";
-import { JSONFormWidgetProps } from "../..";
+import type { JSONFormWidgetProps } from "../..";
 import { getParentPropertyPath } from "../../helper";
+import type { HiddenFnParams } from "../helper";
 import {
   fieldTypeUpdateHook,
   getAutocompleteProperties,
   getSchemaItem,
   getStylesheetValue,
-  HiddenFnParams,
   hiddenIfArrayItemIsObject,
   updateChildrenDisabledStateHook,
 } from "../helper";
@@ -58,9 +56,15 @@ const FIELDS_WITH_ACCENT_COLOR = [
 ];
 
 function accessorValidation(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   props: JSONFormWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lodash: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
   propertyPath: string,
 ): ValidationResponse {
@@ -70,6 +74,7 @@ function accessorValidation(
   const schema = lodash.cloneDeep(lodash.get(props, grandParentPath));
   const RESTRICTED_KEYS = ["__array_item__", "__root_schema__"];
   const currentSchemaItem = lodash.cloneDeep(schema[schemaItemIdentifier]);
+
   // Remove the current edited schemaItem from schema so it doesn't
   // get picked in the existing keys list
   delete schema[schemaItemIdentifier];
@@ -83,7 +88,12 @@ function accessorValidation(
     return {
       isValid: false,
       parsed: value,
-      messages: ["Property Name cannot be empty"],
+      messages: [
+        {
+          name: "ValidationError",
+          message: "Property Name cannot be empty",
+        },
+      ],
     };
   }
 
@@ -96,7 +106,12 @@ function accessorValidation(
     return {
       isValid: false,
       parsed: "",
-      messages: ["Property name already in use."],
+      messages: [
+        {
+          name: "ValidationError",
+          message: "Property name already in use.",
+        },
+      ],
     };
   }
 
@@ -104,14 +119,19 @@ function accessorValidation(
     return {
       isValid: false,
       parsed: "",
-      messages: ["This is a restricted Property Name"],
+      messages: [
+        {
+          name: "ValidationError",
+          message: "This is a restricted Property Name",
+        },
+      ],
     };
   }
 
   return {
     isValid: true,
     parsed: value,
-    messages: [""],
+    messages: [{ name: "", message: "" }],
   };
 }
 
@@ -266,11 +286,29 @@ const COMMON_PROPERTIES = {
         dependencies: ["schema", "sourceData"],
         updateHook: updateChildrenDisabledStateHook,
       },
+      {
+        propertyName: "shouldAllowAutofill",
+        label: "Allow autofill",
+        helpText: "Allow users to autofill values from browser",
+        controlType: "SWITCH",
+        isJSConvertible: true,
+        isBindProperty: true,
+        isTriggerProperty: false,
+        validation: { type: ValidationTypes.BOOLEAN },
+        hidden: (...args: HiddenFnParams) => {
+          //should be shown for only inputWidgetV2 and for email or password input types
+          return getSchemaItem(...args).fieldTypeNotIncludes([
+            FieldType.EMAIL_INPUT,
+            FieldType.PASSWORD_INPUT,
+          ]);
+        },
+        dependencies: ["schema", "sourceData"],
+      },
     ],
     events: [
       {
         propertyName: "onFocus",
-        helpText: "Triggers an action when focused.",
+        helpText: "when focused.",
         label: "onFocus",
         controlType: "ACTION_SELECTOR",
         isJSConvertible: true,
@@ -285,7 +323,7 @@ const COMMON_PROPERTIES = {
       },
       {
         propertyName: "onBlur",
-        helpText: "Triggers an action when the field loses focus.",
+        helpText: "when the field loses focus.",
         label: "onBlur",
         controlType: "ACTION_SELECTOR",
         isJSConvertible: true,
@@ -304,7 +342,7 @@ const COMMON_PROPERTIES = {
     label: [
       {
         propertyName: "labelTextColor",
-        label: "Font Color",
+        label: "Font color",
         helpText: "Control the color of the label associated",
         controlType: "COLOR_PICKER",
         isJSConvertible: true,
@@ -321,7 +359,7 @@ const COMMON_PROPERTIES = {
       },
       {
         propertyName: "labelTextSize",
-        label: "Font Size",
+        label: "Font size",
         helpText: "Control the font size of the label associated",
         defaultValue: "0.875rem",
         controlType: "DROP_DOWN",
@@ -369,11 +407,11 @@ const COMMON_PROPERTIES = {
         controlType: "BUTTON_GROUP",
         options: [
           {
-            icon: "BOLD_FONT",
+            icon: "text-bold",
             value: "BOLD",
           },
           {
-            icon: "ITALICS_FONT",
+            icon: "text-italic",
             value: "ITALIC",
           },
         ],
@@ -388,7 +426,7 @@ const COMMON_PROPERTIES = {
     borderShadow: [
       {
         propertyName: "borderRadius",
-        label: "Border Radius",
+        label: "Border radius",
         helpText: "Rounds the corners of the icon button's outer border edge",
         controlType: "BORDER_RADIUS_OPTIONS",
         customJSControl: "JSON_FORM_COMPUTE_VALUE",
@@ -405,7 +443,7 @@ const COMMON_PROPERTIES = {
       },
       {
         propertyName: "boxShadow",
-        label: "Box Shadow",
+        label: "Box shadow",
         helpText:
           "Enables you to cast a drop shadow from the frame of the widget",
         controlType: "BOX_SHADOW_OPTIONS",
@@ -424,7 +462,7 @@ const COMMON_PROPERTIES = {
       {
         propertyName: "accentColor",
         helpText: "Sets the accent color",
-        label: "Accent Color",
+        label: "Accent color",
         controlType: "COLOR_PICKER",
         customJSControl: "JSON_FORM_COMPUTE_VALUE",
         isJSConvertible: true,

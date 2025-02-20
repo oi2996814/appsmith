@@ -1,10 +1,6 @@
 import React, { useState } from "react";
-import {
-  MenuItem,
-  Classes,
-  Button as BButton,
-  Alignment,
-} from "@blueprintjs/core";
+import type { Alignment } from "@blueprintjs/core";
+import { MenuItem, Classes, Button as BButton } from "@blueprintjs/core";
 import {
   CellWrapper,
   CellCheckboxWrapper,
@@ -13,16 +9,18 @@ import {
   DraggableHeaderWrapper,
   IconButtonWrapper,
 } from "./TableStyledWrappers";
-import { ColumnAction } from "components/propertyControls/ColumnActionSelectorControl";
+import type { ColumnAction } from "components/propertyControls/ColumnActionSelectorControl";
 
-import {
-  ColumnTypes,
-  CellAlignmentTypes,
-  VerticalAlignmentTypes,
+import type {
   ColumnProperties,
   CellLayoutProperties,
   TableStyles,
   MenuItems,
+} from "./Constants";
+import {
+  ColumnTypes,
+  CellAlignmentTypes,
+  VerticalAlignmentTypes,
 } from "./Constants";
 import { isString, isEmpty, findIndex, isNil, isNaN, get, set } from "lodash";
 import PopoverVideo from "widgets/VideoWidget/component/PopoverVideo";
@@ -31,16 +29,15 @@ import { ControlIcons } from "icons/ControlIcons";
 
 import styled from "styled-components";
 import { Colors } from "constants/Colors";
-import { DropdownOption } from "widgets/DropdownWidget/constants";
-import { IconName, IconNames } from "@blueprintjs/icons";
-import { Select, IItemRendererProps } from "@blueprintjs/select";
+import type { DropdownOption } from "widgets/DropdownWidget/constants";
+import type { IconName } from "@blueprintjs/icons";
+import { IconNames } from "@blueprintjs/icons";
+import type { IItemRendererProps } from "@blueprintjs/select";
+import { Select } from "@blueprintjs/select";
 import { FontStyleTypes } from "constants/WidgetConstants";
 import { noop } from "utils/AppsmithUtils";
 
-import { ReactComponent as CheckBoxLineIcon } from "assets/icons/widget/table/checkbox-line.svg";
-import { ReactComponent as CheckBoxCheckIcon } from "assets/icons/widget/table/checkbox-check.svg";
-
-import { ButtonVariant } from "components/constants";
+import type { ButtonVariant } from "components/constants";
 
 //TODO(abstraction leak)
 import { StyledButton } from "widgets/IconButtonWidget/component";
@@ -48,8 +45,18 @@ import MenuButtonTableComponent from "./components/menuButtonTableComponent";
 import { stopClickEventPropagation } from "utils/helpers";
 import tinycolor from "tinycolor2";
 import { generateTableColumnId } from "./TableHelpers";
+import { importSvg } from "@appsmith/ads-old";
+
+const CheckBoxLineIcon = importSvg(
+  async () => import("assets/icons/widget/table/checkbox-line.svg"),
+);
+const CheckBoxCheckIcon = importSvg(
+  async () => import("assets/icons/widget/table/checkbox-check.svg"),
+);
 
 export const renderCell = (
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   columnType: string,
   isHidden: boolean,
@@ -82,10 +89,13 @@ export const renderCell = (
           </CellWrapper>
         );
       }
+
       // better regex: /(?<!base64),/g ; can't use due to safari incompatibility
       const imageSplitRegex = /[^(base64)],/g;
-      const imageUrlRegex = /(http(s?):)([/|.|\w|\s|-])*\.(?:jpeg|jpg|gif|png)??(?:&?[^=&]*=[^=&]*)*/;
+      const imageUrlRegex =
+        /(http(s?):)([/|.|\w|\s|-])*\.(?:jpeg|jpg|gif|png)??(?:&?[^=&]*=[^=&]*)*/;
       const base64ImageRegex = /^data:image\/.*;base64/;
+
       return (
         <CellWrapper
           cellProperties={cellProperties}
@@ -110,6 +120,7 @@ export const renderCell = (
                       if (isSelected) {
                         e.stopPropagation();
                       }
+
                       onClick();
                     }}
                   >
@@ -126,7 +137,9 @@ export const renderCell = (
         </CellWrapper>
       );
     case ColumnTypes.VIDEO:
-      const youtubeRegex = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|\?v=)([^#&?]*).*/;
+      const youtubeRegex =
+        /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|\?v=)([^#&?]*).*/;
+
       if (!value) {
         return (
           <CellWrapper
@@ -173,8 +186,8 @@ export const renderCell = (
           {value && columnType === ColumnTypes.URL && cellProperties.displayText
             ? cellProperties.displayText
             : !isNil(value) && !isNaN(value)
-            ? value.toString()
-            : ""}
+              ? value.toString()
+              : ""}
         </AutoToolTipComponent>
       );
   }
@@ -232,6 +245,7 @@ export const renderIconButton = (
     </CellWrapper>
   );
 };
+
 function IconButton(props: {
   iconName?: IconName;
   onCommandClick: (dynamicTrigger: string, onComplete: () => void) => void;
@@ -260,6 +274,7 @@ function IconButton(props: {
       props.onCommandClick(props.action.dynamicTrigger, onComplete);
     }
   };
+
   return (
     <IconButtonWrapper disabled={props.disabled} onClick={handlePropagation}>
       <StyledButton
@@ -369,6 +384,7 @@ export const renderMenuButton = (
 interface MenuButtonProps extends Omit<RenderMenuButtonProps, "columnActions"> {
   action?: ColumnAction;
 }
+
 function MenuButton({
   borderRadius,
   boxShadow,
@@ -509,39 +525,52 @@ export const renderCheckBoxHeaderCell = (
 
 export const renderEmptyRows = (
   rowCount: number,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   columns: any,
   tableWidth: number,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   page: any,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   prepareRow: any,
   multiRowSelection = false,
   accentColor: string,
   borderRadius: string,
 ) => {
   const rows: string[] = new Array(rowCount).fill("");
+
   if (page.length) {
     const row = page[0];
+
     return rows.map((item: string, index: number) => {
       prepareRow(row);
       const rowProps = {
         ...row.getRowProps(),
         style: { display: "flex" },
       };
+
       return (
         <div {...rowProps} className="tr" key={index}>
           {multiRowSelection &&
             renderCheckBoxCell(false, accentColor, borderRadius)}
+          {/* TODO: Fix this the next time the file is edited */}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           {row.cells.map((cell: any, cellIndex: number) => {
             const cellProps = cell.getCellProps();
+
             set(
               cellProps,
               "style.backgroundColor",
               get(cell, "column.columnProperties.cellBackground"),
             );
+
             return (
               <div
                 {...cellProps}
                 className="td"
-                data-cy={`empty-row-${index}-cell-${cellIndex}`}
+                data-testid={`empty-row-${index}-cell-${cellIndex}`}
                 key={cellIndex}
               />
             );
@@ -553,6 +582,7 @@ export const renderEmptyRows = (
     const tableColumns = columns.length
       ? columns
       : new Array(3).fill({ width: tableWidth / 3, isHidden: false });
+
     return (
       <>
         {rows.map((row: string, index: number) => {
@@ -567,6 +597,8 @@ export const renderEmptyRows = (
             >
               {multiRowSelection &&
                 renderCheckBoxCell(false, accentColor, borderRadius)}
+              {/* TODO: Fix this the next time the file is edited */}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {tableColumns.map((column: any, colIndex: number) => {
                 return (
                   <div
@@ -624,6 +656,8 @@ export function TableHeaderCell(props: {
   isAscOrder?: boolean;
   sortTableColumn: (columnIndex: number, asc: boolean) => void;
   isResizingColumn: boolean;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   column: any;
   editMode?: boolean;
   isSortable?: boolean;
@@ -632,12 +666,16 @@ export function TableHeaderCell(props: {
   const { column, editMode, isSortable, width } = props;
   const handleSortColumn = () => {
     if (props.isResizingColumn) return;
+
     let columnIndex = props.columnIndex;
+
     if (props.isAscOrder === true) {
       columnIndex = -1;
     }
+
     const sortOrder =
       props.isAscOrder === undefined ? false : !props.isAscOrder;
+
     props.sortTableColumn(columnIndex, sortOrder);
   };
   const disableSort = editMode === false && isSortable === false;
@@ -684,6 +722,8 @@ export function TableHeaderCell(props: {
 export function getDefaultColumnProperties(
   accessor: string,
   index: number,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   widgetProperties: any,
   isDerived?: boolean,
 ): ColumnProperties {
@@ -777,6 +817,7 @@ export const renderDropdown = (props: {
     const optionIndex = findIndex(props.options, (option) => {
       return option.value === selectedOption.value;
     });
+
     return optionIndex === props.selectedIndex;
   };
   const renderSingleSelectItem = (
@@ -786,10 +827,13 @@ export const renderDropdown = (props: {
     if (!itemProps.modifiers.matchesPredicate) {
       return null;
     }
+
     if (!props.isCellVisible) {
       return null;
     }
+
     const isSelected: boolean = isOptionSelected(option);
+
     return (
       <MenuItem
         active={isSelected}
@@ -800,6 +844,7 @@ export const renderDropdown = (props: {
       />
     );
   };
+
   return (
     <div onClick={stopClickEventPropagation} style={{ height: "100%" }}>
       <StyledSingleDropDown
@@ -840,9 +885,7 @@ export const renderDropdown = (props: {
  */
 export const getSelectedRowBgColor = (accentColor: string) => {
   const tinyAccentColor = tinycolor(accentColor);
-  const brightness = tinycolor(accentColor)
-    .greyscale()
-    .getBrightness();
+  const brightness = tinycolor(accentColor).greyscale().getBrightness();
 
   const percentageBrightness = (brightness / 255) * 100;
   let nextBrightness = 0;

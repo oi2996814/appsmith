@@ -1,21 +1,20 @@
-import { selectMultipleWidgetsAction } from "actions/widgetSelectionActions";
-import { OccupiedSpace } from "constants/CanvasEditorConstants";
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+import { selectWidgetInitAction } from "actions/widgetSelectionActions";
+import type { OccupiedSpace } from "constants/CanvasEditorConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { MAIN_CONTAINER_WIDGET_ID } from "constants/WidgetConstants";
 import equal from "fast-deep-equal/es6";
-import { SelectedArenaDimensions } from "pages/common/CanvasArenas/CanvasSelectionArena";
-import { Task } from "redux-saga";
+import type { Task } from "redux-saga";
 import { all, cancel, put, select, take, takeLatest } from "redux-saga/effects";
 import { getOccupiedSpaces } from "selectors/editorSelectors";
 import { getSelectedWidgets } from "selectors/ui";
 import { snapToGrid } from "utils/helpers";
 import { areIntersecting } from "utils/boxHelpers";
-import { WidgetProps } from "widgets/BaseWidget";
+import type { WidgetProps } from "widgets/BaseWidget";
 import { getWidgets } from "sagas/selectors";
-import { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
+import type { CanvasWidgetsReduxState } from "ee/reducers/entityReducers/canvasWidgetsReducer";
+import { SelectionRequestType } from "sagas/WidgetSelectUtils";
+import type { SelectedArenaDimensions } from "layoutSystems/fixedlayout/editor/FixedLayoutCanvasArenas/CanvasSelectionArena";
 
 interface StartingSelectionState {
   lastSelectedWidgets: string[];
@@ -26,15 +25,15 @@ interface StartingSelectionState {
       }
     | undefined;
 }
+
 function* selectAllWidgetsInAreaSaga(
   StartingSelectionState: StartingSelectionState,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   action: ReduxAction<any>,
 ) {
-  const {
-    lastSelectedWidgets,
-    mainContainer,
-    widgetOccupiedSpaces,
-  } = StartingSelectionState;
+  const { lastSelectedWidgets, mainContainer, widgetOccupiedSpaces } =
+    StartingSelectionState;
   const {
     isMultiSelect,
     selectionArena,
@@ -99,7 +98,12 @@ function* selectAllWidgetsInAreaSaga(
     const currentSelectedWidgets: string[] = yield select(getSelectedWidgets);
 
     if (!equal(filteredWidgetsToSelect, currentSelectedWidgets)) {
-      yield put(selectMultipleWidgetsAction(filteredWidgetsToSelect));
+      yield put(
+        selectWidgetInitAction(
+          SelectionRequestType.Multiple,
+          filteredWidgetsToSelect,
+        ),
+      );
     }
   }
 }
@@ -135,6 +139,7 @@ function* startCanvasSelectionSaga(
       widgetOccupiedSpaces,
     },
   );
+
   yield take(ReduxActionTypes.STOP_CANVAS_SELECTION);
   yield cancel(selectionTask);
 }

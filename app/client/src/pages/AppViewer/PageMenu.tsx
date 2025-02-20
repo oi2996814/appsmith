@@ -1,65 +1,67 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  ApplicationPayload,
-  Page,
-} from "@appsmith/constants/ReduxActionConstants";
-import { NavLink } from "react-router-dom";
-import {
-  getAppMode,
-  showAppInviteUsersDialogSelector,
-} from "selectors/applicationSelectors";
+import type { ApplicationPayload } from "entities/Application";
+import type { Page } from "entities/Page";
+import { getAppMode } from "ee/selectors/applicationSelectors";
 import { useSelector } from "react-redux";
 import classNames from "classnames";
 import PrimaryCTA from "./PrimaryCTA";
-import Button from "./AppViewerButton";
-import AppInviteUsersForm from "pages/workspace/AppInviteUsersForm";
-import FormDialogComponent from "components/editorComponents/form/FormDialogComponent";
-import { getCurrentWorkspaceId } from "@appsmith/selectors/workspaceSelectors";
+import { getCurrentWorkspaceId } from "ee/selectors/selectedWorkspaceSelectors";
 import { getSelectedAppTheme } from "selectors/appThemingSelectors";
 import BrandingBadge from "./BrandingBadgeMobile";
 import { getAppViewHeaderHeight } from "selectors/appViewSelectors";
 import { useOnClickOutside } from "utils/hooks/useOnClickOutside";
 import { useHref } from "pages/Editor/utils";
 import { APP_MODE } from "entities/App";
-import { builderURL, viewerURL } from "RouteBuilder";
+import { builderURL, viewerURL } from "ee/RouteBuilder";
 import { trimQueryString } from "utils/helpers";
-import {
-  createMessage,
-  INVITE_USERS_MESSAGE,
-  INVITE_USERS_PLACEHOLDER,
-} from "@appsmith/constants/messages";
-import { getAppsmithConfigs } from "@appsmith/configs";
+import type { NavigationSetting } from "constants/AppConstants";
+import { NAVIGATION_SETTINGS } from "constants/AppConstants";
+import { get } from "lodash";
+import { PageMenuContainer, StyledNavLink } from "./PageMenu.styled";
+import { StyledCtaContainer } from "./Navigation/Sidebar.styled";
+import ShareButton from "./Navigation/components/ShareButton";
+import BackToAppsButton from "./Navigation/components/BackToAppsButton";
+import { getHideWatermark } from "ee/selectors/organizationSelectors";
 
-const { cloudHosting } = getAppsmithConfigs();
-
-type AppViewerHeaderProps = {
+interface NavigationProps {
   isOpen?: boolean;
   application?: ApplicationPayload;
   pages: Page[];
   url?: string;
   setMenuOpen?: (shouldOpen: boolean) => void;
   headerRef?: React.RefObject<HTMLDivElement>;
-};
+}
 
-export function PageMenu(props: AppViewerHeaderProps) {
+export function PageMenu(props: NavigationProps) {
   const { application, headerRef, isOpen, pages, setMenuOpen } = props;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const menuRef = useRef<any>();
   const selectedTheme = useSelector(getSelectedAppTheme);
   const workspaceID = useSelector(getCurrentWorkspaceId);
-  const showAppInviteUsersDialog = useSelector(
-    showAppInviteUsersDialogSelector,
-  );
   const headerHeight = useSelector(getAppViewHeaderHeight);
   const [query, setQuery] = useState("");
-  const { hideWatermark } = getAppsmithConfigs();
+  const hideWatermark = useSelector(getHideWatermark);
+  const navColorStyle =
+    application?.applicationDetail?.navigationSetting?.colorStyle ||
+    NAVIGATION_SETTINGS.COLOR_STYLE.LIGHT;
+  const primaryColor = get(
+    selectedTheme,
+    "properties.colors.primaryColor",
+    "inherit",
+  );
+
+  const closeMenu = () => {
+    if (typeof setMenuOpen === "function") {
+      setMenuOpen?.(false);
+    }
+  };
 
   // hide menu on click outside
   useOnClickOutside(
     [menuRef, headerRef as React.RefObject<HTMLDivElement>],
     () => {
-      if (typeof setMenuOpen === "function") {
-        setMenuOpen?.(false);
-      }
+      closeMenu();
     },
   );
 
@@ -69,6 +71,7 @@ export function PageMenu(props: AppViewerHeaderProps) {
 
   // Mark default page as first page
   const appPages = pages;
+
   if (appPages.length > 1) {
     appPages.forEach((item, i) => {
       if (item.isDefault) {
@@ -87,99 +90,118 @@ export function PageMenu(props: AppViewerHeaderProps) {
           "opacity-0 hidden": !isOpen,
           "opacity-100": isOpen,
         })}
+        onClick={closeMenu}
         style={{
           height: `calc(100% - ${headerHeight})`,
         }}
       />
       {/* MAIN CONTAINER */}
-      <div
+      <PageMenuContainer
         className={classNames({
-          "fixed flex flex-col w-7/12 bg-white transform transition-all duration-400": true,
+          "fixed flex flex-col w-7/12 transform transition-all duration-400":
+            true,
           "-left-full": !isOpen,
           "left-0": isOpen,
         })}
+        navColorStyle={navColorStyle}
+        primaryColor={primaryColor}
         ref={menuRef}
         style={{
           height: `calc(100% - ${headerHeight}px)`,
         }}
       >
-        <div className="flex-grow py-3 overflow-y-auto">
+        <div className="flex-grow py-3 overflow-y-auto page-list-container">
           {appPages.map((page) => (
-            <PageNavLink key={page.pageId} page={page} query={query} />
+            <PageNavLink
+              closeMenu={closeMenu}
+              key={page.pageId}
+              navColorStyle={navColorStyle}
+              page={page}
+              primaryColor={primaryColor}
+              query={query}
+            />
           ))}
         </div>
-        <div className="p-3 space-y-3 border-t">
+        <div className="py-3 border-t">
           {application && (
-            <FormDialogComponent
-              Form={AppInviteUsersForm}
-              applicationId={application.id}
-              canOutsideClickClose
-              headerIcon={{
-                name: "right-arrow",
-                bgColor: "transparent",
-              }}
-              isOpen={showAppInviteUsersDialog}
-              message={createMessage(INVITE_USERS_MESSAGE, cloudHosting)}
-              placeholder={createMessage(
-                INVITE_USERS_PLACEHOLDER,
-                cloudHosting,
-              )}
-              title={application.name}
-              trigger={
-                <Button
-                  borderRadius={
-                    selectedTheme.properties.borderRadius.appBorderRadius
-                  }
-                  boxShadow="none"
-                  buttonColor={selectedTheme.properties.colors.primaryColor}
-                  buttonVariant="SECONDARY"
-                  className="w-full h-8"
-                  text="Share"
+            <StyledCtaContainer>
+              <ShareButton
+                currentApplicationDetails={application}
+                currentWorkspaceId={workspaceID}
+                insideSidebar
+              />
+
+              {isOpen && (
+                <PrimaryCTA
+                  className="t--back-to-editor--mobile"
+                  insideSidebar
+                  navColorStyle={navColorStyle}
+                  primaryColor={primaryColor}
+                  url={props.url}
                 />
-              }
-              workspaceId={workspaceID}
-            />
-          )}
-          <PrimaryCTA className="t--back-to-editor--mobile" url={props.url} />
-          {!hideWatermark && (
-            <a
-              className="flex hover:no-underline"
-              href="https://appsmith.com"
-              rel="noreferrer"
-              target="_blank"
-            >
-              <BrandingBadge />
-            </a>
+              )}
+
+              <BackToAppsButton
+                currentApplicationDetails={application}
+                insideSidebar
+              />
+
+              {!hideWatermark && (
+                <a
+                  className="flex mt-2 hover:no-underline"
+                  href="https://appsmith.com"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <BrandingBadge />
+                </a>
+              )}
+            </StyledCtaContainer>
           )}
         </div>
-      </div>
+      </PageMenuContainer>
     </>
   );
 }
 
-function PageNavLink({ page, query }: { page: Page; query: string }) {
+function PageNavLink({
+  closeMenu,
+  navColorStyle,
+  page,
+  primaryColor,
+  query,
+}: {
+  page: Page;
+  query: string;
+  closeMenu: () => void;
+  primaryColor: string;
+  navColorStyle: NavigationSetting["colorStyle"];
+}) {
   const appMode = useSelector(getAppMode);
   const selectedTheme = useSelector(getSelectedAppTheme);
   const pathname = useHref(
     appMode === APP_MODE.PUBLISHED ? viewerURL : builderURL,
-    { pageId: page.pageId },
+    { basePageId: page.basePageId },
   );
 
   return (
-    <NavLink
+    <StyledNavLink
       activeClassName="border-r-3 font-semibold"
       activeStyle={{
         borderColor: selectedTheme.properties.colors.primaryColor,
       }}
-      className="flex flex-col px-4 py-2 text-gray-700 no-underline border-transparent border-r-3 hover:no-underline focus:text-gray-700"
-      key={page.pageId}
+      className="flex flex-col px-4 py-2 no-underline border-transparent border-r-3 hover:no-underline"
+      key={page.basePageId}
+      navColorStyle={navColorStyle}
+      onClick={closeMenu}
+      primaryColor={primaryColor}
       to={{
         pathname: trimQueryString(pathname),
         search: query,
       }}
     >
       {page.pageName}
-    </NavLink>
+    </StyledNavLink>
   );
 }
 

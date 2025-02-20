@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.http.HttpStatus;
 
 import java.io.Serializable;
 
@@ -22,6 +23,10 @@ public class ResponseDTO<T> implements Serializable {
 
     private T data;
 
+    public ResponseDTO(HttpStatus status, T data) {
+        this(status.value(), data, null);
+    }
+
     public ResponseDTO(int status, T data, String message) {
         this.responseMeta = new ResponseMetaDTO(status, message);
         this.data = data;
@@ -36,4 +41,16 @@ public class ResponseDTO<T> implements Serializable {
         this.responseMeta = new ResponseMetaDTO(status, errorDTO);
     }
 
+    public String getErrorDisplay() {
+        if (responseMeta == null) {
+            return "";
+        }
+
+        final ErrorDTO error = responseMeta.getError();
+        if (error == null || error.getMessage() == null) {
+            return "";
+        }
+
+        return error.getCode() + ": " + error.getMessage();
+    }
 }

@@ -1,34 +1,35 @@
 import React from "react";
-import { TabComponent } from "design-system";
+import { Tab, Tabs, TabsList } from "@appsmith/ads";
 import styled from "styled-components";
-import { Colors } from "constants/Colors";
-import TabItem from "./components/TabItem";
 
-type Props = {
-  activeTabIndex: number;
-  onSelect: (index: number) => void;
-  options: Array<{ key: string; title: string }>;
-};
+interface Props {
+  activeTabKey: string;
+  onSelect: (key: string) => void;
+  options: Array<{ key: string; title: string; disabled?: boolean }>;
+}
 
-const TabWrapper = styled.div`
-  .react-tabs {
-    border-bottom: 1px solid ${Colors.ALTO2};
-  }
-  .react-tabs__tab {
-    margin-right: 0px;
-    padding-right: ${(props) => props.theme.spaces[8]}px;
+const StyledTab = styled(Tab)`
+  &:disabled,
+  [disabled] {
+    cursor: not-allowed;
   }
 `;
 
 export default function Menu(props: Props) {
   return (
-    <TabWrapper>
-      <TabComponent
-        onSelect={props.onSelect}
-        selectedIndex={props.activeTabIndex || 0}
-        tabItemComponent={TabItem}
-        tabs={props.options}
-      />
-    </TabWrapper>
+    <Tabs onValueChange={props.onSelect} value={props.activeTabKey}>
+      <TabsList>
+        {props.options.map((tab) => (
+          <StyledTab
+            data-testid={"t--tab-" + tab.key}
+            disabled={tab.disabled ?? false}
+            key={tab.key}
+            value={tab.key}
+          >
+            {tab.title}
+          </StyledTab>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }

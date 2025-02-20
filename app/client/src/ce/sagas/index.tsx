@@ -1,49 +1,61 @@
-import pageSagas from "sagas/PageSagas";
-import { watchActionSagas } from "sagas/ActionSagas";
-import { watchJSActionSagas } from "sagas/JSActionSagas";
-import { watchActionExecutionSagas } from "@appsmith/sagas/ActionExecution/ActionExecutionSagas";
+import { watchActionExecutionSagas } from "ee/sagas/ActionExecution/ActionExecutionSagas";
+import NavigationSagas from "ee/sagas/NavigationSagas";
+import SuperUserSagas from "ee/sagas/SuperUserSagas";
+import organizationSagas from "ee/sagas/organizationSagas";
+import userSagas from "ee/sagas/userSagas";
+import workspaceSagas from "ee/sagas/WorkspaceSagas";
 import { watchPluginActionExecutionSagas } from "sagas/ActionExecution/PluginActionSaga";
-import templateSagas from "sagas/TemplatesSagas";
-import widgetOperationSagas from "sagas/WidgetOperationSagas";
-import errorSagas from "sagas/ErrorSagas";
-import applicationSagas from "sagas/ApplicationSagas";
-import { watchDatasourcesSagas } from "sagas/DatasourcesSagas";
-import initSagas from "sagas/InitSagas";
+import { watchActionSagas } from "sagas/ActionSagas";
 import apiPaneSagas from "sagas/ApiPaneSagas";
-import jsPaneSagas from "sagas/JSPaneSagas";
-import userSagas from "@appsmith/sagas/userSagas";
-import pluginSagas from "sagas/PluginSagas";
-import workspaceSagas from "@appsmith/sagas/WorkspaceSagas";
-import importedCollectionsSagas from "sagas/CollectionSagas";
-import providersSagas from "sagas/ProvidersSaga";
-import curlImportSagas from "sagas/CurlImportSagas";
-import snipingModeSagas from "sagas/SnipingModeSagas";
-import queryPaneSagas from "sagas/QueryPaneSagas";
-import modalSagas from "sagas/ModalSagas";
-import batchSagas from "sagas/BatchSagas";
-import themeSagas from "sagas/ThemeSaga";
-import evaluationsSaga from "sagas/EvaluationsSaga";
-import onboardingSagas from "sagas/OnboardingSagas";
-import utilSagas from "sagas/UtilSagas";
-import saaSPaneSagas from "sagas/SaaSPaneSagas";
-import actionExecutionChangeListeners from "sagas/WidgetLoadingSaga";
-import globalSearchSagas from "sagas/GlobalSearchSagas";
-import websocketSagas from "sagas/WebsocketSagas/WebsocketSagas";
-import debuggerSagas from "sagas/DebuggerSagas";
-import replaySaga from "sagas/ReplaySaga";
-import selectionCanvasSagas from "sagas/CanvasSagas/SelectionCanvasSagas";
-import draggingCanvasSagas from "sagas/CanvasSagas/DraggingCanvasSagas";
-import gitSyncSagas from "sagas/GitSyncSagas";
+import applicationSagas from "ee/sagas/ApplicationSagas";
 import appThemingSaga from "sagas/AppThemingSaga";
-import formEvaluationChangeListener from "sagas/FormEvaluationSaga";
-import SuperUserSagas from "@appsmith/sagas/SuperUserSagas";
-import NavigationSagas from "@appsmith/sagas/NavigationSagas";
-import editorContextSagas from "sagas/editorContextSagas";
-import PageVisibilitySaga from "sagas/PageVisibilitySagas";
-import JSLibrarySaga from "sagas/JSLibrarySaga";
 import AutoHeightSagas from "sagas/autoHeightSagas";
-import tenantSagas from "@appsmith/sagas/tenantSagas";
+import autoLayoutUpdateSagas from "sagas/AutoLayoutUpdateSagas";
+import batchSagas from "sagas/BatchSagas";
+import autoLayoutDraggingSagas from "sagas/CanvasSagas/AutoLayoutDraggingSagas";
+import draggingCanvasSagas from "sagas/CanvasSagas/DraggingCanvasSagas";
+import selectionCanvasSagas from "sagas/CanvasSagas/SelectionCanvasSagas";
+import curlImportSagas from "sagas/CurlImportSagas";
+import { watchDatasourcesSagas } from "ee/sagas/DatasourcesSagas";
+import debuggerSagas from "sagas/DebuggerSagas";
+import editorContextSagas from "sagas/editorContextSagas";
+import errorSagas from "sagas/ErrorSagas";
+import evaluationsSaga from "sagas/EvaluationsSaga";
+import formEvaluationChangeListener, {
+  formEvaluationSagas,
+} from "sagas/FormEvaluationSaga";
+import gitSyncSagas from "sagas/GitSyncSagas";
+import globalSearchSagas from "sagas/GlobalSearchSagas";
+import initSagas from "sagas/InitSagas";
+import { watchJSActionSagas } from "ee/sagas/JSActionSagas";
+import JSLibrarySaga from "sagas/JSLibrarySaga";
+import jsPaneSagas from "sagas/JSPaneSagas";
+import layoutConversionSagas from "sagas/layoutConversionSagas";
 import LintingSaga from "sagas/LintingSagas";
+import modalSagas from "sagas/ModalSagas";
+import onboardingSagas from "sagas/OnboardingSagas";
+import pageSagas from "ee/sagas/PageSagas";
+import pluginSagas from "sagas/PluginSagas";
+import queryPaneSagas from "sagas/QueryPaneSagas";
+import replaySaga from "sagas/ReplaySaga";
+import saaSPaneSagas from "sagas/SaaSPaneSagas";
+import snapshotSagas from "sagas/SnapshotSagas";
+import snipingModeSagas from "sagas/SnipingModeSagas";
+import templateSagas from "sagas/TemplatesSagas";
+import themeSagas from "sagas/ThemeSaga";
+import actionExecutionChangeListeners from "sagas/WidgetLoadingSaga";
+import widgetOperationSagas from "sagas/WidgetOperationSagas";
+import oneClickBindingSaga from "sagas/OneClickBindingSaga";
+import entityNavigationSaga from "sagas/NavigationSagas";
+import communityTemplateSagas from "sagas/CommunityTemplatesSagas";
+import anvilSagas from "layoutSystems/anvil/integrations/sagas";
+import ideSagas from "sagas/IDESaga";
+import sendSideBySideWidgetHoverAnalyticsEventSaga from "sagas/AnalyticsSaga";
+import gitSagas from "git/sagas";
+
+/* Sagas that are registered by a module that is designed to be independent of the core platform */
+import ternSagas from "sagas/TernSaga";
+import gitApplicationSagas from "git-artifact-helpers/application/sagas";
 
 export const sagas = [
   initSagas,
@@ -62,8 +74,6 @@ export const sagas = [
   templateSagas,
   pluginSagas,
   workspaceSagas,
-  importedCollectionsSagas,
-  providersSagas,
   curlImportSagas,
   snipingModeSagas,
   queryPaneSagas,
@@ -74,9 +84,8 @@ export const sagas = [
   onboardingSagas,
   actionExecutionChangeListeners,
   formEvaluationChangeListener,
-  utilSagas,
+  formEvaluationSagas,
   globalSearchSagas,
-  websocketSagas,
   debuggerSagas,
   saaSPaneSagas,
   selectionCanvasSagas,
@@ -87,9 +96,21 @@ export const sagas = [
   appThemingSaga,
   NavigationSagas,
   editorContextSagas,
-  PageVisibilitySaga,
   AutoHeightSagas,
-  tenantSagas,
+  organizationSagas,
   JSLibrarySaga,
   LintingSaga,
+  autoLayoutUpdateSagas,
+  autoLayoutDraggingSagas,
+  layoutConversionSagas,
+  snapshotSagas,
+  oneClickBindingSaga,
+  entityNavigationSaga,
+  communityTemplateSagas,
+  anvilSagas,
+  ternSagas,
+  ideSagas,
+  sendSideBySideWidgetHoverAnalyticsEventSaga,
+  gitSagas,
+  gitApplicationSagas,
 ];

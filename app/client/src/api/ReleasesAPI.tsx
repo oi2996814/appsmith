@@ -1,11 +1,11 @@
-import { AxiosPromise } from "axios";
+import type { AxiosPromise } from "axios";
 import Api from "api/Api";
-import { ApiResponse } from "./ApiResponses";
+import type { ApiResponse } from "./ApiResponses";
 
 class ReleasesAPI extends Api {
   static markAsReadURL = `v1/users/setReleaseNotesViewed`;
 
-  static markAsRead(): AxiosPromise<ApiResponse> {
+  static async markAsRead(): Promise<AxiosPromise<ApiResponse>> {
     return Api.put(ReleasesAPI.markAsReadURL);
   }
 }

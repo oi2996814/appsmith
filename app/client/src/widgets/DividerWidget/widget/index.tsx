@@ -1,11 +1,111 @@
 import React from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import { WidgetType } from "constants/WidgetConstants";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
 import DividerComponent from "../component";
-
 import { ValidationTypes } from "constants/WidgetValidation";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
+import { isAutoLayout } from "layoutSystems/autolayout/utils/flexWidgetUtils";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import type { SetterConfig } from "entities/AppTheming";
+import { Colors } from "constants/Colors";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
 class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
+  static type = "DIVIDER_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Divider",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.LAYOUT],
+      searchTags: ["line"],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      rows: 4,
+      columns: 20,
+      widgetName: "Divider",
+      orientation: "horizontal",
+      capType: "nc",
+      capSide: 0,
+      strokeStyle: "solid",
+      dividerColor: Colors.GRAY,
+      thickness: 2,
+      isVisible: true,
+      version: 1,
+      animateLoading: true,
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "280px",
+              minHeight: "40px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        vertical: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "40px" },
+        minWidth: { base: "280px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc": "Divider is a simple UI widget used as a separator",
+      "!url": "https://docs.appsmith.com/widget-reference/divider",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      orientation: "string",
+      capType: "string",
+      capSide: "number",
+      strokeStyle: "string",
+      dividerColor: "string",
+      thickness: "number",
+    };
+  }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return [
       {
@@ -23,7 +123,7 @@ class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -47,6 +147,7 @@ class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
             propertyName: "orientation",
             label: "Direction",
             controlType: "ICON_TABS",
+            defaultValue: "horizontal",
             fullWidth: true,
             options: [
               {
@@ -58,6 +159,7 @@ class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
                 value: "vertical",
               },
             ],
+            hidden: isAutoLayout,
             isJSConvertible: true,
             isBindProperty: true,
             isTriggerProperty: false,
@@ -93,19 +195,16 @@ class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
                 label: "Solid",
                 value: "solid",
                 icon: "cap-solid",
-                iconSize: "large",
               },
               {
                 label: "Dashed",
                 value: "dashed",
                 icon: "line-dashed",
-                iconSize: "large",
               },
               {
                 label: "Dotted",
                 value: "dotted",
                 icon: "line-dotted",
-                iconSize: "large",
               },
             ],
             isJSConvertible: true,
@@ -139,22 +238,19 @@ class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
             isJSConvertible: true,
             options: [
               {
-                label: "No Cap",
+                label: "No cap",
                 value: "nc",
                 icon: "cap-solid",
-                iconSize: "large",
               },
               {
                 label: "Arrow",
                 value: "arrow",
                 icon: "arrow-forward",
-                iconSize: "large",
               },
               {
                 label: "Dot",
                 value: "dot",
                 icon: "cap-dot",
-                iconSize: "large",
               },
             ],
             isBindProperty: true,
@@ -172,25 +268,25 @@ class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
             helpText:
               "Changes the position of the cap if a valid cap is selected.",
             propertyName: "capSide",
-            label: "Cap Position",
+            label: "Cap position",
             controlType: "ICON_TABS",
             fullWidth: true,
             options: [
               {
-                icon: "DIVIDER_CAP_LEFT",
+                startIcon: "contract-left-line",
                 value: -1,
               },
               {
-                icon: "DIVIDER_CAP_ALL",
+                startIcon: "column-freeze",
                 value: 0,
                 width: 48,
               },
               {
-                icon: "DIVIDER_CAP_RIGHT",
+                startIcon: "contract-right-line",
                 value: 1,
               },
             ],
-            defaultValue: "0",
+            defaultValue: 0,
             isBindProperty: false,
             isTriggerProperty: false,
           },
@@ -199,7 +295,7 @@ class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
     ];
   }
 
-  getPageView() {
+  getWidgetView() {
     return (
       <DividerComponent
         capSide={this.props.capSide}
@@ -210,10 +306,6 @@ class DividerWidget extends BaseWidget<DividerWidgetProps, WidgetState> {
         thickness={this.props.thickness}
       />
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "DIVIDER_WIDGET";
   }
 }
 

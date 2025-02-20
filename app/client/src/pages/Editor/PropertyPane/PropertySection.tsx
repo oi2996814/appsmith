@@ -1,39 +1,38 @@
 import { Classes } from "@blueprintjs/core";
+import type { ReactNode, Context } from "react";
 import React, {
   memo,
-  ReactNode,
   useState,
-  Context,
+  useEffect,
   createContext,
   useCallback,
 } from "react";
 import { Collapse } from "@blueprintjs/core";
 import styled from "styled-components";
 import { Colors } from "constants/Colors";
-import { AppIcon as Icon, Size } from "design-system";
-import { AppState } from "@appsmith/reducers";
+import { Icon, Tag } from "@appsmith/ads";
+import type { AppState } from "ee/reducers";
 import { useDispatch, useSelector } from "react-redux";
 import { getPropertySectionState } from "selectors/editorContextSelectors";
 import { getCurrentWidgetId } from "selectors/propertyPaneSelectors";
 import { setPropertySectionState } from "actions/propertyPaneActions";
+import { getIsOneClickBindingOptionsVisibility } from "selectors/oneClickBindingSelectors";
+import localStorage from "utils/localStorage";
+import { WIDGET_ID_SHOW_WALKTHROUGH } from "constants/WidgetConstants";
+import { PROPERTY_PANE_ID } from "components/editorComponents/PropertyPaneSidebar";
 
-const Label = styled.div`
-  font-size: 11px;
-  background: ${Colors.GRAY_100};
-  color: ${Colors.GRAY_600};
-  padding: 2px 4px;
-`;
+const TagContainer = styled.div``;
 
 const SectionTitle = styled.span`
-  color: ${Colors.GRAY_800};
-  font-size: ${(props) => props.theme.fontSizes[3]}px;
-  font-weight: 500;
+  color: var(--ads-v2-color-gray-600);
+  font-size: var(--ads-v2-font-size-4);
+  font-weight: var(--ads-v2-font-weight-bold);
   margin-right: 8px;
 `;
 
 const SectionWrapper = styled.div`
   position: relative;
-  border-top: 1px solid ${Colors.GREY_4};
+  border-top: 1px solid var(--ads-v2-color-border);
   padding: 12px 16px;
 
   &:first-of-type {
@@ -47,7 +46,7 @@ const SectionWrapper = styled.div`
     &:first-of-type {
       margin-top: 0;
     }
-    ${Label} {
+    ${TagContainer} {
       display: none;
     }
   }
@@ -73,14 +72,7 @@ const SectionWrapper = styled.div`
   }
 `;
 
-const StyledIcon = styled(Icon)`
-  margin-left: auto;
-  svg path {
-    fill: ${Colors.GRAY_700};
-  }
-`;
-
-type PropertySectionProps = {
+interface PropertySectionProps {
   id: string;
   name: string;
   childrenId?: string;
@@ -88,12 +80,14 @@ type PropertySectionProps = {
   children?: ReactNode;
   childrenWrapperRef?: React.RefObject<HTMLDivElement>;
   className?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   hidden?: (props: any, propertyPath: string) => boolean;
   isDefaultOpen?: boolean;
   propertyPath?: string;
   tag?: string; // Used to show a tag on the section title on search results
   panelPropertyPath?: string;
-};
+}
 
 const areEqual = (prev: PropertySectionProps, next: PropertySectionProps) => {
   return prev.id === next.id && prev.childrenId === next.childrenId;
@@ -105,25 +99,24 @@ export const CollapseContext: Context<boolean> = createContext<boolean>(false);
 export const PropertySection = memo((props: PropertySectionProps) => {
   const dispatch = useDispatch();
   const currentWidgetId = useSelector(getCurrentWidgetId);
-  const { isDefaultOpen = true } = props;
-  const isDefaultContextOpen = useSelector(
-    (state: AppState) =>
-      getPropertySectionState(state, {
-        key: `${currentWidgetId}.${props.id}`,
-        panelPropertyPath: props.panelPropertyPath,
-      }),
-    () => true,
+  const { isDefaultOpen } = props;
+  const isContextOpen = useSelector((state: AppState) =>
+    getPropertySectionState(state, {
+      key: `${currentWidgetId}.${props.id}`,
+      panelPropertyPath: props.panelPropertyPath,
+    }),
   );
   const isSearchResult = props.tag !== undefined;
-  let initialIsOpenState = true;
-  if (isSearchResult) {
-    initialIsOpenState = true;
-  } else if (isDefaultContextOpen !== undefined) {
-    initialIsOpenState = isDefaultContextOpen;
-  } else {
-    initialIsOpenState = !!isDefaultOpen;
-  }
-  const [isOpen, setIsOpen] = useState(initialIsOpenState);
+  const [isOpen, setIsOpen] = useState(!!isContextOpen);
+
+  const className = props.name.split(" ").join("").toLowerCase();
+  const connectDataClicked = useSelector(getIsOneClickBindingOptionsVisibility);
+
+  useEffect(() => {
+    if (connectDataClicked && className === "data" && !isOpen) {
+      handleSectionTitleClick();
+    }
+  }, [connectDataClicked]);
 
   const handleSectionTitleClick = useCallback(() => {
     if (props.collapsible)
@@ -135,16 +128,54 @@ export const PropertySection = memo((props: PropertySectionProps) => {
             props.panelPropertyPath,
           ),
         );
+
         return !x;
       });
   }, [props.collapsible, props.id, currentWidgetId]);
 
+  useEffect(() => {
+    let initialIsOpenState = true;
+
+    if (isSearchResult) {
+      initialIsOpenState = true;
+    } else if (isContextOpen !== undefined) {
+      initialIsOpenState = isContextOpen;
+    } else {
+      initialIsOpenState = !!isDefaultOpen;
+    }
+
+    setIsOpen(initialIsOpenState);
+  }, [isContextOpen, isSearchResult, isDefaultOpen]);
+
+  // If the walkthrough is opened for widget Id, then only open the data section of property pane and collapse other sections.
+  const enableDataSectionOnly = async () => {
+    const widgetId: string | null = await localStorage.getItem(
+      WIDGET_ID_SHOW_WALKTHROUGH,
+    );
+
+    if (widgetId) {
+      const isWidgetIdTableDataExist = document.querySelector(
+        `#${PROPERTY_PANE_ID} [id='${btoa(widgetId + ".tableData")}']`,
+      );
+
+      if (isWidgetIdTableDataExist) {
+        if (className === "data") {
+          setIsOpen(true);
+        } else {
+          setIsOpen(false);
+        }
+      } else {
+        await localStorage.removeItem(WIDGET_ID_SHOW_WALKTHROUGH);
+      }
+    }
+  };
+
+  useEffect(() => {
+    enableDataSectionOnly();
+  }, []);
+
   if (!currentWidgetId) return null;
 
-  const className = props.name
-    .split(" ")
-    .join("")
-    .toLowerCase();
   return (
     <SectionWrapper
       className={`t--property-pane-section-wrapper ${props.className}`}
@@ -157,15 +188,20 @@ export const PropertySection = memo((props: PropertySectionProps) => {
       >
         <SectionTitle>{props.name}</SectionTitle>
         {props.tag && (
-          <Label className={`t--property-section-tag-${props.tag}`}>
-            {props.tag}
-          </Label>
+          <TagContainer>
+            <Tag
+              className={`capitalize t--property-section-tag-${props.tag}`}
+              isClosable={false}
+            >
+              {props.tag.toLowerCase()}
+            </Tag>
+          </TagContainer>
         )}
         {props.collapsible && (
-          <StyledIcon
-            className="t--chevron-icon"
-            name={isOpen ? "arrow-down" : "arrow-right"}
-            size={Size.small}
+          <Icon
+            className={`ml-auto t--chevron-icon`}
+            name={isOpen ? "expand-less" : "expand-more"}
+            size="md"
           />
         )}
       </div>
@@ -188,6 +224,8 @@ export const PropertySection = memo((props: PropertySectionProps) => {
 
 PropertySection.displayName = "PropertySection";
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (PropertySection as any).whyDidYouRender = {
   logOnDifferentValues: false,
 };

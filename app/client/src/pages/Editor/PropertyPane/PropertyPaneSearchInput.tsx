@@ -1,42 +1,35 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import styled from "styled-components";
-import { SearchVariant } from "design-system";
-import { InputWrapper, SearchInput } from "design-system";
-import { Colors } from "constants/Colors";
+import { SearchInput } from "@appsmith/ads";
 import { useSelector } from "react-redux";
 import {
   getShouldFocusPanelPropertySearch,
   getShouldFocusPropertySearch,
 } from "selectors/propertyPaneSelectors";
 import { isCurrentFocusOnInput } from "utils/editorContextUtils";
-import { PROPERTY_SEARCH_INPUT_PLACEHOLDER } from "@appsmith/constants/messages";
+import { PROPERTY_SEARCH_INPUT_PLACEHOLDER } from "ee/constants/messages";
 
-const SearchInputWrapper = styled.div`
+const Container = styled.div`
   position: sticky;
-  top: 42px;
+  top: 44px;
   z-index: 3;
-  border: 1px solid ${Colors.GRAY_50};
-  :focus-within {
-    border-color: var(--appsmith-input-focus-border-color);
-  }
+  margin-bottom: 2px;
+  background: var(--ads-v2-color-white);
+  height: 35px;
 `;
 
-const StyledSearchInput = React.memo(styled(SearchInput)`
-  ${InputWrapper} {
-    background: ${Colors.GRAY_50};
-    padding: 0 8px;
-    height: 34px;
-  }
-`);
+const SearchInputWrapper = styled.div`
+  margin: 0 1rem;
+`;
 
-type PropertyPaneSearchInputProps = {
+interface PropertyPaneSearchInputProps {
   onTextChange: (text: string) => void;
   isPanel?: boolean;
-};
+}
 
 export function PropertyPaneSearchInput(props: PropertyPaneSearchInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLDivElement>(null);
   const shouldFocusSearch = useSelector(getShouldFocusPropertySearch);
   const shouldFocusPanelSearch = useSelector(getShouldFocusPanelPropertySearch);
   const isPanel = !!props.isPanel;
@@ -89,21 +82,21 @@ export function PropertyPaneSearchInput(props: PropertyPaneSearchInputProps) {
   }, []);
 
   return (
-    <SearchInputWrapper
-      className="t--property-pane-search-input-wrapper"
-      onKeyDown={handleWrapperKeydown}
-      ref={wrapperRef}
-      tabIndex={0}
-    >
-      <StyledSearchInput
-        className="propertyPaneSearch"
-        fill
-        onChange={props.onTextChange}
-        placeholder={PROPERTY_SEARCH_INPUT_PLACEHOLDER}
-        ref={inputRef}
-        tabIndex={-1}
-        variant={SearchVariant.BACKGROUND}
-      />
-    </SearchInputWrapper>
+    <Container tabIndex={-1}>
+      <SearchInputWrapper
+        className="t--property-pane-search-input-wrapper"
+        onKeyDown={handleWrapperKeydown}
+        ref={wrapperRef}
+        tabIndex={0}
+      >
+        <SearchInput
+          className="propertyPaneSearch t--property-pane-search-input-wrapper"
+          onChange={props.onTextChange}
+          placeholder={PROPERTY_SEARCH_INPUT_PLACEHOLDER}
+          ref={inputRef}
+          tabIndex={-1}
+        />
+      </SearchInputWrapper>
+    </Container>
   );
 }

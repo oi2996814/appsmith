@@ -1,30 +1,29 @@
-import React, { MutableRefObject } from "react";
+import type { MutableRefObject } from "react";
+import React from "react";
 import styled from "styled-components";
+import type { Alignment, Intent, IconName, IRef } from "@blueprintjs/core";
 import {
-  Alignment,
-  Intent,
   NumericInput,
-  IconName,
   InputGroup,
   Classes,
   ControlGroup,
   Tag,
-  IRef,
 } from "@blueprintjs/core";
 import _, { isNil } from "lodash";
 
-import { ComponentProps } from "widgets/BaseComponent";
+import type { ComponentProps } from "widgets/BaseComponent";
 import { Colors } from "constants/Colors";
 import {
   createMessage,
   INPUT_WIDGET_DEFAULT_VALIDATION_ERROR,
-} from "@appsmith/constants/messages";
-import { InputTypes, NumberInputStepButtonPosition } from "../constants";
+} from "ee/constants/messages";
+import type { NumberInputStepButtonPosition } from "../constants";
+import { InputTypes } from "../constants";
 
 // TODO(abhinav): All of the following imports should not be in widgets.
 import ErrorTooltip from "components/editorComponents/ErrorTooltip";
-import { Icon } from "design-system";
-import { InputType } from "widgets/InputWidget/constants";
+import { Icon } from "@design-system/widgets-old";
+import type { InputType } from "widgets/InputWidget/constants";
 import { getBaseWidgetClassName } from "constants/componentClassNameConstants";
 import { LabelPosition } from "components/constants";
 import { lightenColor } from "widgets/WidgetUtils";
@@ -61,6 +60,7 @@ const InputComponentWrapper = styled((props) => (
       "boxShadow",
       "accentColor",
       "isDynamicHeightEnabled",
+      "isMultiLine",
     ])}
   />
 ))<{
@@ -79,7 +79,6 @@ const InputComponentWrapper = styled((props) => (
   isMultiline?: boolean;
 }>`
   ${labelLayoutStyles}
-
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "auto")};
   .${Classes.INPUT_GROUP} {
     display: flex;
@@ -103,6 +102,38 @@ const InputComponentWrapper = styled((props) => (
         line-height: 16px;
       }
     }
+
+    ${(props) =>
+      props.inputType === "PASSWORD" &&
+      `
+      .password-input {
+        height: 100%;
+        width: 36px;
+        cursor: pointer;
+
+        color:
+          ${
+            props.disabled
+              ? "var(--wds-color-icon-disabled)"
+              : "var(--wds-color-icon)"
+          };
+        justify-content: center;
+        height: 100%;
+        svg {
+          width: 20px;
+          height: 20px;
+        }
+        &:hover {
+          background-color: var(--wds-color-bg-hover);
+        }
+      }
+  `}
+
+  &.rtl {
+    input {
+      direction: rtl;
+    }
+  }
   }
 
   &&&& {
@@ -143,6 +174,7 @@ const InputComponentWrapper = styled((props) => (
           fill: ${(props) => props.theme.colors.icon?.hover};
         }
       }
+
       .${Classes.INPUT} {
         padding-left: 0.5rem;
         min-height: 36px;
@@ -208,34 +240,6 @@ const InputComponentWrapper = styled((props) => (
           return "var(--wds-color-text-light)";
         }};
       }
-
-      ${(props) =>
-        props.inputType === "PASSWORD" &&
-        `
-      & + .bp3-input-action {
-        height: 100%;
-        width: 36px;
-        cursor: pointer;
-
-        .password-input {
-          color:
-            ${
-              props.disabled
-                ? "var(--wds-color-icon-disabled)"
-                : "var(--wds-color-icon)"
-            };
-          justify-content: center;
-          height: 100%;
-          svg {
-            width: 20px;
-            height: 20px;
-          }
-          &:hover {
-            background-color: var(--wds-color-bg-hover);
-          }
-        }
-      }
-    `}
     }
 
     & .${Classes.INPUT_GROUP} {
@@ -290,20 +294,25 @@ const InputComponentWrapper = styled((props) => (
       if (!labelPosition && !checkInputTypeText(inputType)) {
         return "center";
       }
+
       if (labelPosition === LabelPosition.Top) {
         return "flex-start";
       }
+
       if (compactMode) {
         return "center";
       }
+
       if (labelPosition === LabelPosition.Left) {
         if (inputType === InputTypes.TEXT) {
           return "center";
         } else if (inputType === InputTypes.MULTI_LINE_TEXT) {
           return "flex-start";
         }
+
         return "center";
       }
+
       return "flex-start";
     }};
 
@@ -332,6 +341,12 @@ const StyledNumericInput = styled(NumericInput)`
           width: 12px;
         }
       }
+    }
+  }
+
+  &.rtl {
+    input {
+      direction: rtl;
     }
   }
 `;
@@ -472,13 +487,6 @@ class BaseInputComponent extends React.Component<
     this.props.onValueChange(valueAsString);
   };
 
-  getLeftIcon = () => {
-    if (this.props.iconName && this.props.iconAlign === "left") {
-      return this.props.iconName;
-    }
-    return this.props.leftIcon;
-  };
-
   getType(inputType: InputHTMLType = "TEXT") {
     switch (inputType) {
       case "PASSWORD":
@@ -494,9 +502,11 @@ class BaseInputComponent extends React.Component<
 
   onKeyDownTextArea = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const isEnterKey = e.key === "Enter" || e.keyCode === 13;
+
     if (isEnterKey && e.metaKey) {
       e.preventDefault();
     }
+
     if (typeof this.props.onKeyDown === "function") {
       this.props.onKeyDown(e);
     }
@@ -535,7 +545,10 @@ class BaseInputComponent extends React.Component<
         allowNumericCharactersOnly
         autoFocus={this.props.autoFocus}
         buttonPosition={this.props.buttonPosition}
-        className={this.props.isLoading ? "bp3-skeleton" : Classes.FILL}
+        className={
+          (this.props.isLoading ? "bp3-skeleton" : Classes.FILL) +
+          (this.props.rtl ? " rtl" : "")
+        }
         disabled={this.props.disabled}
         inputRef={(el) => {
           if (this.props.inputRef && el) {
@@ -553,6 +566,7 @@ class BaseInputComponent extends React.Component<
         onKeyUp={this.onKeyUp}
         onValueChange={this.onNumberChange}
         placeholder={this.props.placeholder}
+        rightElement={this.getRightIcon()}
         stepSize={this.props.stepSize}
         value={this.props.value}
         {...conditionalProps}
@@ -565,6 +579,7 @@ class BaseInputComponent extends React.Component<
       autoFocus={this.props.autoFocus}
       autoResize={!!this.props.isDynamicHeightEnabled}
       className={this.props.isLoading ? "bp3-skeleton" : ""}
+      dir={this.props.rtl ? "rtl" : "ltr"}
       disabled={this.props.disabled}
       maxLength={this.props.maxChars}
       onBlur={() => this.setFocusState(false)}
@@ -584,16 +599,16 @@ class BaseInputComponent extends React.Component<
       this.textAreaInputComponent()
     ) : (
       <InputGroup
+        autoComplete={this.props.autoComplete}
         autoFocus={this.props.autoFocus}
-        className={this.props.isLoading ? "bp3-skeleton" : ""}
+        className={
+          (this.props.isLoading ? "bp3-skeleton" : "") +
+          (this.props.rtl ? " rtl" : "")
+        }
         disabled={this.props.disabled}
         inputRef={this.props.inputRef as IRef<HTMLInputElement>}
         intent={this.props.intent}
-        leftIcon={
-          this.props.iconName && this.props.iconAlign === "left"
-            ? this.props.iconName
-            : this.props.leftIcon
-        }
+        leftIcon={this.getLeftIcon()}
         maxLength={this.props.maxChars}
         onBlur={() => this.setFocusState(false)}
         onChange={this.onTextChange}
@@ -601,26 +616,47 @@ class BaseInputComponent extends React.Component<
         onKeyDown={this.onKeyDown}
         onKeyUp={this.onKeyUp}
         placeholder={this.props.placeholder}
-        rightElement={
-          this.props.inputType === "PASSWORD" ? (
-            <Icon
-              className="password-input"
-              name={this.state.showPassword ? "eye-off" : "eye-on"}
-              onClick={() => {
-                this.setState({ showPassword: !this.state.showPassword });
-              }}
-            />
-          ) : this.props.iconName && this.props.iconAlign === "right" ? (
-            <Tag icon={this.props.iconName} />
-          ) : (
-            undefined
-          )
-        }
+        rightElement={this.getRightIcon()}
         spellCheck={this.props.spellCheck}
         type={this.getType(this.props.inputHTMLType)}
         value={this.props.value}
       />
     );
+
+  private getLeftIcon = () => {
+    if (this.props.inputType === "PASSWORD" && this.props.rtl) {
+      return (
+        <Icon
+          className="password-input"
+          name={this.state.showPassword ? "eye-off" : "eye-on"}
+          onClick={() => {
+            this.setState({ showPassword: !this.state.showPassword });
+          }}
+        />
+      );
+    } else if (this.props.iconName && this.props.iconAlign === "left") {
+      return this.props.iconName;
+    } else {
+      return this.props.leftIcon;
+    }
+  };
+
+  private getRightIcon = () => {
+    if (this.props.inputType === "PASSWORD" && !this.props.rtl) {
+      return (
+        <Icon
+          className="password-input"
+          name={this.state.showPassword ? "eye-off" : "eye-on"}
+          onClick={() => {
+            this.setState({ showPassword: !this.state.showPassword });
+          }}
+        />
+      );
+    } else if (this.props.iconName && this.props.iconAlign === "right") {
+      return <Tag icon={this.props.iconName} />;
+    }
+  };
+
   private renderInputComponent = (
     inputHTMLType: InputHTMLType = "TEXT",
     isTextArea: boolean,
@@ -695,6 +731,7 @@ class BaseInputComponent extends React.Component<
             isDynamicHeightEnabled={isDynamicHeightEnabled}
             loading={isLoading}
             position={labelPosition}
+            rtl={this.props.rtl}
             text={label}
             width={labelWidth}
           />
@@ -760,6 +797,7 @@ export interface BaseInputComponentProps extends ComponentProps {
   compactMode: boolean;
   isInvalid: boolean;
   autoFocus?: boolean;
+  autoComplete?: string;
   iconName?: IconName;
   iconAlign?: Omit<Alignment, "center">;
   showError: boolean;
@@ -790,6 +828,7 @@ export interface BaseInputComponentProps extends ComponentProps {
   errorTooltipBoundary?: string;
   shouldUseLocale?: boolean;
   buttonPosition?: NumberInputStepButtonPosition;
+  rtl?: boolean;
 }
 
 export default BaseInputComponent;

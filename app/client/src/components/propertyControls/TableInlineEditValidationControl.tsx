@@ -1,40 +1,61 @@
 import React from "react";
-import BaseControl, { ControlProps } from "./BaseControl";
+import type { ColumnProperties } from "widgets/TableWidgetV2/component/Constants";
+import type { ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 import { StyledDynamicInput } from "./StyledControls";
-import CodeEditor, {
-  CodeEditorExpected,
-} from "components/editorComponents/CodeEditor";
+import type { CodeEditorExpected } from "components/editorComponents/CodeEditor";
+import type { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
 import {
   EditorModes,
   EditorSize,
-  EditorTheme,
   TabBehaviour,
 } from "components/editorComponents/CodeEditor/EditorConfig";
 import { isDynamicValue } from "utils/DynamicBindingUtils";
 import styled from "styled-components";
 import { isString } from "utils/helpers";
+import { JSToString, stringToJS } from "./utils";
+import type { AdditionalDynamicDataTree } from "utils/autocomplete/customTreeTypeDefCreator";
+import LazyCodeEditor from "components/editorComponents/LazyCodeEditor";
 import {
-  JSToString,
-  stringToJS,
-} from "components/editorComponents/ActionCreator/utils";
-import { AdditionalDynamicDataTree } from "utils/autocomplete/customTreeTypeDefCreator";
+  ORIGINAL_INDEX_KEY,
+  PRIMARY_COLUMN_KEY_VALUE,
+} from "widgets/TableWidgetV2/constants";
+import {
+  createMessage,
+  TABLE_WIDGET_VALIDATION_ASSIST_PROMPT,
+} from "ee/constants/messages";
+import { bindingHintHelper } from "components/editorComponents/CodeEditor/hintHelpers";
+import { slashCommandHintHelper } from "components/editorComponents/CodeEditor/commandsHelper";
 
-const PromptMessage = styled.span`
+export const PromptMessage = styled.span`
   line-height: 17px;
+
+  > .code-wrapper {
+    font-family: var(--ads-v2-font-family-code);
+    display: inline-flex;
+    align-items: center;
+  }
 `;
+
+export const StyledCode = styled.span`
+  color: var(--ads-v2-color-fg-brand);
+`;
+
 export const CurlyBraces = styled.span`
-  color: ${(props) => props.theme.colors.codeMirror.background.hoverState};
-  background-color: #ffffff;
+  color: var(--ads-v2-color-fg-brand);
   border-radius: 2px;
   padding: 2px;
-  margin: 0px 2px;
+  margin: 0 2px 0 0;
   font-size: 10px;
+  font-weight: var(--ads-v2-font-weight-bold);
 `;
 
-type InputTextProp = {
+interface InputTextProp {
   label: string;
   value: string;
   onChange: (event: React.ChangeEvent<HTMLTextAreaElement> | string) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluatedValue?: any;
   expected?: CodeEditorExpected;
   placeholder?: string;
@@ -42,7 +63,7 @@ type InputTextProp = {
   additionalDynamicData: AdditionalDynamicDataTree;
   theme: EditorTheme;
   promptMessage?: JSX.Element;
-};
+}
 
 export function InputText(props: InputTextProp) {
   const {
@@ -56,19 +77,23 @@ export function InputText(props: InputTextProp) {
     theme,
     value,
   } = props;
+
   return (
     <StyledDynamicInput>
-      <CodeEditor
+      <LazyCodeEditor
+        AIAssisted
         additionalDynamicData={additionalDynamicData}
         dataTreePath={dataTreePath}
         evaluatedValue={evaluatedValue}
         expected={expected}
+        hinting={[bindingHintHelper, slashCommandHintHelper]}
         input={{
           value: value,
           onChange: onChange,
         }}
         mode={EditorModes.TEXT_WITH_BINDING}
         placeholder={placeholder}
+        positionCursorInsideBinding
         promptMessage={<PromptMessage>{promptMessage}</PromptMessage>}
         size={EditorSize.EXTENDED}
         tabBehaviour={TabBehaviour.INDENT}
@@ -80,22 +105,28 @@ export function InputText(props: InputTextProp) {
 
 const bindingPrefix = `{{
   (
-    (isNewRow) => (
+    (isNewRow, currentIndex, currentRow) => (
 `;
 
 const getBindingSuffix = (tableId: string) => {
   return `
     ))
     (
-      ${tableId}.isAddRowInProgress
+      ${tableId}.isAddRowInProgress,
+      ${tableId}.isAddRowInProgress ? -1 : ${tableId}.editableCell.index,
+      ${tableId}.isAddRowInProgress ? ${tableId}.newRow : (${tableId}.processedTableData[${tableId}.editableCell.${ORIGINAL_INDEX_KEY}] ||
+        Object.keys(${tableId}.processedTableData[0])
+          .filter(key => ["${ORIGINAL_INDEX_KEY}", "${PRIMARY_COLUMN_KEY_VALUE}"].indexOf(key) === -1)
+          .reduce((prev, curr) => {
+            prev[curr] = "";
+            return prev;
+          }, {}))
     )
   }}
   `;
 };
 
-class TableInlineEditValidationControl extends BaseControl<
-  TableInlineEditValidationControlProps
-> {
+class TableInlineEditValidationControl extends BaseControl<TableInlineEditValidationControlProps> {
   render() {
     const {
       dataTreePath,
@@ -112,6 +143,17 @@ class TableInlineEditValidationControl extends BaseControl<
         ? this.getInputComputedValue(propertyValue, tableId)
         : propertyValue || defaultValue;
 
+    const columns: Record<string, ColumnProperties> =
+      widgetProperties.primaryColumns || {};
+
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const currentRow: { [key: string]: any } = {};
+
+    Object.values(columns).forEach((column) => {
+      currentRow[column.alias || column.originalId] = undefined;
+    });
+
     // Load default value in evaluated value
     if (value && !propertyValue) {
       this.onTextChange(value);
@@ -119,6 +161,8 @@ class TableInlineEditValidationControl extends BaseControl<
 
     const additionalDynamicData = {
       isNewRow: false,
+      currentIndex: -1,
+      currentRow,
     };
 
     return (
@@ -128,6 +172,16 @@ class TableInlineEditValidationControl extends BaseControl<
         expected={expected}
         label={label}
         onChange={this.onTextChange}
+        promptMessage={
+          <PromptMessage>
+            {createMessage(TABLE_WIDGET_VALIDATION_ASSIST_PROMPT)}
+            <span className="code-wrapper">
+              <CurlyBraces>{"{{"}</CurlyBraces>
+              <StyledCode>currentRow.columnName</StyledCode>
+              <CurlyBraces>{"}}"}</CurlyBraces>
+            </span>
+          </PromptMessage>
+        }
         theme={theme}
         value={value}
       />
@@ -161,16 +215,19 @@ class TableInlineEditValidationControl extends BaseControl<
     if (stringToEvaluate === "") {
       return stringToEvaluate;
     }
+
     return `${bindingPrefix}${stringToEvaluate}${getBindingSuffix(tableId)}`;
   };
 
   onTextChange = (event: React.ChangeEvent<HTMLTextAreaElement> | string) => {
     let value = "";
+
     if (typeof event !== "string") {
       value = event.target?.value;
     } else {
       value = event;
     }
+
     if (isString(value)) {
       const output = this.getComputedValue(
         value,

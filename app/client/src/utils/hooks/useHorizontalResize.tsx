@@ -1,4 +1,6 @@
-import React, { useState, useEffect, MutableRefObject } from "react";
+import type { MutableRefObject } from "react";
+import type React from "react";
+import { useState, useEffect } from "react";
 
 import { unFocus } from "utils/helpers";
 
@@ -95,6 +97,7 @@ const useHorizontalResize = (
     const eventWithTouches = Object.assign({}, event, {
       touches: [{ clientX: event.clientX, clientY: event.clientY }],
     });
+
     onTouchMove(eventWithTouches);
   };
 

@@ -16,9 +16,11 @@ import {
 } from "lodash";
 import equal from "fast-deep-equal/es6";
 
-import BaseWidget, { WidgetState } from "widgets/BaseWidget";
-import { RenderModes, WidgetType } from "constants/WidgetConstants";
+import type { WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
+import { RenderModes } from "constants/WidgetConstants";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import type { RenderMenuButtonProps } from "../component/TableUtilities";
 import {
   getDefaultColumnProperties,
   getTableStyles,
@@ -26,37 +28,60 @@ import {
   renderDropdown,
   renderActions,
   renderMenuButton,
-  RenderMenuButtonProps,
   renderIconButton,
 } from "../component/TableUtilities";
 import { getAllTableColumnKeys } from "../component/TableHelpers";
 import Skeleton from "components/utils/Skeleton";
 import { noop, retryPromise } from "utils/AppsmithUtils";
 
-import { DynamicPath, getDynamicBindings } from "utils/DynamicBindingUtils";
-import { ReactTableFilter, OperatorTypes } from "../component/Constants";
-import { TableWidgetProps } from "../constants";
+import type { DynamicPath } from "utils/DynamicBindingUtils";
+import { getDynamicBindings } from "utils/DynamicBindingUtils";
+import type { ReactTableFilter } from "../component/Constants";
+import { OperatorTypes } from "../component/Constants";
+import type { TableWidgetProps } from "../constants";
 import derivedProperties from "./parseDerivedProperties";
 import { selectRowIndex, selectRowIndices } from "./utilities";
+import type { ExtraDef } from "utils/autocomplete/defCreatorUtils";
+import { generateTypeDef } from "utils/autocomplete/defCreatorUtils";
 
-import {
+import type {
   ColumnProperties,
   ReactTableColumnProps,
+} from "../component/Constants";
+import {
   ColumnTypes,
   CompactModeTypes,
   SortOrderTypes,
 } from "../component/Constants";
 import tablePropertyPaneConfig from "./propertyConfig";
-import { BatchPropertyUpdatePayload } from "actions/controlActions";
-import { IconName } from "@blueprintjs/icons";
+import type { BatchPropertyUpdatePayload } from "actions/controlActions";
+import type { IconName } from "@blueprintjs/icons";
 import { getCellProperties } from "./getTableColumns";
 import { Colors } from "constants/Colors";
-import { borderRadiusUtility, boxShadowMigration } from "widgets/WidgetUtils";
+import {
+  borderRadiusUtility,
+  boxShadowMigration,
+  DefaultAutocompleteDefinitions,
+} from "widgets/WidgetUtils";
 import { ButtonVariantTypes } from "components/constants";
-import { Stylesheet } from "entities/AppTheming";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { cloneDeep, set } from "lodash";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import { combineDynamicBindings } from "utils/DynamicBindingUtils";
+import type { WidgetProps } from "widgets/BaseWidget";
+import { BlueprintOperationTypes } from "WidgetProvider/constants";
+import type {
+  SnipingModeProperty,
+  PropertyUpdates,
+} from "WidgetProvider/constants";
+import IconSVG from "../icon.svg";
 
-const ReactTableComponent = lazy(() =>
-  retryPromise(() => import("../component")),
+const ReactTableComponent = lazy(async () =>
+  retryPromise(async () => import("../component")),
 );
 const defaultFilter = [
   {
@@ -68,6 +93,287 @@ const defaultFilter = [
 ];
 
 class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
+  static type = "TABLE_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Table",
+      iconSVG: IconSVG,
+      needsMeta: true,
+      searchTags: ["datagrid"],
+      hideCard: true,
+      needsHeightForContent: true,
+    };
+  }
+
+  static getDefaults() {
+    return {
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      rows: 28,
+      columns: 34,
+      animateLoading: true,
+      defaultSelectedRow: "0",
+      label: "Data",
+      widgetName: "Table",
+      searchKey: "",
+      textSize: "0.875rem",
+      horizontalAlignment: "LEFT",
+      verticalAlignment: "CENTER",
+      totalRecordsCount: 0,
+      defaultPageSize: 0,
+      dynamicBindingPathList: [
+        {
+          key: "primaryColumns.step.computedValue",
+        },
+        {
+          key: "primaryColumns.task.computedValue",
+        },
+        {
+          key: "primaryColumns.status.computedValue",
+        },
+        {
+          key: "primaryColumns.action.computedValue",
+        },
+        {
+          key: "primaryColumns.action.buttonColor",
+        },
+        {
+          key: "primaryColumns.action.borderRadius",
+        },
+        {
+          key: "primaryColumns.action.boxShadow",
+        },
+      ],
+      primaryColumns: {
+        step: {
+          index: 0,
+          width: 150,
+          id: "step",
+          horizontalAlignment: "LEFT",
+          verticalAlignment: "CENTER",
+          columnType: "text",
+          textSize: "0.875rem",
+          enableFilter: true,
+          enableSort: true,
+          isVisible: true,
+          isCellVisible: true,
+          isDerived: false,
+          label: "step",
+          computedValue:
+            "{{Table1.sanitizedTableData.map((currentRow) => ( currentRow.step))}}",
+        },
+        task: {
+          index: 1,
+          width: 150,
+          id: "task",
+          horizontalAlignment: "LEFT",
+          verticalAlignment: "CENTER",
+          columnType: "text",
+          textSize: "0.875rem",
+          enableFilter: true,
+          enableSort: true,
+          isVisible: true,
+          isCellVisible: true,
+          isDerived: false,
+          label: "task",
+          computedValue:
+            "{{Table1.sanitizedTableData.map((currentRow) => ( currentRow.task))}}",
+        },
+        status: {
+          index: 2,
+          width: 150,
+          id: "status",
+          horizontalAlignment: "LEFT",
+          verticalAlignment: "CENTER",
+          columnType: "text",
+          textSize: "0.875rem",
+          enableFilter: true,
+          enableSort: true,
+          isVisible: true,
+          isCellVisible: true,
+          isDerived: false,
+          label: "status",
+          computedValue:
+            "{{Table1.sanitizedTableData.map((currentRow) => ( currentRow.status))}}",
+        },
+        action: {
+          index: 3,
+          width: 150,
+          id: "action",
+          horizontalAlignment: "LEFT",
+          verticalAlignment: "CENTER",
+          columnType: "button",
+          textSize: "0.875rem",
+          enableFilter: true,
+          enableSort: true,
+          isVisible: true,
+          isCellVisible: true,
+          isDisabled: false,
+          isDerived: false,
+          label: "action",
+          onClick:
+            "{{currentRow.step === '#1' ? showAlert('Done', 'success') : currentRow.step === '#2' ? navigateTo('https://docs.appsmith.com/core-concepts/connecting-to-data-sources/querying-a-database',undefined,'NEW_WINDOW') : navigateTo('https://docs.appsmith.com/core-concepts/displaying-data-read/display-data-tables',undefined,'NEW_WINDOW')}}",
+          computedValue:
+            "{{Table1.sanitizedTableData.map((currentRow) => ( currentRow.action))}}",
+        },
+      },
+      derivedColumns: {},
+      tableData: [
+        {
+          step: "#1",
+          task: "Drop a table",
+          status: "✅",
+          action: "",
+        },
+        {
+          step: "#2",
+          task: "Create a query fetch_users with the Mock DB",
+          status: "--",
+          action: "",
+        },
+        {
+          step: "#3",
+          task: "Bind the query using => fetch_users.data",
+          status: "--",
+          action: "",
+        },
+      ],
+      columnSizeMap: {
+        task: 245,
+        step: 62,
+        status: 75,
+      },
+      columnOrder: ["step", "task", "status", "action"],
+      blueprint: {
+        operations: [
+          {
+            type: BlueprintOperationTypes.MODIFY_PROPS,
+            fn: (widget: WidgetProps & { children?: WidgetProps[] }) => {
+              const primaryColumns = cloneDeep(widget.primaryColumns);
+              const columnIds = Object.keys(primaryColumns);
+
+              columnIds.forEach((columnId) => {
+                set(
+                  primaryColumns,
+                  `${columnId}.computedValue`,
+                  `{{${widget.widgetName}.sanitizedTableData.map((currentRow) => ( currentRow.${columnId}))}}`,
+                );
+                set(primaryColumns, `${columnId}.labelColor`, Colors.WHITE);
+
+                Object.keys(
+                  widget.childStylesheet[primaryColumns[columnId].columnType] ||
+                    [],
+                ).map((propertyKey) => {
+                  const { jsSnippets, stringSegments } = getDynamicBindings(
+                    widget.childStylesheet[primaryColumns[columnId].columnType][
+                      propertyKey
+                    ],
+                  );
+
+                  const js = combineDynamicBindings(jsSnippets, stringSegments);
+
+                  set(
+                    primaryColumns,
+                    `${columnId}.${propertyKey}`,
+                    `{{${widget.widgetName}.sanitizedTableData.map((currentRow) => ( ${js}))}}`,
+                  );
+                });
+              });
+
+              const updatePropertyMap = [
+                {
+                  widgetId: widget.widgetId,
+                  propertyName: "primaryColumns",
+                  propertyValue: primaryColumns,
+                },
+              ];
+
+              return updatePropertyMap;
+            },
+          },
+        ],
+      },
+      enableClientSideSearch: true,
+      isVisibleSearch: true,
+      isVisibleFilters: true,
+      isVisibleDownload: true,
+      isVisiblePagination: true,
+      isSortable: true,
+      delimiter: ",",
+      version: 3,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "280px",
+            };
+          },
+        },
+      ],
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: {},
+        minWidth: { base: "280px" },
+      },
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "tableData",
+            propertyValue: propValueMap.data,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return (widget: TableWidgetProps, extraDefsToDefine?: ExtraDef) => ({
+      "!doc":
+        "The Table is the hero widget of Appsmith. You can display data from an API in a table, trigger an action when a user selects a row and even work with large paginated data sets",
+      "!url": "https://docs.appsmith.com/widget-reference/table",
+      selectedRow: generateTypeDef(widget.selectedRow, extraDefsToDefine),
+      selectedRows: generateTypeDef(widget.selectedRows, extraDefsToDefine),
+      selectedRowIndices: generateTypeDef(widget.selectedRowIndices),
+      triggeredRow: generateTypeDef(widget.triggeredRow),
+      selectedRowIndex: "number",
+      tableData: generateTypeDef(widget.tableData, extraDefsToDefine),
+      filteredTableData: generateTypeDef(
+        widget.filteredTableData,
+        extraDefsToDefine,
+      ),
+      pageNo: "number",
+      pageSize: "number",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      searchText: "string",
+      totalRecordsCount: "number",
+      sortOrder: {
+        column: "string",
+        order: ["asc", "desc"],
+      },
+    });
+  }
+
   static getPropertyValidationMap() {
     throw new Error("Method not implemented.");
   }
@@ -100,6 +406,8 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       pageNo: 1,
@@ -137,14 +445,40 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     };
   }
 
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "string",
+        },
+        setSelectedRowIndex: {
+          path: "defaultSelectedRowIndex",
+          type: "number",
+          disabled: "return options.entity.multiRowSelection",
+        },
+        setSelectedRowIndices: {
+          path: "defaultSelectedRowIndices",
+          type: "array",
+          disabled: "return !options.entity.multiRowSelection",
+        },
+        setData: {
+          path: "tableData",
+          type: "array",
+        },
+      },
+    };
+  }
+
   getTableColumns = () => {
     let columns: ReactTableColumnProps[] = [];
     const hiddenColumns: ReactTableColumnProps[] = [];
     const { columnSizeMap } = this.props;
-    const { componentWidth } = this.getComponentDimensions();
+    const { componentWidth } = this.props;
     let totalColumnSizes = 0;
     const defaultColumnWidth = 150;
     const allColumnProperties = this.props.tableColumns || [];
+
     for (let index = 0; index < allColumnProperties.length; index++) {
       const isAllCellVisible: boolean | boolean[] =
         allColumnProperties[index].isCellVisible;
@@ -170,6 +504,8 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
           inputFormat: columnProperties?.inputFormat || "",
         },
         columnProperties: columnProperties,
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         Cell: (props: any) => {
           const rowIndex: number = props.cell.row.index;
           const data = this.props.filteredTableData[rowIndex];
@@ -212,6 +548,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
               : cellProperties.boxShadow) || "none";
 
           let isSelected = false;
+
           if (this.props.multiRowSelection) {
             isSelected =
               Array.isArray(this.props.selectedRowIndices) &&
@@ -219,6 +556,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
           } else {
             isSelected = this.props.selectedRowIndex === rowIndex;
           }
+
           if (columnProperties.columnType === "button") {
             const buttonProps = {
               isSelected: isSelected,
@@ -242,12 +580,15 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
                 },
               ],
             };
+
             return renderActions(buttonProps, isHidden, cellProperties);
           } else if (columnProperties.columnType === "dropdown") {
             let options = [];
+
             try {
               options = JSON.parse(columnProperties.dropdownOptions || "");
             } catch (e) {}
+
             return renderDropdown({
               options: options,
               onItemSelect: this.onItemSelect,
@@ -263,6 +604,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
               ? () =>
                   this.onCommandClick(rowIndex, columnProperties.onClick, noop)
               : noop;
+
             return renderCell(
               props.cell.value,
               columnProperties.columnType,
@@ -295,6 +637,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
               isCellVisible: cellProperties.isCellVisible ?? true,
               label: cellProperties.menuButtonLabel ?? "Open menu",
             };
+
             return renderMenuButton(menuButtonProps, isHidden, cellProperties);
           } else if (columnProperties.columnType === "iconButton") {
             const iconButtonProps = {
@@ -320,9 +663,11 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
               isCellVisible: cellProperties.isCellVisible ?? true,
               disabled: !!cellProperties.isDisabled,
             };
+
             return renderIconButton(iconButtonProps, isHidden, cellProperties);
           } else {
             const isCellVisible = cellProperties.isCellVisible ?? true;
+
             return renderCell(
               props.cell.value,
               columnProperties.columnType,
@@ -349,12 +694,15 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
         columns.push(columnData);
       }
     }
+
     if (totalColumnSizes < componentWidth) {
       const lastColumnIndex = columns.length - 1;
       let remainingColumnsSize = 0;
+
       for (let i = 0; i < columns.length - 1; i++) {
         remainingColumnsSize += columns[i].width || defaultColumnWidth;
       }
+
       if (columns[lastColumnIndex]) {
         columns[lastColumnIndex].width =
           componentWidth - remainingColumnsSize < defaultColumnWidth
@@ -362,9 +710,11 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
             : componentWidth - remainingColumnsSize; //Min remaining width to be defaultColumnWidth
       }
     }
+
     if (hiddenColumns.length && this.props.renderMode === RenderModes.CANVAS) {
       columns = columns.concat(hiddenColumns);
     }
+
     return columns.filter((column: ReactTableColumnProps) => column.accessor);
   };
 
@@ -373,20 +723,29 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     columns: ReactTableColumnProps[],
   ) => {
     const updatedTableData = [];
+
     // For each row in the tableData (filteredTableData)
     for (let row = 0; row < tableData.length; row++) {
       // Get the row object
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: { [key: string]: any } = tableData[row];
+
       if (data) {
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const tableRow: { [key: string]: any } = {};
+
         // For each column in the expected columns of the table
         for (let colIndex = 0; colIndex < columns.length; colIndex++) {
           // Get the column properties
           const column = columns[colIndex];
           const { accessor } = column;
           let value = data[accessor];
+
           if (column.metaProperties) {
             const type = column.metaProperties.type;
+
             switch (type) {
               case ColumnTypes.DATE:
                 let isValidDate = true;
@@ -394,10 +753,12 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
                   ? column.metaProperties.format[row]
                   : column.metaProperties.format;
                 let inputFormat;
+
                 try {
                   const type = Array.isArray(column.metaProperties.inputFormat)
                     ? column.metaProperties.inputFormat[row]
                     : column.metaProperties.inputFormat;
+
                   if (type !== "Epoch" && type !== "Milliseconds") {
                     inputFormat = type;
                     moment(value, inputFormat);
@@ -407,16 +768,19 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
                 } catch (e) {
                   isValidDate = false;
                 }
+
                 if (isValidDate && value) {
                   try {
                     if (outputFormat === "SAME_AS_INPUT") {
                       outputFormat = inputFormat;
                     }
+
                     if (column.metaProperties.inputFormat === "Milliseconds") {
                       value = Number(value);
                     } else if (column.metaProperties.inputFormat === "Epoch") {
                       value = 1000 * Number(value);
                     }
+
                     tableRow[accessor] = moment(value, inputFormat).format(
                       outputFormat,
                     );
@@ -429,14 +793,16 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
                 } else {
                   tableRow[accessor] = "";
                 }
+
                 break;
               default:
                 const data =
                   isString(value) || isNumber(value)
                     ? value
                     : isNil(value)
-                    ? ""
-                    : JSON.stringify(value);
+                      ? ""
+                      : JSON.stringify(value);
+
                 tableRow[accessor] = data;
                 break;
             }
@@ -452,6 +818,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
 
   getParsedComputedValues = (value: string | Array<unknown>) => {
     let computedValues: Array<unknown> = [];
+
     if (isString(value)) {
       try {
         computedValues = JSON.parse(value);
@@ -463,6 +830,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     } else {
       log.debug("Error parsing column values:", value);
     }
+
     return computedValues;
   };
 
@@ -471,6 +839,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     tableColumnCount: number,
   ) => {
     if (!derivedColumns) return [];
+
     //update index property of all columns in new derived columns
     return (
       Object.keys(derivedColumns)?.map((columnId: string, index: number) => {
@@ -486,14 +855,15 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     | Record<string, ColumnProperties>
     | undefined => {
     const {
-      sanitizedTableData = [],
-      primaryColumns = {},
       columnNameMap = {},
       columnTypeMap = {},
       derivedColumns = {},
       hiddenColumns = [],
       migrated,
+      primaryColumns = {},
+      sanitizedTableData = [],
     } = this.props;
+
     // Bail out if the data doesn't exist.
     // This is a temporary measure,
     // to solve for the scenario where the column properties are getting reset
@@ -505,11 +875,13 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     //Get table level styles
     const tableStyles = getTableStyles(this.props);
     const columnKeys: string[] = getAllTableColumnKeys(sanitizedTableData);
+
     // Generate default column properties for all columns
     // But donot replace existing columns with the same id
     for (let index = 0; index < columnKeys.length; index++) {
       const i = columnKeys[index];
       const prevIndex = previousColumnIds.indexOf(i);
+
       if (prevIndex > -1) {
         // we found an existing property with the same column id use the previous properties
         tableColumns[i] = primaryColumns[i];
@@ -519,27 +891,33 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
           index,
           this.props.widgetName,
         );
+
         if (migrated === false) {
           // Update column names using the names from the table before migration
           if ((columnNameMap as Record<string, string>)[i]) {
             columnProperties.label = columnNameMap[i];
           }
+
           // Update column types using types from the table before migration
           if (
-            (columnTypeMap as Record<
-              string,
-              { type: ColumnTypes; inputFormat?: string; format?: string }
-            >)[i]
+            (
+              columnTypeMap as Record<
+                string,
+                { type: ColumnTypes; inputFormat?: string; format?: string }
+              >
+            )[i]
           ) {
             columnProperties.columnType = columnTypeMap[i].type;
             columnProperties.inputFormat = columnTypeMap[i].inputFormat;
             columnProperties.outputFormat = columnTypeMap[i].format;
           }
+
           // Hide columns which were hidden in the table before migration
           if (hiddenColumns.indexOf(i) > -1) {
             columnProperties.isVisible = false;
           }
         }
+
         //add column properties along with table level styles
         tableColumns[columnProperties.id] = {
           ...columnProperties,
@@ -547,6 +925,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
         };
       }
     }
+
     // Get derived columns
     const updatedDerivedColumns = this.getDerivedColumns(
       derivedColumns,
@@ -567,8 +946,9 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
   updateColumnProperties = (
     tableColumns?: Record<string, ColumnProperties>,
   ) => {
-    const { primaryColumns = {}, derivedColumns = {} } = this.props;
+    const { derivedColumns = {}, primaryColumns = {} } = this.props;
     const { columnOrder, migrated } = this.props;
+
     if (tableColumns) {
       const previousColumnIds = Object.keys(primaryColumns);
       const previousDerivedColumnIds = Object.keys(derivedColumns);
@@ -579,6 +959,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
         const columnIdsToAdd = without(newColumnIds, ...previousColumnIds);
 
         const propertiesToAdd: Record<string, unknown> = {};
+
         columnIdsToAdd.forEach((id: string) => {
           if (id) {
             Object.entries(tableColumns[id]).forEach(([key, value]) => {
@@ -598,14 +979,17 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
         }
 
         const pathsToDelete: string[] = [];
+
         if (migrated === false) {
           propertiesToAdd["migrated"] = true;
         }
+
         const propertiesToUpdate: BatchPropertyUpdatePayload = {
           modify: propertiesToAdd,
         };
 
         const columnsIdsToDelete = without(previousColumnIds, ...newColumnIds);
+
         if (columnsIdsToDelete.length > 0) {
           columnsIdsToDelete.forEach((id: string) => {
             pathsToDelete.push(`primaryColumns.${id}`);
@@ -626,6 +1010,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
 
     if (Array.isArray(sanitizedTableData) && sanitizedTableData.length > 0) {
       newPrimaryColumns = this.createTablePrimaryColumns();
+
       if (newPrimaryColumns) this.updateColumnProperties(newPrimaryColumns);
     }
   }
@@ -662,6 +1047,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
           condition: "",
         },
       ];
+
       this.props.updateWidgetMetaProperty("filters", defaultFilter);
       // Get columns keys from this.props.tableData
       const columnIds: string[] = getAllTableColumnKeys(this.props.tableData);
@@ -675,6 +1061,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       // If the keys which exist in the tableData are different from the ones available in primaryColumns
       if (xor(columnIds, primaryColumnIds).length > 0) {
         const newTableColumns = this.createTablePrimaryColumns(); // This updates the widget
+
         this.updateColumnProperties(newTableColumns);
       }
     }
@@ -689,6 +1076,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       const maxAllowedPageNumber = Math.ceil(
         this.props.totalRecordsCount / this.props.pageSize,
       );
+
       if (this.props.pageNo > maxAllowedPageNumber) {
         this.props.updateWidgetMetaProperty("pageNo", maxAllowedPageNumber);
       }
@@ -706,6 +1094,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       if (this.props.multiRowSelection) {
         // Use the selectedRowIndex if available as default selected index
         let selectedRowIndices: number[] = [];
+
         // Check if selectedRowIndex is valid
         if (
           this.props.selectedRowIndex !== undefined &&
@@ -743,6 +1132,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     if (this.props.pageSize !== prevProps.pageSize) {
       //reset current page number when page size changes
       this.props.updateWidgetMetaProperty("pageNo", 1);
+
       if (this.props.onPageSizeChange) {
         super.executeAction({
           triggerPropertyName: "onPageSizeChange",
@@ -760,11 +1150,13 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       const selectedRowIndex = isNumber(this.props.defaultSelectedRow)
         ? this.props.defaultSelectedRow
         : -1;
+
       this.props.updateWidgetMetaProperty("selectedRowIndex", selectedRowIndex);
     } else {
       const selectedRowIndices = Array.isArray(this.props.defaultSelectedRow)
         ? this.props.defaultSelectedRow
         : [];
+
       this.props.updateWidgetMetaProperty(
         "selectedRowIndices",
         selectedRowIndices,
@@ -784,6 +1176,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
         this.props.selectedRowIndex,
         this.props.primaryColumnId,
       );
+
       this.props.updateWidgetMetaProperty("selectedRowIndex", selectedRowIndex);
     } else {
       const selectedRowIndices = selectRowIndices(
@@ -793,6 +1186,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
         this.props.selectedRowIndices,
         this.props.primaryColumnId,
       );
+
       this.props.updateWidgetMetaProperty(
         "selectedRowIndices",
         selectedRowIndices,
@@ -801,8 +1195,9 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
   };
 
   getSelectedRowIndices = () => {
-    let selectedRowIndices: number[] | undefined = this.props
-      .selectedRowIndices;
+    let selectedRowIndices: number[] | undefined =
+      this.props.selectedRowIndices;
+
     if (!this.props.multiRowSelection) selectedRowIndices = undefined;
     else {
       if (!Array.isArray(selectedRowIndices)) {
@@ -811,6 +1206,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
         else selectedRowIndices = [];
       }
     }
+
     return selectedRowIndices;
   };
 
@@ -828,16 +1224,16 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     this.disableDrag(disable);
   };
 
-  getPageView() {
+  getWidgetView() {
     const {
-      totalRecordsCount,
       delimiter,
-      pageSize,
       filteredTableData = [],
       isVisibleDownload,
       isVisibleFilters,
       isVisiblePagination,
       isVisibleSearch,
+      pageSize,
+      totalRecordsCount,
     } = this.props;
     const tableColumns = this.getTableColumns() || [];
     const transformedData = this.transformData(filteredTableData, tableColumns);
@@ -847,7 +1243,8 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       isVisiblePagination ||
       isVisibleSearch;
 
-    const { componentHeight, componentWidth } = this.getComponentDimensions();
+    const { componentHeight, componentWidth } = this.props;
+
     return (
       <Suspense fallback={<Skeleton />}>
         <ReactTableComponent
@@ -922,6 +1319,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
             column: column,
             order: asc ? SortOrderTypes.asc : SortOrderTypes.desc,
           };
+
     this.props.updateWidgetMetaProperty("sortOrder", sortOrderProps, {
       triggerPropertyName: "onSort",
       dynamicString: this.props.onSort,
@@ -939,8 +1337,11 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     }
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handleSearchTable = (searchKey: any) => {
     const { onSearchTextChanged } = this.props;
+
     this.resetSelectedRowIndex();
     this.props.updateWidgetMetaProperty("pageNo", 1);
     this.props.updateWidgetMetaProperty("searchText", searchKey, {
@@ -959,6 +1360,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
   ) => {
     try {
       const rowData = this.props.filteredTableData[rowIndex];
+
       this.props.updateWidgetMetaProperty(
         "triggeredRowIndex",
         this.props.filteredTableData[rowIndex].__originalIndex__,
@@ -967,6 +1369,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       const modifiedAction = jsSnippets.reduce((prev: string, next: string) => {
         return prev + `{{ ${next} }} `;
       }, "");
+
       if (modifiedAction) {
         super.executeAction({
           triggerPropertyName: "onClick",
@@ -999,6 +1402,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       const selectedRowIndices = pageData.map(
         (row: Record<string, unknown>) => row.index,
       );
+
       this.props.updateWidgetMetaProperty(
         "selectedRowIndices",
         selectedRowIndices,
@@ -1011,8 +1415,10 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       const selectedRowIndices = Array.isArray(this.props.selectedRowIndices)
         ? [...this.props.selectedRowIndices]
         : [];
+
       if (selectedRowIndices.includes(index)) {
         const rowIndex = selectedRowIndices.indexOf(index);
+
         selectedRowIndices.splice(rowIndex, 1);
         this.props.updateWidgetMetaProperty(
           "selectedRowIndices",
@@ -1065,6 +1471,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
     } else {
       this.props.updateWidgetMetaProperty("pageNo", pageNo);
     }
+
     if (this.props.onPageChange) {
       this.resetSelectedRowIndex();
     }
@@ -1072,6 +1479,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
 
   handleNextPageClick = () => {
     let pageNo = this.props.pageNo || 1;
+
     pageNo = pageNo + 1;
     this.props.updateWidgetMetaProperty("pageNo", pageNo, {
       triggerPropertyName: "onPageChange",
@@ -1080,6 +1488,7 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
         type: EventType.ON_NEXT_PAGE,
       },
     });
+
     if (this.props.onPageChange) {
       this.resetSelectedRowIndex();
     }
@@ -1090,11 +1499,13 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
       const selectedRowIndex = isNumber(this.props.defaultSelectedRow)
         ? this.props.defaultSelectedRow
         : -1;
+
       this.props.updateWidgetMetaProperty("selectedRowIndex", selectedRowIndex);
     } else {
       const selectedRowIndices = Array.isArray(this.props.defaultSelectedRow)
         ? this.props.defaultSelectedRow
         : [];
+
       this.props.updateWidgetMetaProperty(
         "selectedRowIndices",
         selectedRowIndices,
@@ -1107,7 +1518,9 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
 
   handlePrevPageClick = () => {
     let pageNo = this.props.pageNo || 1;
+
     pageNo = pageNo - 1;
+
     if (pageNo >= 1) {
       this.props.updateWidgetMetaProperty("pageNo", pageNo, {
         triggerPropertyName: "onPageChange",
@@ -1116,15 +1529,12 @@ class TableWidget extends BaseWidget<TableWidgetProps, WidgetState> {
           type: EventType.ON_PREV_PAGE,
         },
       });
+
       if (this.props.onPageChange) {
         this.resetSelectedRowIndex();
       }
     }
   };
-
-  static getWidgetType(): WidgetType {
-    return "TABLE_WIDGET";
-  }
 }
 
 export default TableWidget;

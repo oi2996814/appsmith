@@ -1,5 +1,28 @@
 /* eslint-disable @typescript-eslint/no-unused-vars*/
 export default {
+  getOptions: (props, moment, _) => {
+    let labels = [],
+      values = [],
+      sourceData = props.sourceData || [];
+
+    if (typeof props.optionLabel === "string") {
+      labels = sourceData.map((d) => d[props.optionLabel]);
+    } else if (_.isArray(props.optionLabel)) {
+      labels = props.optionLabel;
+    }
+
+    if (typeof props.optionValue === "string") {
+      values = sourceData.map((d) => d[props.optionValue]);
+    } else if (_.isArray(props.optionValue)) {
+      values = props.optionValue;
+    }
+
+    return sourceData.map((d, i) => ({
+      label: labels[i],
+      value: values[i],
+    }));
+  },
+  //
   getIsValid: (props, moment, _) => {
     return props.isRequired
       ? !_.isNil(props.selectedOptionValues) &&
@@ -20,6 +43,7 @@ export default {
     if (!props.isDirty && filteredValues.length !== values.length) {
       return filteredValues;
     }
+
     return values;
   },
   //
@@ -32,6 +56,7 @@ export default {
     return values
       .map((value) => {
         const label = options.find((option) => value === option.value)?.label;
+
         if (label) {
           return label;
         } else {

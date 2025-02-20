@@ -153,6 +153,19 @@ rts="http://$rts_host:$rts_port"
 http_listen_port="${http_listen_port-80}"
 https_listen_port="${https_listen_port-443}"
 
+if [[ $backend =~ /$ ]]; then
+    echo "The backend endpoint ($backend) ends with a '/'. This will change Nginx's behavior in unintended ways." >&2
+    echo "Exiting. Please run again, removing the trailing slash(es) for the backend." >&2
+    exit 1
+fi
+
+if [[ -n $backend ]]; then
+  # Try to get a version from the "backend". If it's a full container, not just backend, then it'll give us a version.
+  APPSMITH_VERSION_ID="$(
+    curl -vsS "${backend/host.docker.internal/localhost}/info" | grep -Eo '"version": ".+?"' | cut -d\" -f4 || true
+  )"
+  export APPSMITH_VERSION_ID
+fi
 
 if [[ -n ${env_file-} && ! -f $env_file ]]; then
     echo "I got --env-file as '$env_file', but I cannot access it." >&2
@@ -199,6 +212,12 @@ nginx_dev_conf="$working_dir/nginx.dev.conf"
 rm -rf "$nginx_dev_conf"
 
 worker_connections=1024
+
+substitutions="$(
+  grep -Eo '{{env "APPSMITH_\w+"}}' public/index.html \
+    | cut -d\" -f2 \
+    | awk '{print "sub_filter '\''{{env \"" $0 "\"}}'\'' '\''" ENVIRON[$0] "'\'';"}'
+)"
 
 echo "
 worker_processes  1;
@@ -249,7 +268,7 @@ $(if [[ $use_https == 1 ]]; then echo "
         server_name _;
 "; fi)
 
-        client_max_body_size 100m;
+        client_max_body_size 150m;
         gzip on;
 
         proxy_ssl_server_name on;
@@ -259,40 +278,26 @@ $(if [[ $use_https == 1 ]]; then echo "
         proxy_set_header X-Forwarded-Host \$host;
         proxy_set_header Accept-Encoding '';
 
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-ancestors
+        add_header Content-Security-Policy \"frame-ancestors ${APPSMITH_ALLOWED_FRAME_ANCESTORS-'self' *}\";
+
+        # Disable caching completely. This is dev-time config, caching causes more problems than it solves.
+        # Taken from <https://stackoverflow.com/a/2068407/151048>.
+        add_header Cache-Control 'no-store, must-revalidate' always;
+        proxy_hide_header Cache-Control;  # Hide it, if present in upstream's response.
+
         sub_filter_once off;
         location / {
             proxy_pass $frontend;
-            sub_filter __APPSMITH_SENTRY_DSN__ '${APPSMITH_SENTRY_DSN-}';
-            sub_filter __APPSMITH_SMART_LOOK_ID__ '${APPSMITH_SMART_LOOK_ID-}';
-            sub_filter __APPSMITH_OAUTH2_GOOGLE_CLIENT_ID__ '${APPSMITH_OAUTH2_GOOGLE_CLIENT_ID-}';
-            sub_filter __APPSMITH_OAUTH2_GITHUB_CLIENT_ID__ '${APPSMITH_OAUTH2_GITHUB_CLIENT_ID-}';
-            sub_filter __APPSMITH_MARKETPLACE_ENABLED__ '${APPSMITH_MARKETPLACE_ENABLED-}';
-            sub_filter __APPSMITH_SEGMENT_KEY__ '${APPSMITH_SEGMENT_KEY-}';
-            sub_filter __APPSMITH_ALGOLIA_API_ID__ '${APPSMITH_ALGOLIA_API_ID-}';
-            sub_filter __APPSMITH_ALGOLIA_SEARCH_INDEX_NAME__ '${APPSMITH_ALGOLIA_SEARCH_INDEX_NAME-}';
-            sub_filter __APPSMITH_ALGOLIA_API_KEY__ '${APPSMITH_ALGOLIA_API_KEY-}';
-            sub_filter __APPSMITH_CLIENT_LOG_LEVEL__ '${APPSMITH_CLIENT_LOG_LEVEL-}';
-            sub_filter __APPSMITH_GOOGLE_MAPS_API_KEY__ '${APPSMITH_GOOGLE_MAPS_API_KEY-}';
-            sub_filter __APPSMITH_TNC_PP__ '${APPSMITH_TNC_PP-}';
-            sub_filter __APPSMITH_SENTRY_RELEASE__ '${APPSMITH_SENTRY_RELEASE-}';
-            sub_filter __APPSMITH_SENTRY_ENVIRONMENT__ '${APPSMITH_SENTRY_ENVIRONMENT-}';
-            sub_filter __APPSMITH_VERSION_ID__ '${APPSMITH_VERSION_ID-}';
-            sub_filter __APPSMITH_VERSION_RELEASE_DATE__ '${APPSMITH_VERSION_RELEASE_DATE-}';
-            sub_filter __APPSMITH_INTERCOM_APP_ID__ '${APPSMITH_INTERCOM_APP_ID-}';
-            sub_filter __APPSMITH_MAIL_ENABLED__ '${APPSMITH_MAIL_ENABLED-}';
-            sub_filter __APPSMITH_DISABLE_TELEMETRY__ '${APPSMITH_DISABLE_TELEMETRY-}';
-            sub_filter __APPSMITH_CLOUD_SERVICES_BASE_URL__ '${APPSMITH_CLOUD_SERVICES_BASE_URL-}';
-            sub_filter __APPSMITH_RECAPTCHA_SITE_KEY__ '${APPSMITH_RECAPTCHA_SITE_KEY-}';
-            sub_filter __APPSMITH_DISABLE_INTERCOM__ '${APPSMITH_DISABLE_INTERCOM-}';
-            sub_filter __APPSMITH_FORM_LOGIN_DISABLED__ '${APPSMITH_FORM_LOGIN_DISABLED-}';
-            sub_filter __APPSMITH_SIGNUP_DISABLED__ '${APPSMITH_SIGNUP_DISABLED-}';
-            sub_filter __APPSMITH_ZIPY_SDK_KEY__ '${APPSMITH_ZIPY_SDK_KEY-}';
-            sub_filter __APPSMITH_HIDE_WATERMARK__ '${APPSMITH_HIDE_WATERMARK-}';
-            sub_filter __APPSMITH_DISABLE_IFRAME_WIDGET_SANDBOX__ '${APPSMITH_DISABLE_IFRAME_WIDGET_SANDBOX-}';
+            $substitutions
         }
 
         location /api {
             proxy_pass $backend;
+            # Delete the Cache-Control header set in the server block above.
+            add_header Cache-Control '' always;
+            # Proxy pass the Cache-Control header from the upstream.
+            proxy_pass_header Cache-Control;
         }
 
         location /oauth2 {
@@ -331,6 +336,27 @@ if [[ -f $nginx_pid ]]; then
     # The above stop command will delete the pid file, but we still do this to ensure it really is gone.
     rm -f "$nginx_pid" "$temp_nginx_conf"
     unset temp_nginx_conf
+fi
+
+remaining_listeners="$(
+    lsof -nP "-iTCP:$http_listen_port" -sTCP:LISTEN || true
+    lsof -nP "-iTCP:$https_listen_port" -sTCP:LISTEN || true
+)"
+if [[ -n $remaining_listeners ]]; then
+    echo $'\nThe following processes are listening on the ports we want to use:\n'"$remaining_listeners"$'\n' >&2
+    answer=
+    for attempt in 1 2 3; do
+        echo -n 'Kill and proceed? [y/n] ' >&2
+        read -rn1 answer
+        if [[ $answer == y ]]; then
+            (lsof -t "-iTCP:$http_listen_port" -sTCP:LISTEN | xargs kill) || true
+            (lsof -t "-iTCP:$https_listen_port" -sTCP:LISTEN | xargs kill) || true
+            break
+        elif [[ $answer == n || $attempt == 3 ]]; then
+            echo $'\nAborting.' >&2
+            exit 1
+        fi
+    done
 fi
 
 if [[ $run_as == nginx ]]; then

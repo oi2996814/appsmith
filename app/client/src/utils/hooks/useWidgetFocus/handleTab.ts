@@ -17,7 +17,7 @@ export function handleTab(event: KeyboardEvent) {
   const currentWidget = currentNode.closest(WIDGET_SELECTOR) as HTMLElement;
 
   switch (true) {
-    // when the current node is a widget, we want to do tabbing in regular way
+    // when the current node is one of these widget, we want to do tabbing in regular way
     // the elements will be in proper order in dom for thes widgets
     case currentWidget && currentWidget.matches(JSONFORM_WIDGET):
     case currentWidget && currentWidget.matches(CHECKBOXGROUP_WIDGET):
@@ -31,7 +31,19 @@ export function handleTab(event: KeyboardEvent) {
     default:
       const tabbable = getTabbableDescendants(currentNode, shiftKey);
 
-      nextTabbableDescendant = getNextTabbableDescendant(tabbable, shiftKey);
+      let isNextWidgetElementFocusable = false;
+
+      do {
+        nextTabbableDescendant = getNextTabbableDescendant(tabbable, shiftKey);
+
+        if (nextTabbableDescendant) {
+          isNextWidgetElementFocusable = !!getFocussableElementOfWidget(
+            nextTabbableDescendant,
+          );
+        }
+
+        tabbable.shift();
+      } while (!isNextWidgetElementFocusable && tabbable.length > 0);
   }
 
   // if nextTabbableDescendant is found, focus

@@ -45,7 +45,7 @@ const PageNumberInputWrapper = styled(NumericInput)<{
 
 const MIN_PAGE_COUNT = 1;
 
-export function PageNumberInput(props: {
+function PageNumberInputComponent(props: {
   pageNo: number;
   pageCount: number;
   updatePageNo: (pageNo: number, event?: EventType) => void;
@@ -97,6 +97,8 @@ export function PageNumberInput(props: {
       max={props.pageCount || 1}
       min={1}
       onBlur={handleUpdatePageNo}
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onKeyDown={(e: any) => {
         if (e.keyCode === Keys.ENTER) {
           handleUpdatePageNo(e);
@@ -109,3 +111,5 @@ export function PageNumberInput(props: {
     />
   );
 }
+
+export const PageNumberInput = React.memo(PageNumberInputComponent);

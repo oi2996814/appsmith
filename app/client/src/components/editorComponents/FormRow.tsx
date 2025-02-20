@@ -4,7 +4,6 @@ export default styled.div`
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  align-items: flex-start;
-  min-height: 50px;
+  align-items: center;
   flex-shrink: 0;
 `;

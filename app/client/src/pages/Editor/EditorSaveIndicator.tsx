@@ -1,39 +1,30 @@
 import React from "react";
-
-import { useSelector } from "react-redux";
 import styled from "styled-components";
-import { Icon, TextType, Text } from "design-system";
-import { getIsPageSaving, getPageSavingError } from "selectors/editorSelectors";
+import { TextType, Text } from "@appsmith/ads-old";
 import { Colors } from "constants/Colors";
-import { createMessage, EDITOR_HEADER } from "ce/constants/messages";
+import { createMessage, EDITOR_HEADER } from "ee/constants/messages";
+import { Icon, Spinner } from "@appsmith/ads";
 
 const SaveStatusContainer = styled.div`
   align-items: center;
   display: flex;
 `;
 
-const StyledLoader = styled(Icon)`
-  animation: spin 2s linear infinite;
-  @keyframes spin {
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-`;
-
-export function EditorSaveIndicator() {
-  const isSaving = useSelector(getIsPageSaving);
-  const pageSaveError = useSelector(getPageSavingError);
-
+export function EditorSaveIndicator({
+  isSaving,
+  saveError,
+}: {
+  isSaving: boolean;
+  saveError: boolean;
+}) {
   let saveStatusIcon: React.ReactNode;
   let saveStatusText = "";
+
   if (isSaving) {
-    saveStatusIcon = (
-      <StyledLoader className="t--save-status-is-saving" name="refresh" />
-    );
+    saveStatusIcon = <Spinner className="t--save-status-is-saving" />;
     saveStatusText = createMessage(EDITOR_HEADER.saving);
   } else {
-    if (pageSaveError) {
+    if (saveError) {
       saveStatusIcon = (
         <Icon className={"t--save-status-error"} name="cloud-off-line" />
       );
@@ -41,7 +32,7 @@ export function EditorSaveIndicator() {
     }
   }
 
-  if (!pageSaveError && !isSaving) return null;
+  if (!saveError && !isSaving) return null;
 
   return (
     <SaveStatusContainer className={"t--save-status-container gap-x-1"}>

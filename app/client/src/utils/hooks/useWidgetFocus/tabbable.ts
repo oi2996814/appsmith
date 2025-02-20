@@ -7,6 +7,7 @@ export const CONTAINER_SELECTOR =
   ":is(.t--widget-containerwidget, .t--widget-formwidget)";
 const NON_FOCUSABLE_WIDGET_CLASS =
   ".t--widget-textwidget, .t--widget-ratewidget, [disabled], [data-hidden]";
+
 export const JSONFORM_WIDGET = ".t--widget-jsonformwidget";
 export const MODAL_WIDGET = ".t--modal-widget";
 export const CHECKBOXGROUP_WIDGET = ".t--widget-checkboxgroupwidget";
@@ -115,18 +116,16 @@ export function getNextTabbableDescendant(
 ) {
   const nextTabbableDescendant = descendants[0];
 
+  if (!nextTabbableDescendant) return;
+
   // if nextTabbableDescendant is a container,
   if (nextTabbableDescendant.matches(CONTAINER_SELECTOR)) {
     const tabbableDescendants = getChildrenWidgetsOfNode(
       nextTabbableDescendant,
     );
 
-    const {
-      bottom,
-      left,
-      right,
-      top,
-    } = nextTabbableDescendant.getBoundingClientRect();
+    const { bottom, left, right, top } =
+      nextTabbableDescendant.getBoundingClientRect();
 
     const sortedTabbableDescendants = sortWidgetsByPosition(
       {
@@ -225,10 +224,8 @@ export function sortWidgetsByPosition(
 
   let tabbableElementsByPosition = Array.from(tabbableDescendants).map(
     (element) => {
-      const {
-        left: elementLeft,
-        top: elementTop,
-      } = element.getBoundingClientRect();
+      const { left: elementLeft, top: elementTop } =
+        element.getBoundingClientRect();
       const topDiff = elementTop - top;
       const leftDiff = elementLeft - left;
 
@@ -309,6 +306,7 @@ export function getNextTabbableDescendantForRegularWidgets(
 
   if (isTabbingOutOfJSONForm) {
     const descendents = getTabbableDescendants(currentWidget, shiftKey);
+
     nextTabbableDescendant = getNextTabbableDescendant(descendents, shiftKey);
   }
 

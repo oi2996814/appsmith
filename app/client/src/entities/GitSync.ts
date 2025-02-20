@@ -1,24 +1,24 @@
 export enum GitSyncModalTab {
-  GIT_CONNECTION,
-  DEPLOY,
-  MERGE,
+  GIT_CONNECTION = "GIT_CONNECTION",
+  DEPLOY = "DEPLOY",
+  MERGE = "MERGE",
 }
 
-export type GitConfig = {
+export interface GitConfig {
   authorName: string;
   authorEmail: string;
   useGlobalProfile?: boolean;
-};
+}
 
-export type Branch = {
+export interface Branch {
   branchName: string;
   default: boolean;
-};
+}
 
-export type MergeStatus = {
+export interface MergeStatus {
   isMergeAble: boolean;
   conflictingFiles: Array<string>;
   status?: string;
   message?: string;
   referenceDoc?: string;
-};
+}

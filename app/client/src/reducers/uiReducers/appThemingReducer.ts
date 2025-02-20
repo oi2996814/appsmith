@@ -1,12 +1,10 @@
-import { AppTheme } from "entities/AppTheming";
-import { AppThemingMode } from "selectors/appThemingSelectors";
+import type { AppTheme } from "entities/AppTheming";
+import type { AppThemingMode } from "selectors/appThemingSelectors";
 import { createImmerReducer } from "utils/ReducerUtils";
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 
-export type AppThemingState = {
+export interface AppThemingState {
   isSaving: boolean;
   isChanging: boolean;
   stack: AppThemingMode[];
@@ -15,7 +13,7 @@ export type AppThemingState = {
   themesLoading: boolean;
   selectedThemeLoading: boolean;
   isBetaCardShown: boolean;
-};
+}
 
 const initialState: AppThemingState = {
   stack: [],
@@ -32,6 +30,7 @@ const initialState: AppThemingState = {
     created_by: "",
     created_at: "",
     config: {
+      order: 0,
       colors: {
         backgroundColor: "#F8FAFC",
         primaryColor: "",
@@ -44,7 +43,7 @@ const initialState: AppThemingState = {
     properties: {
       colors: {
         backgroundColor: "#F8FAFC",
-        primaryColor: "",
+        primaryColor: "#000",
         secondaryColor: "",
       },
       borderRadius: {},
@@ -112,12 +111,6 @@ const themeReducer = createImmerReducer(initialState, {
       (theme) => theme.id !== action.payload.themeId,
     );
   },
-  [ReduxActionTypes.SAVE_APP_THEME_SUCCESS]: (
-    state: AppThemingState,
-    action: ReduxAction<AppTheme>,
-  ) => {
-    state.themes.push(action.payload);
-  },
   [ReduxActionTypes.UPDATE_BETA_CARD_SHOWN]: (
     state: AppThemingState,
     action: ReduxAction<boolean>,
@@ -132,6 +125,12 @@ const themeReducer = createImmerReducer(initialState, {
   },
   [ReduxActionTypes.START_CANVAS_SELECTION]: (state: AppThemingState) => {
     state.stack = [];
+  },
+  [ReduxActionTypes.RESET_EDITOR_REQUEST]: (state: AppThemingState) => {
+    return {
+      ...state,
+      isSaving: false,
+    };
   },
 });
 

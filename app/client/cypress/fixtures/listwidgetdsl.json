@@ -56,7 +56,7 @@
                                       "children": [
                                           {
                                               "isVisible": true,
-                                              "defaultImage": "https://res.cloudinary.com/drako999/image/upload/v1589196259/default.png",
+                                              "defaultImage": "http://host.docker.internal:4200/clouddefaultImage.png",
                                               "imageShape": "RECTANGLE",
                                               "maxZoomLevel": 1,
                                               "image": "{{currentItem.img}}",
@@ -172,7 +172,7 @@
               "type": "LIST_WIDGET",
               "isLoading": false,
               "parentColumnSpace": 57.875,
-              "parentRowSpace": 40,
+              "parentRowSpace": 10,
               "leftColumn": 4,
               "rightColumn": 12,
               "topRow": 2,
@@ -193,7 +193,7 @@
               "template": {
                   "Image1": {
                       "isVisible": true,
-                      "defaultImage": "https://res.cloudinary.com/drako999/image/upload/v1589196259/default.png",
+                      "defaultImage": "http://host.docker.internal:4200/clouddefaultImage.png",
                       "imageShape": "RECTANGLE",
                       "maxZoomLevel": 1,
                       "image": "{{List1.listData.map((currentItem) => currentItem.img)}}",

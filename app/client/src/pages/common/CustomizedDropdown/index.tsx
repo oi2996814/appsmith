@@ -1,19 +1,24 @@
-import React, { ReactNode } from "react";
+import type { ReactNode } from "react";
+import React from "react";
 import { createGlobalStyle } from "styled-components";
-import {
-  Popover,
+import type {
   IconName,
   PopoverPosition,
-  Classes,
-  PopoverInteractionKind,
-  Icon,
   IPopoverSharedProps,
   MaybeElement,
 } from "@blueprintjs/core";
+import {
+  Popover,
+  Classes,
+  PopoverInteractionKind,
+  Icon,
+} from "@blueprintjs/core";
 import { IconNames } from "@blueprintjs/icons";
 import { MenuIcons } from "icons/MenuIcons";
-import { Intent, IntentColors } from "constants/DefaultTheme";
-import { Direction, Directions } from "utils/helpers";
+import type { Intent } from "constants/DefaultTheme";
+import { IntentColors } from "constants/DefaultTheme";
+import type { Direction } from "utils/helpers";
+import { Directions } from "utils/helpers";
 import { getDirectionBased } from "./dropdownHelpers";
 import { Skin } from "constants/DefaultTheme";
 import {
@@ -22,23 +27,24 @@ import {
   DropdownContent,
   DropdownTrigger,
 } from "./StyledComponents";
-import Button, { ButtonProps } from "components/editorComponents/Button";
+import type { ButtonProps } from "components/editorComponents/Button";
+import Button from "components/editorComponents/Button";
 
-export type CustomizedDropdownOptionSection = {
+export interface CustomizedDropdownOptionSection {
   isSticky?: boolean;
   options?: CustomizedDropdownOption[];
-};
+}
 
-export type CustomizedDropdownOption = {
+export interface CustomizedDropdownOption {
   content: ReactNode;
   active?: boolean;
   onSelect?: () => void;
   intent?: Intent;
   shouldCloseDropdown?: boolean;
   disabled?: boolean;
-};
+}
 
-export type CustomizedDropdownProps = {
+export interface CustomizedDropdownProps {
   sections: CustomizedDropdownOptionSection[];
   trigger: ButtonProps & {
     content?: ReactNode;
@@ -52,7 +58,7 @@ export type CustomizedDropdownProps = {
   borderRadius?: string;
   customizedDropdownId?: string;
   modifiers?: IPopoverSharedProps["modifiers"];
-};
+}
 
 const PopoverStyles = createGlobalStyle<{
   id?: string;
@@ -76,7 +82,9 @@ export const getIcon = (icon?: string | MaybeElement, intent?: Intent) => {
         height: 16,
       });
     }
+
     const iconNames: string[] = Object.values({ ...IconNames });
+
     if (iconNames.indexOf(icon) > -1) {
       return (
         <Icon
@@ -98,6 +106,7 @@ const getContentSection = (
     section.options.map((option, index) => {
       const shouldClose =
         option.shouldCloseDropdown === undefined || option.shouldCloseDropdown;
+
       return (
         <Option
           active={!!option.active}
@@ -145,6 +154,7 @@ export function CustomizedDropdown(props: CustomizedDropdownProps) {
       {getContentSection(section, skin)}
     </DropdownContentSection>
   ));
+
   return (
     <>
       <Popover

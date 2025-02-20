@@ -1,28 +1,31 @@
 import React from "react";
-import { ComponentProps } from "widgets/BaseComponent";
-import { Alignment, Classes } from "@blueprintjs/core";
-import { DropdownOption } from "../constants";
-import {
+import type { ComponentProps } from "widgets/BaseComponent";
+import type { Alignment } from "@blueprintjs/core";
+import { Classes } from "@blueprintjs/core";
+import type { DropdownOption } from "../constants";
+import type {
   IItemListRendererProps,
   IItemRendererProps,
 } from "@blueprintjs/select";
 import { debounce, findIndex, isEmpty, isNil, isNumber } from "lodash";
 import equal from "fast-deep-equal/es6";
-import "../../../../node_modules/@blueprintjs/select/lib/css/blueprint-select.css";
+import "@blueprintjs/select/lib/css/blueprint-select.css";
 import { FixedSizeList } from "react-window";
-import { TextSize } from "constants/WidgetConstants";
+import type { TextSize } from "constants/WidgetConstants";
 import {
   StyledControlGroup,
   StyledSingleDropDown,
   DropdownStyles,
   DropdownContainer,
   MenuItem,
+  RTLStyleContainer,
 } from "./index.styled";
 import { WidgetContainerDiff } from "widgets/WidgetUtils";
-import { LabelPosition } from "components/constants";
+import type { LabelPosition } from "components/constants";
 import SelectButton from "./SelectButton";
 import { labelMargin } from "../../WidgetUtils";
 import LabelWithTooltip from "widgets/components/LabelWithTooltip";
+import { CANVAS_ART_BOARD } from "constants/componentClassNameConstants";
 
 const DEBOUNCE_TIMEOUT = 800;
 const ITEM_SIZE = 40;
@@ -37,6 +40,8 @@ class SelectComponent extends React.Component<
   SelectComponentProps,
   SelectComponentState
 > {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   listRef: any = React.createRef();
   labelRef = React.createRef<HTMLDivElement>();
   spanRef = React.createRef<HTMLSpanElement>();
@@ -70,12 +75,21 @@ class SelectComponent extends React.Component<
     }
   };
 
-  togglePopoverVisibility = () => {
+  togglePopoverVisibilityFromButton = () => {
+    this.togglePopoverVisibility(true);
+  };
+
+  togglePopoverVisibility = (isButtonClick = false) => {
+    // This is an edge case, this method gets called twice if user closes it by clicking on the `SelectButton`
+    // which in turn triggers handleOnDropdownClose twice, to solve we have this exception to tell if click event is from button
+    if (isButtonClick && this.state.isOpen) return;
+
     if (this.state.isOpen) {
       this.handleOnDropdownClose();
     } else {
       this.handleOnDropdownOpen();
     }
+
     this.setState({ isOpen: !this.state.isOpen });
   };
 
@@ -90,6 +104,7 @@ class SelectComponent extends React.Component<
         "label",
         activeItem?.label,
       ]);
+
       this.setState({ activeItemIndex });
     }
   };
@@ -99,33 +114,37 @@ class SelectComponent extends React.Component<
 
     const filter = items.filter(
       (item) =>
-        item.label
-          ?.toString()
-          .toLowerCase()
-          .includes(query.toLowerCase()) ||
-        String(item.value)
-          .toLowerCase()
-          .includes(query.toLowerCase()),
+        item.label?.toString().toLowerCase().includes(query.toLowerCase()) ||
+        String(item.value).toLowerCase().includes(query.toLowerCase()),
     );
+
     return filter;
   }
 
   onItemSelect = (item: DropdownOption): void => {
     this.props.onOptionSelected(item);
+
     // If Popover is open, then toggle visibility.
     // Required when item selection is made via keyboard input.
     if (this.state.isOpen) this.togglePopoverVisibility();
   };
 
-  isOptionSelected = (selectedOption: DropdownOption) => {
-    if (this.props.value) return selectedOption.value === this.props.value;
+  isOptionSelected = (currentOption: DropdownOption) => {
+    // if currentOption is null, then return false
+    if (isNil(currentOption)) return false;
+
+    if (this.props.value) return currentOption.value === this.props.value;
+
     const optionIndex = findIndex(this.props.options, (option) => {
-      return option.value === selectedOption.value;
+      return option.value === currentOption.value;
     });
+
     return optionIndex === this.props.selectedIndex;
   };
+
   onQueryChange = debounce((filterValue: string) => {
     if (equal(filterValue, this.props.filterText)) return;
+
     this.props.onFilterChange(filterValue);
     this.listRef?.current?.scrollTo(0);
   }, DEBOUNCE_TIMEOUT);
@@ -135,14 +154,17 @@ class SelectComponent extends React.Component<
     itemProps: IItemRendererProps,
   ) => {
     if (!this.state.isOpen) return null;
+
     if (!itemProps.modifiers.matchesPredicate) {
       return null;
     }
+
     const isSelected: boolean = this.isOptionSelected(option);
     // For tabbable menuItems
     const isFocused = itemProps.modifiers.active;
     const focusClassName = `${isFocused && "has-focus"}`;
     const selectedClassName = `${isSelected && "menu-item-active"}`;
+
     return (
       <MenuItem
         accentColor={this.props.accentColor}
@@ -175,12 +197,15 @@ class SelectComponent extends React.Component<
   handleCloseList = () => {
     if (this.state.isOpen) {
       this.togglePopoverVisibility();
+
       if (!this.props.selectedIndex) return;
+
       return this.handleActiveItemChange(
         this.props.options[this.props.selectedIndex],
       );
     } else {
       this.handleOnDropdownClose();
+
       /**
        * Clear the search input on closing the widget
        * and when serverSideFiltering is off
@@ -202,17 +227,23 @@ class SelectComponent extends React.Component<
     </MenuItem>
   );
   itemListRenderer = (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     props: IItemListRendererProps<any>,
   ): JSX.Element | null => {
     if (!this.state.isOpen) return null;
+
     let activeItemIndex = this.props.selectedIndex || null;
+
     if (props.activeItem && activeItemIndex === null) {
       activeItemIndex = props.filteredItems?.findIndex(
         (item) => item.value === props.activeItem?.value,
       );
     }
+
     if (!props.filteredItems || !props.filteredItems.length)
       return this.noResultsUI;
+
     return this.renderList(
       props.filteredItems,
       activeItemIndex,
@@ -223,6 +254,8 @@ class SelectComponent extends React.Component<
   renderList = (
     items: DropdownOption[],
     activeItemIndex: number | null,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     renderItem: (item: any, index: number) => JSX.Element | null,
   ): JSX.Element | null => {
     // Don't scroll if the list is filtered.
@@ -233,14 +266,18 @@ class SelectComponent extends React.Component<
       optionsCount * ITEM_SIZE > MAX_RENDER_MENU_ITEMS_HEIGHT
         ? activeItemIndex * ITEM_SIZE
         : 0;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const RowRenderer = (itemProps: any) => (
       <div key={itemProps.index} style={itemProps.style}>
         {renderItem(items[itemProps.index], itemProps.index)}
       </div>
     );
+
     return (
       <FixedSizeList
         className="menu-virtual-list"
+        direction={this.props.rtl ? "rtl" : "ltr"}
         height={MAX_RENDER_MENU_ITEMS_HEIGHT}
         initialScrollOffset={scrollOffset}
         itemCount={items.length}
@@ -256,13 +293,16 @@ class SelectComponent extends React.Component<
 
   getDropdownWidth = () => {
     const parentWidth = this.props.width - WidgetContainerDiff;
+
     if (this.props.compactMode && this.labelRef.current) {
       const labelWidth = this.labelRef.current.getBoundingClientRect().width;
       const widthDiff = parentWidth - labelWidth - labelMargin;
+
       return widthDiff > this.props.dropDownWidth
         ? widthDiff
         : this.props.dropDownWidth;
     }
+
     return parentWidth > this.props.dropDownWidth
       ? parentWidth
       : this.props.dropDownWidth;
@@ -294,6 +334,7 @@ class SelectComponent extends React.Component<
         isNil(this.state.activeItemIndex)
       )
         return undefined;
+
       if (!isEmpty(this.props.options))
         return this.props.options[this.state.activeItemIndex];
     };
@@ -326,7 +367,13 @@ class SelectComponent extends React.Component<
         compactMode={compactMode}
         data-testid="select-container"
         labelPosition={labelPosition}
+        rtl={this.props.rtl}
       >
+        {this.props.rtl ? (
+          <RTLStyleContainer
+            dropdownPopoverContainer={`select-popover-wrapper-${this.props.widgetId}`}
+          />
+        ) : null}
         <DropdownStyles
           accentColor={accentColor}
           borderRadius={borderRadius}
@@ -382,7 +429,7 @@ class SelectComponent extends React.Component<
             onQueryChange={this.onQueryChange}
             popoverProps={{
               portalContainer:
-                document.getElementById("art-board") || undefined,
+                document.getElementById(CANVAS_ART_BOARD) || undefined,
               boundary: "window",
               isOpen: this.state.isOpen,
               minimal: true,
@@ -393,6 +440,7 @@ class SelectComponent extends React.Component<
                 if (!this.props.selectedIndex) {
                   return this.handleActiveItemChange(null);
                 }
+
                 return this.handleActiveItemChange(
                   this.props.options[this.props.selectedIndex],
                 );
@@ -402,7 +450,7 @@ class SelectComponent extends React.Component<
                   enabled: false,
                 },
               },
-              popoverClassName: `select-popover-wrapper select-popover-width-${this.props.widgetId}`,
+              popoverClassName: `select-popover-wrapper select-popover-width-${this.props.widgetId} select-popover-wrapper-${this.props.widgetId}`,
             }}
             query={this.props.filterText}
             resetOnClose={this.props.resetFilterTextOnClose}
@@ -414,8 +462,9 @@ class SelectComponent extends React.Component<
               displayText={value.toString()}
               handleCancelClick={this.handleCancelClick}
               hideCancelIcon={this.props.hideCancelIcon}
+              isRequired={this.props.isRequired}
               spanRef={this.spanRef}
-              togglePopoverVisibility={this.togglePopoverVisibility}
+              togglePopoverVisibility={this.togglePopoverVisibilityFromButton}
               tooltipText={tooltipText}
               value={this.props.value?.toString()}
             />
@@ -427,43 +476,45 @@ class SelectComponent extends React.Component<
 }
 
 export interface SelectComponentProps extends ComponentProps {
+  accentColor?: string;
+  borderRadius: string;
+  boxShadow?: string;
   className?: string;
+  compactMode: boolean;
   disabled?: boolean;
-  onOptionSelected: (optionSelected: DropdownOption) => void;
-  placeholder?: string;
+  dropDownWidth: number;
+  filterText?: string;
+  hasError?: boolean;
+  height: number;
+  hideCancelIcon?: boolean;
+  isDynamicHeightEnabled?: boolean;
+  isFilterable: boolean;
+  isLoading: boolean;
+  isOpen?: boolean;
+  isRequired?: boolean;
+  isValid: boolean;
+  label?: string | number;
   labelAlignment?: Alignment;
   labelPosition?: LabelPosition;
+  labelStyle?: string;
   labelText: string;
   labelTextColor?: string;
   labelTextSize?: TextSize;
-  labelStyle?: string;
-  labelWidth?: number;
   labelTooltip?: string;
-  compactMode: boolean;
-  selectedIndex?: number;
-  options: DropdownOption[];
-  isDynamicHeightEnabled?: boolean;
-  isLoading: boolean;
-  isFilterable: boolean;
-  isValid: boolean;
-  width: number;
-  dropDownWidth: number;
-  height: number;
-  serverSideFiltering: boolean;
-  hasError?: boolean;
-  onFilterChange: (text: string) => void;
-  onDropdownOpen?: () => void;
-  onDropdownClose?: () => void;
-  value?: string | number;
-  label?: string | number;
-  filterText?: string;
-  borderRadius: string;
-  boxShadow?: string;
-  accentColor?: string;
-  isOpen?: boolean;
+  labelWidth?: number;
   onClose?: () => void;
-  hideCancelIcon?: boolean;
+  onDropdownClose?: () => void;
+  onDropdownOpen?: () => void;
+  onFilterChange: (text: string) => void;
+  onOptionSelected: (optionSelected: DropdownOption) => void;
+  options: DropdownOption[];
+  placeholder?: string;
   resetFilterTextOnClose?: boolean;
+  rtl?: boolean;
+  selectedIndex?: number;
+  serverSideFiltering: boolean;
+  value?: string | number;
+  width: number;
 }
 
 export default React.memo(SelectComponent);

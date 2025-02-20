@@ -8,7 +8,7 @@
     ],
     "addons": [
         {
-            "plan": "heroku-redis:hobby-dev",
+            "plan": "heroku-redis:mini",
             "as": "APPSMITH_REDIS"
         }
     ],
@@ -18,7 +18,7 @@
     "success_url": "/",
     "stack": "container",
     "env": {
-      "APPSMITH_MONGODB_URI": {
+      "APPSMITH_DB_URL": {
         "description": "Your Mongo Database URI. Since Heroku doesn't support a managed MongoDB instance, you'll have to create a Mongo DB instance on another service such as https://cloud.mongodb.com",
         "value": ""
       },
@@ -31,7 +31,7 @@
         "value": ""
       },
       "APPSMITH_DISABLE_TELEMETRY": {
-        "description" : "We want to be transparent and request that you share anonymous usage data with us. This data is purely statistical in nature and helps us understand your needs & provide better support to your self-hosted instance. You can read more about what information is collected in our documentation https://docs.appsmith.com/v/v1.2.1/setup/telemetry",
+        "description" : "We want to be transparent and request that you share anonymous usage data with us. This data is purely statistical in nature and helps us understand your needs & provide better support to your self-hosted instance. You can read more about what information is collected in our documentation https://docs.appsmith.com/product/telemetry",
         "value": "false"
       },
       "APPSMITH_SUPERVISOR_PASSWORD": {

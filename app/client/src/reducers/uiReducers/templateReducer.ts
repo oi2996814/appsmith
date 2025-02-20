@@ -1,10 +1,10 @@
 import { createReducer } from "utils/ReducerUtils";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
-  ReduxAction,
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { Template, TemplateFiltersResponse } from "api/TemplatesApi";
+} from "ee/constants/ReduxActionConstants";
+import type { Template, TemplateFiltersResponse } from "api/TemplatesApi";
 
 const initialState: TemplatesReduxState = {
   isImportingTemplate: false,
@@ -13,15 +13,26 @@ const initialState: TemplatesReduxState = {
   gettingAllTemplates: false,
   gettingTemplate: false,
   activeTemplate: null,
+  activeLoadingTemplateId: null,
   templates: [],
   similarTemplates: [],
-  filters: {},
+  filters: {
+    functions: ["All"],
+  },
   allFilters: {
     functions: [],
   },
   templateSearchQuery: "",
   templateNotificationSeen: null,
-  showTemplatesModal: false,
+  templatesModal: {
+    isOpen: false,
+    isOpenFromCanvas: false,
+  },
+  currentForkingTemplateInfo: {
+    buildingBlock: {
+      name: "",
+    },
+  },
 };
 
 const templateReducer = createReducer(initialState, {
@@ -69,6 +80,15 @@ const templateReducer = createReducer(initialState, {
       },
     };
   },
+  [ReduxActionTypes.RESET_TEMPLATE_FILTERS]: (
+    state: TemplatesReduxState,
+  ): TemplatesReduxState => {
+    return {
+      ...state,
+      filters: {},
+      templateSearchQuery: "",
+    };
+  },
   [ReduxActionTypes.SET_TEMPLATE_SEARCH_QUERY]: (
     state: TemplatesReduxState,
     action: ReduxAction<string>,
@@ -110,6 +130,23 @@ const templateReducer = createReducer(initialState, {
       isImportingTemplateToApp: true,
     };
   },
+  [ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_ONBOARDING_FLOW]: (
+    state: TemplatesReduxState,
+  ) => {
+    return {
+      ...state,
+      isImportingTemplateToApp: true,
+    };
+  },
+  [ReduxActionTypes.SET_ACTIVE_LOADING_TEMPLATE_ID]: (
+    state: TemplatesReduxState,
+    action: ReduxAction<string>,
+  ) => {
+    return {
+      ...state,
+      activeLoadingTemplateId: action.payload,
+    };
+  },
   [ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_SUCCESS]: (
     state: TemplatesReduxState,
   ) => {
@@ -118,12 +155,42 @@ const templateReducer = createReducer(initialState, {
       isImportingTemplateToApp: false,
     };
   },
+  [ReduxActionTypes.IMPORT_TEMPLATE_TO_APPLICATION_ONBOARDING_FLOW_SUCCESS]: (
+    state: TemplatesReduxState,
+  ) => {
+    return {
+      ...state,
+      isImportingTemplateToApp: false,
+      activeLoadingTemplateId: null,
+    };
+  },
   [ReduxActionErrorTypes.IMPORT_TEMPLATE_TO_APPLICATION_ERROR]: (
     state: TemplatesReduxState,
   ) => {
     return {
       ...state,
       isImportingTemplateToApp: false,
+    };
+  },
+  [ReduxActionErrorTypes.IMPORT_TEMPLATE_TO_APPLICATION_ONBOARDING_FLOW_ERROR]:
+    (state: TemplatesReduxState) => {
+      return {
+        ...state,
+        isImportingTemplateToApp: false,
+        activeLoadingTemplateId: null,
+      };
+    },
+  [ReduxActionTypes.SET_CURRENT_FORKING_BUILDING_BLOCK_NAME]: (
+    state: TemplatesReduxState,
+    action: ReduxAction<string>,
+  ) => {
+    return {
+      ...state,
+      currentForkingTemplateInfo: {
+        buildingBlock: {
+          name: action.payload,
+        },
+      },
     };
   },
   [ReduxActionErrorTypes.GET_TEMPLATE_ERROR]: (state: TemplatesReduxState) => {
@@ -152,11 +219,23 @@ const templateReducer = createReducer(initialState, {
   },
   [ReduxActionTypes.SHOW_TEMPLATES_MODAL]: (
     state: TemplatesReduxState,
-    action: ReduxAction<boolean>,
+    action: ReduxAction<{ isOpenFromCanvas: boolean }>,
   ) => {
     return {
       ...state,
-      showTemplatesModal: action.payload,
+      templatesModal: {
+        isOpen: true,
+        isOpenFromCanvas: action.payload.isOpenFromCanvas,
+      },
+    };
+  },
+  [ReduxActionTypes.HIDE_TEMPLATES_MODAL]: (state: TemplatesReduxState) => {
+    return {
+      ...state,
+      templatesModal: {
+        isOpen: false,
+        isOpenFromCanvas: false,
+      },
     };
   },
   [ReduxActionTypes.GET_TEMPLATE_FILTERS_INIT]: (
@@ -193,14 +272,24 @@ export interface TemplatesReduxState {
   gettingTemplate: boolean;
   templates: Template[];
   activeTemplate: Template | null;
+  activeLoadingTemplateId: string | null;
   similarTemplates: Template[];
   filters: Record<string, string[]>;
   templateSearchQuery: string;
   isImportingTemplate: boolean;
   isImportingTemplateToApp: boolean;
+  buildingBlockSourcePageId?: string;
   templateNotificationSeen: boolean | null;
-  showTemplatesModal: boolean;
+  templatesModal: {
+    isOpen: boolean;
+    isOpenFromCanvas: boolean;
+  };
   loadingFilters: boolean;
+  currentForkingTemplateInfo: {
+    buildingBlock: {
+      name: string;
+    };
+  };
 }
 
 export default templateReducer;

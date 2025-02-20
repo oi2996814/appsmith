@@ -1,12 +1,12 @@
 import { createImmerReducer } from "utils/ReducerUtils";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionTypes,
   ReduxActionErrorTypes,
-  ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
-import { WidgetProps } from "widgets/BaseWidget";
+} from "ee/constants/ReduxActionConstants";
+import type { WidgetProps } from "widgets/BaseWidget";
 import { compareAndGenerateImmutableCanvasStructure } from "utils/canvasStructureHelpers";
-import { WidgetType } from "constants/WidgetConstants";
+import type { WidgetType } from "constants/WidgetConstants";
 
 export interface CanvasStructure {
   widgetName: string;
@@ -18,6 +18,7 @@ export interface CanvasStructure {
 export interface DSL extends WidgetProps {
   children?: DSL[];
 }
+
 export interface PageCanvasStructureReduxState {
   [pageId: string]: CanvasStructure;
 }

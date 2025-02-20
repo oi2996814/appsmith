@@ -1,16 +1,11 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import { AppSettingsPaneContext } from "reducers/uiReducers/appSettingsPaneReducer";
-import { Action } from "redux";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { AppSettingsPaneReduxState } from "reducers/uiReducers/appSettingsPaneReducer";
 
-export const openAppSettingsPaneAction = (context?: AppSettingsPaneContext) => {
+export const updateAppSettingsPaneSelectedTabAction = (
+  payload: AppSettingsPaneReduxState,
+) => {
   return {
-    type: ReduxActionTypes.OPEN_APP_SETTINGS_PANE,
-    payload: context,
-  };
-};
-
-export const closeAppSettingsPaneAction = (): Action => {
-  return {
-    type: ReduxActionTypes.CLOSE_APP_SETTINGS_PANE,
+    type: ReduxActionTypes.UPDATE_APP_SETTINGS_PANE_SELECTED_TAB,
+    payload: payload,
   };
 };

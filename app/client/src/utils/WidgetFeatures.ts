@@ -1,15 +1,12 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import {
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type {
   PropertyPaneConfig,
   PropertyPaneControlConfig,
 } from "constants/PropertyControlConstants";
-import {
-  GridDefaults,
-  WidgetHeightLimits,
-  WidgetType,
-} from "constants/WidgetConstants";
-import { WidgetProps } from "widgets/BaseWidget";
-import { WidgetConfiguration } from "widgets/constants";
+import type { WidgetType } from "constants/WidgetConstants";
+import { GridDefaults, WidgetHeightLimits } from "constants/WidgetConstants";
+import type { WidgetProps } from "widgets/BaseWidget";
+import type BaseWidget from "widgets/BaseWidget";
 
 export enum RegisteredWidgetFeatures {
   DYNAMIC_HEIGHT = "dynamicHeight",
@@ -19,6 +16,7 @@ interface WidgetFeatureConfig {
   active: boolean;
   defaultValue?: DynamicHeight;
   sectionIndex: number;
+  helperText?: (props?: WidgetProps) => PropertyPaneControlConfig["helperText"];
 }
 
 export type WidgetFeatures = Record<
@@ -53,30 +51,35 @@ export const WidgetFeatureProps: Record<
 
 export const WidgetFeaturePropertyEnhancements: Record<
   RegisteredWidgetFeatures,
-  (config: WidgetConfiguration) => Record<string, unknown>
+  (config: typeof BaseWidget) => Record<string, unknown>
 > = {
-  [RegisteredWidgetFeatures.DYNAMIC_HEIGHT]: (config: WidgetConfiguration) => {
+  [RegisteredWidgetFeatures.DYNAMIC_HEIGHT]: (widget: typeof BaseWidget) => {
+    const features = widget.getFeatures();
+    const defaults = widget.getDefaults();
+    const config = widget.getConfig();
+
     const newProperties: Partial<WidgetProps> = {};
+
     newProperties.dynamicHeight =
-      config.features?.dynamicHeight?.defaultValue || DynamicHeight.AUTO_HEIGHT;
+      features?.dynamicHeight?.defaultValue || DynamicHeight.AUTO_HEIGHT;
+
     if (config.isCanvas) {
       newProperties.dynamicHeight = DynamicHeight.AUTO_HEIGHT;
       newProperties.minDynamicHeight =
-        config.defaults.minDynamicHeight ||
+        defaults.minDynamicHeight ||
         WidgetHeightLimits.MIN_CANVAS_HEIGHT_IN_ROWS;
       newProperties.maxDynamicHeight =
-        config.defaults.maxDynamicHeight ||
-        WidgetHeightLimits.MAX_HEIGHT_IN_ROWS;
+        defaults.maxDynamicHeight || WidgetHeightLimits.MAX_HEIGHT_IN_ROWS;
       newProperties.shouldScrollContents = true;
     } else {
       newProperties.minDynamicHeight =
-        config.defaults.minDynamicHeight ||
-        WidgetHeightLimits.MIN_HEIGHT_IN_ROWS;
+        defaults.minDynamicHeight || WidgetHeightLimits.MIN_HEIGHT_IN_ROWS;
       newProperties.maxDynamicHeight =
-        config.defaults.maxDynamicHeight ||
-        WidgetHeightLimits.MAX_HEIGHT_IN_ROWS;
+        defaults.maxDynamicHeight || WidgetHeightLimits.MAX_HEIGHT_IN_ROWS;
     }
-    if (config.defaults.overflow) newProperties.overflow = "NONE";
+
+    if (defaults.overflow) newProperties.overflow = "NONE";
+
     return newProperties;
   },
 };
@@ -91,13 +94,12 @@ function findAndUpdatePropertyPaneControlConfig(
       sectionConfig.children.length > 0
     ) {
       Object.keys(propertyPaneUpdates).forEach((propertyName: string) => {
-        const controlConfigIndex:
-          | number
-          | undefined = sectionConfig.children?.findIndex(
-          (controlConfig: PropertyPaneConfig) =>
-            (controlConfig as PropertyPaneControlConfig).propertyName ===
-            propertyName,
-        );
+        const controlConfigIndex: number | undefined =
+          sectionConfig.children?.findIndex(
+            (controlConfig: PropertyPaneConfig) =>
+              (controlConfig as PropertyPaneControlConfig).propertyName ===
+              propertyName,
+          );
 
         if (
           controlConfigIndex !== undefined &&
@@ -111,6 +113,7 @@ function findAndUpdatePropertyPaneControlConfig(
         }
       });
     }
+
     return sectionConfig;
   });
 }
@@ -132,6 +135,7 @@ export const WidgetFeaturePropertyPaneEnhancements: Record<
         props.dynamicHeight === DynamicHeight.AUTO_HEIGHT
       );
     }
+
     let update = findAndUpdatePropertyPaneControlConfig(config, {
       shouldScrollContents: {
         hidden: hideWhenDynamicHeightIsEnabled,
@@ -150,6 +154,7 @@ export const WidgetFeaturePropertyPaneEnhancements: Record<
         dependencies: ["dynamicHeight"],
       },
     });
+
     if (widgetType === "MODAL_WIDGET") {
       update = findAndUpdatePropertyPaneControlConfig(update, {
         dynamicHeight: {
@@ -166,6 +171,7 @@ export const WidgetFeaturePropertyPaneEnhancements: Record<
         },
       });
     }
+
     return update;
   },
 };
@@ -204,7 +210,9 @@ function updateMinMaxDynamicHeight(
         propertyValue: WidgetHeightLimits.MIN_HEIGHT_IN_ROWS,
       });
     }
+
     const maxDynamicHeight = parseInt(props.maxDynamicHeight, 10);
+
     if (
       isNaN(maxDynamicHeight) ||
       maxDynamicHeight === WidgetHeightLimits.MAX_HEIGHT_IN_ROWS ||
@@ -228,6 +236,7 @@ function updateMinMaxDynamicHeight(
     const minHeightInRows = props.isCanvas
       ? WidgetHeightLimits.MIN_CANVAS_HEIGHT_IN_ROWS
       : WidgetHeightLimits.MIN_HEIGHT_IN_ROWS;
+
     updates.push(
       {
         propertyPath: "minDynamicHeight",
@@ -266,24 +275,28 @@ function updateMinMaxDynamicHeight(
         propertyValue: props.topRow,
       });
     }
+
     if (!props.shouldScrollContents) {
       updates.push({
         propertyPath: "shouldScrollContents",
         propertyValue: true,
       });
     }
+
     if (props.overflow !== undefined) {
       updates.push({
         propertyPath: "overflow",
         propertyValue: "NONE",
       });
     }
+
     if (props.scrollContents === true) {
       updates.push({
         propertyPath: "scrollContents",
         propertyValue: false,
       });
     }
+
     if (props.fixedFooter === true) {
       updates.push({
         propertyPath: "fixedFooter",
@@ -302,9 +315,9 @@ const CONTAINER_SCROLL_HELPER_TEXT =
 
 export const PropertyPaneConfigTemplates: Record<
   RegisteredWidgetFeatures,
-  PropertyPaneConfig[]
+  (featureConfig: WidgetFeatureConfig) => PropertyPaneConfig[]
 > = {
-  [RegisteredWidgetFeatures.DYNAMIC_HEIGHT]: [
+  [RegisteredWidgetFeatures.DYNAMIC_HEIGHT]: (featureConfig) => [
     {
       helpText:
         "Auto Height: Configure the way the widget height reacts to content changes.",
@@ -324,11 +337,13 @@ export const PropertyPaneConfigTemplates: Record<
         "isCanvas",
       ],
       updateHook: updateMinMaxDynamicHeight,
+      //TODO: Canvas widgets should also use the helper text config of dynamic height feature
+      // instead of using a hardcoded string
       helperText: (props: WidgetProps) => {
         return props.isCanvas &&
           props.dynamicHeight === DynamicHeight.AUTO_HEIGHT
           ? CONTAINER_SCROLL_HELPER_TEXT
-          : "";
+          : featureConfig.helperText?.(props) || "";
       },
       options: [
         {

@@ -1,14 +1,4 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import { GUIDED_TOUR_STEPS } from "pages/Editor/GuidedTour/constants";
-import { GuidedTourState } from "reducers/uiReducers/guidedTourReducer";
-import { WidgetProps } from "widgets/BaseWidget";
-
-export const enableGuidedTour = (payload: boolean) => {
-  return {
-    type: ReduxActionTypes.ENABLE_GUIDED_TOUR,
-    payload,
-  };
-};
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 
 export const toggleInOnboardingWidgetSelection = (payload: boolean) => {
   return {
@@ -17,97 +7,67 @@ export const toggleInOnboardingWidgetSelection = (payload: boolean) => {
   };
 };
 
+export const removeFirstTimeUserOnboardingApplicationId = (
+  applicationId: string,
+) => {
+  return {
+    type: ReduxActionTypes.REMOVE_FIRST_TIME_USER_ONBOARDING_APPLICATION_ID,
+    payload: applicationId,
+  };
+};
+
+export const showSignpostingModal = (payload: boolean) => {
+  return {
+    type: ReduxActionTypes.SET_SHOW_FIRST_TIME_USER_ONBOARDING_MODAL,
+    payload,
+  };
+};
+
+export const disableStartSignpostingAction = () => {
+  return {
+    type: ReduxActionTypes.DISABLE_START_SIGNPOSTING,
+  };
+};
+
 export const firstTimeUserOnboardingInit = (
   applicationId: string | undefined,
-  pageId: string,
+  basePageId: string,
+  suffix?: string,
 ) => {
   return {
     type: ReduxActionTypes.FIRST_TIME_USER_ONBOARDING_INIT,
     payload: {
-      applicationId: applicationId,
-      pageId: pageId,
+      applicationId,
+      basePageId,
+      suffix,
     },
   };
 };
 
-export const markStepComplete = () => {
+export const setSignpostingOverlay = (payload: boolean) => {
   return {
-    type: ReduxActionTypes.GUIDED_TOUR_MARK_STEP_COMPLETED,
-  };
-};
-
-export const tableWidgetWasSelected = (payload: boolean) => {
-  return {
-    type: ReduxActionTypes.TABLE_WIDGET_WAS_SELECTED,
+    type: ReduxActionTypes.SET_SIGNPOSTING_OVERLAY,
     payload,
   };
 };
 
-export const setCurrentStepInit = (payload: GUIDED_TOUR_STEPS) => {
+export const signpostingMarkAllRead = () => {
   return {
-    type: ReduxActionTypes.SET_CURRENT_STEP_INIT,
+    type: ReduxActionTypes.SIGNPOSTING_MARK_ALL_READ,
+  };
+};
+
+export const showSignpostingTooltip = (payload: boolean) => {
+  return {
+    type: ReduxActionTypes.SIGNPOSTING_SHOW_TOOLTIP,
     payload,
   };
 };
 
-export const setCurrentStep = (payload: GUIDED_TOUR_STEPS) => {
+export const showAnonymousDataPopup = (payload: boolean) => {
   return {
-    type: ReduxActionTypes.SET_CURRENT_STEP,
+    type: ReduxActionTypes.SHOW_ANONYMOUS_DATA_POPUP,
     payload,
-  };
-};
-
-export const addOnboardingWidget = (payload: Partial<WidgetProps>) => {
-  return {
-    type: ReduxActionTypes.GUIDED_TOUR_ADD_WIDGET,
-    payload,
-  };
-};
-
-export const setUpTourApp = () => {
-  return {
-    type: ReduxActionTypes.SET_UP_TOUR_APP,
-  };
-};
-
-export const toggleLoader = (payload: boolean) => {
-  return {
-    type: ReduxActionTypes.GUIDED_TOUR_TOGGLE_LOADER,
-    payload,
-  };
-};
-
-export const toggleShowDeviationDialog = (payload: boolean) => {
-  return {
-    type: ReduxActionTypes.TOGGLE_DEVIATION_DIALOG,
-    payload,
-  };
-};
-
-export const toggleShowEndTourDialog = (payload: boolean) => {
-  return {
-    type: ReduxActionTypes.TOGGLE_END_GUIDED_TOUR_DIALOG,
-    payload,
-  };
-};
-
-export const showPostCompletionMessage = (payload: boolean) => {
-  return {
-    type: ReduxActionTypes.TOGGLE_END_GUIDED_TOUR_DIALOG,
-    payload,
-  };
-};
-
-export const forceShowContent = (payload: GUIDED_TOUR_STEPS) => {
-  return {
-    type: ReduxActionTypes.FORCE_SHOW_CONTENT,
-    payload,
-  };
-};
-
-export const updateButtonWidgetText = () => {
-  return {
-    type: ReduxActionTypes.UPDATE_BUTTON_WIDGET_TEXT,
   };
 };
 
@@ -117,38 +77,23 @@ export const showInfoMessage = () => {
   };
 };
 
-export const focusWidget = (widgetName: string, propertyName?: string) => {
+export const setCurrentApplicationIdForCreateNewApp = (
+  applicationId: string,
+) => {
   return {
-    type: ReduxActionTypes.GUIDED_TOUR_FOCUS_WIDGET,
-    payload: {
-      widgetName,
-      propertyName,
-    },
+    type: ReduxActionTypes.SET_CURRENT_APPLICATION_ID_FOR_CREATE_NEW_APP,
+    payload: applicationId,
   };
 };
 
-export const focusWidgetProperty = (widgetName: string) => {
+export const resetCurrentApplicationIdForCreateNewApp = () => {
   return {
-    type: ReduxActionTypes.FOCUS_WIDGET_PROPERTY,
-    payload: widgetName,
+    type: ReduxActionTypes.RESET_CURRENT_APPLICATION_ID_FOR_CREATE_NEW_APP,
   };
 };
 
-export const onboardingCreateApplication = () => {
+export const resetCurrentPluginIdForCreateNewApp = () => {
   return {
-    type: ReduxActionTypes.ONBOARDING_CREATE_APPLICATION,
-  };
-};
-
-export const loadGuidedTourInit = () => {
-  return {
-    type: ReduxActionTypes.LOAD_GUIDED_TOUR_INIT,
-  };
-};
-
-export const loadGuidedTour = (guidedTourState: GuidedTourState) => {
-  return {
-    type: ReduxActionTypes.LOAD_GUIDED_TOUR,
-    payload: guidedTourState,
+    type: ReduxActionTypes.RESET_CURRENT_PLUGIN_ID_FOR_CREATE_NEW_APP,
   };
 };

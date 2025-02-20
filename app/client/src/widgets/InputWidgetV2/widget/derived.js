@@ -2,6 +2,7 @@
 export default {
   isValid: (props, moment, _) => {
     let hasValidValue, value, isEmpty;
+
     switch (props.inputType) {
       case "NUMBER":
         try {
@@ -30,6 +31,7 @@ export default {
     if (!props.isRequired && isEmpty) {
       return true;
     }
+
     if (props.isRequired && !hasValidValue) {
       return false;
     }
@@ -39,6 +41,7 @@ export default {
     }
 
     let parsedRegex = null;
+
     if (props.regex) {
       /*
        * break up the regexp pattern into 4 parts: given regex, regex prefix , regex pattern, regex flags
@@ -65,11 +68,17 @@ export default {
         }
       }
     }
+
     switch (props.inputType) {
       case "EMAIL":
+        /**
+         * Explanation of Regex:
+         *  https://stackoverflow.com/questions/15017052/understanding-email-validation-using-javascript
+         * */
         const emailRegex = new RegExp(
-          /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+          /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,4})+$/,
         );
+
         if (!emailRegex.test(value)) {
           /* email should conform to generic email regex */
           return false;

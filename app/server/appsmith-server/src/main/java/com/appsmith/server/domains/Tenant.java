@@ -1,27 +1,36 @@
 package com.appsmith.server.domains;
 
 import com.appsmith.external.models.BaseDomain;
-import com.appsmith.server.constants.ConfigNames;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.experimental.FieldNameConstants;
 import org.checkerframework.common.aliasing.qual.Unique;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.util.Map;
+import java.io.Serializable;
 
+@Deprecated
+// This class has been deprecated. Please use Organization instead.
 @Getter
 @Setter
 @ToString
 @NoArgsConstructor
 @Document
-public class Tenant extends BaseDomain {
+@FieldNameConstants
+public class Tenant extends BaseDomain implements Serializable {
 
-    @Unique
-    String slug;
+    @Unique String slug;
 
     String displayName;
+
+    @Transient
+    String instanceId;
+
+    @Transient
+    String adminEmailDomainHash;
 
     PricingPlan pricingPlan;
 

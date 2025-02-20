@@ -1,7 +1,7 @@
 package com.appsmith.server.repositories.ce;
 
-import com.appsmith.server.domains.Plugin;
 import com.appsmith.external.models.PluginType;
+import com.appsmith.server.domains.Plugin;
 import com.appsmith.server.repositories.BaseRepository;
 import com.appsmith.server.repositories.CustomPluginRepository;
 import reactor.core.publisher.Flux;
@@ -11,8 +11,6 @@ public interface PluginRepositoryCE extends BaseRepository<Plugin, String>, Cust
     Mono<Plugin> findByName(String name);
 
     Mono<Plugin> findByPackageName(String packageName);
-
-    Mono<Plugin> findById(String id);
 
     Flux<Plugin> findByDefaultInstall(Boolean isDefaultInstall);
 

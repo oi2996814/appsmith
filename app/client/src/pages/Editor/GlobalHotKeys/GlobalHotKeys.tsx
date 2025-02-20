@@ -1,8 +1,7 @@
-import React from "react";
-import { connect } from "react-redux";
-import { AppState } from "@appsmith/reducers";
-import { Hotkey, Hotkeys } from "@blueprintjs/core";
-import { HotkeysTarget } from "@blueprintjs/core/lib/esnext/components/hotkeys/hotkeysTarget.js";
+import React, { useCallback } from "react";
+import { connect, useDispatch, useSelector } from "react-redux";
+import type { AppState } from "ee/reducers";
+import { Hotkey, Hotkeys, HotkeysTarget } from "@blueprintjs/core";
 import {
   closePropertyPane,
   closeTableFilterPane,
@@ -12,46 +11,73 @@ import {
   groupWidgets,
   pasteWidget,
 } from "actions/widgetActions";
-import {
-  deselectAllInitAction,
-  selectAllWidgetsInCanvasInitAction,
-} from "actions/widgetSelectionActions";
+import { selectWidgetInitAction } from "actions/widgetSelectionActions";
 import { setGlobalSearchCategory } from "actions/globalSearchActions";
-import { isMacOrIOS } from "utils/helpers";
+import { getSelectedText, isMacOrIOS } from "utils/helpers";
 import { getLastSelectedWidget, getSelectedWidgets } from "selectors/ui";
 import { MAIN_CONTAINER_WIDGET_ID } from "constants/WidgetConstants";
-import { getSelectedText } from "utils/helpers";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import { WIDGETS_SEARCH_ID } from "constants/Explorer";
 import { resetSnipingMode as resetSnipingModeAction } from "actions/propertyPaneActions";
-import { showDebugger } from "actions/debuggerActions";
 
 import { runActionViaShortcut } from "actions/pluginActionActions";
+import type { SearchCategory } from "components/editorComponents/GlobalSearch/utils";
 import {
   filterCategories,
-  SearchCategory,
   SEARCH_CATEGORY_ID,
 } from "components/editorComponents/GlobalSearch/utils";
 import { redoAction, undoAction } from "actions/pageActions";
-import { Toaster, Variant } from "design-system";
 
-import { getAppMode } from "selectors/applicationSelectors";
-import { APP_MODE } from "entities/App";
+import { getAppMode } from "ee/selectors/applicationSelectors";
+import type { APP_MODE } from "entities/App";
 
 import {
   createMessage,
   SAVE_HOTKEY_TOASTER_MESSAGE,
-} from "@appsmith/constants/messages";
-import { setPreviewModeAction } from "actions/editorActions";
+} from "ee/constants/messages";
 import { previewModeSelector } from "selectors/editorSelectors";
-import { getExplorerPinned } from "selectors/explorerSelector";
-import { setExplorerPinnedAction } from "actions/explorerActions";
-import { setIsGitSyncModalOpen } from "actions/gitSyncActions";
-import { GitSyncModalTab } from "entities/GitSync";
 import { matchBuilderPath } from "constants/routes";
 import { toggleInstaller } from "actions/JSLibraryActions";
+import { SelectionRequestType } from "sagas/WidgetSelectUtils";
+import { toast } from "@appsmith/ads";
+import { showDebuggerFlag } from "selectors/debuggerSelectors";
+import { getIsFirstTimeUserOnboardingEnabled } from "selectors/onboardingSelectors";
+import WalkthroughContext from "components/featureWalkthrough/walkthroughContext";
+import { setPreviewModeInitAction } from "actions/editorActions";
+import { setIsGitSyncModalOpen } from "actions/gitSyncActions";
+import { GitSyncModalTab } from "entities/GitSync";
+import {
+  selectGitApplicationProtectedMode,
+  selectGitModEnabled,
+} from "selectors/gitModSelectors";
+import { GitHotKeys as GitHotKeysNew } from "git";
 
-type Props = {
+function GitHotKeys() {
+  const isGitModEnabled = useSelector(selectGitModEnabled);
+  const dispatch = useDispatch();
+
+  const showCommitModal = useCallback(() => {
+    dispatch(
+      setIsGitSyncModalOpen({
+        isOpen: true,
+        tab: GitSyncModalTab.DEPLOY,
+      }),
+    );
+  }, [dispatch]);
+
+  return isGitModEnabled ? (
+    <GitHotKeysNew />
+  ) : (
+    <Hotkey
+      combo="ctrl + shift + g"
+      global
+      label="Show git commit modal"
+      onKeyDown={showCommitModal}
+    />
+  );
+}
+
+interface Props {
   copySelectedWidget: () => void;
   pasteCopiedWidget: (mouseLocation: { x: number; y: number }) => void;
   deleteSelectedWidget: () => void;
@@ -59,7 +85,6 @@ type Props = {
   groupSelectedWidget: () => void;
   setGlobalSearchCategory: (category: SearchCategory) => void;
   resetSnipingMode: () => void;
-  openDebugger: () => void;
   closeProppane: () => void;
   closeTableFilterProppane: () => void;
   executeAction: () => void;
@@ -73,13 +98,13 @@ type Props = {
   redo: () => void;
   appMode?: APP_MODE;
   isPreviewMode: boolean;
-  setPreviewModeAction: (shouldSet: boolean) => void;
-  isExplorerPinned: boolean;
-  setExplorerPinnedAction: (shouldPinned: boolean) => void;
-  showCommitModal: () => void;
+  isProtectedMode: boolean;
+  setPreviewModeInitAction: (shouldSet: boolean) => void;
+  isSignpostingEnabled: boolean;
   getMousePosition: () => { x: number; y: number };
   hideInstaller: () => void;
-};
+  toggleDebugger: () => void;
+}
 
 @HotkeysTarget
 class GlobalHotKeys extends React.Component<Props> {
@@ -89,14 +114,17 @@ class GlobalHotKeys extends React.Component<Props> {
     const singleWidgetSelected =
       this.props.selectedWidget &&
       this.props.selectedWidget != MAIN_CONTAINER_WIDGET_ID;
+
     if (
       (singleWidgetSelected || multipleWidgetsSelected) &&
       !getSelectedText()
     ) {
       e.preventDefault();
       e.stopPropagation();
+
       return true;
     }
+
     return false;
   }
 
@@ -110,6 +138,7 @@ class GlobalHotKeys extends React.Component<Props> {
     if (this.props.isPreviewMode) return;
 
     const category = filterCategories[categoryId];
+
     this.props.setGlobalSearchCategory(category);
     this.props.hideInstaller();
     AnalyticsUtil.logEvent("OPEN_OMNIBAR", {
@@ -119,16 +148,24 @@ class GlobalHotKeys extends React.Component<Props> {
   }
 
   public renderHotkeys() {
+    const { isOpened: isWalkthroughOpened } = this.context ?? {};
+    const { isProtectedMode } = this.props;
+
+    // If walkthrough is open disable shortcuts
+    if (isWalkthroughOpened || isProtectedMode) return <Hotkeys />;
+
     return (
       <Hotkeys>
         <Hotkey
           combo="mod + f"
           global
           label="Search entities"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
-            const widgetSearchInput = document.getElementById(
-              WIDGETS_SEARCH_ID,
-            );
+            const widgetSearchInput =
+              document.getElementById(WIDGETS_SEARCH_ID);
+
             if (widgetSearchInput) {
               widgetSearchInput.focus();
               e.preventDefault();
@@ -147,30 +184,9 @@ class GlobalHotKeys extends React.Component<Props> {
           allowInInput
           combo="mod + plus"
           global
-          label="Create New"
+          label="Create new"
           onKeyDown={(e) =>
             this.onOnmnibarHotKeyDown(e, SEARCH_CATEGORY_ID.ACTION_OPERATION)
-          }
-        />
-        <Hotkey
-          allowInInput
-          combo="mod + j"
-          global
-          label="Lookup code snippets"
-          onKeyDown={(e) => {
-            this.onOnmnibarHotKeyDown(e, SEARCH_CATEGORY_ID.SNIPPETS);
-            AnalyticsUtil.logEvent("SNIPPET_LOOKUP", {
-              source: "HOTKEY_COMBO",
-            });
-          }}
-        />
-        <Hotkey
-          allowInInput
-          combo="mod + l"
-          global
-          label="Search documentation"
-          onKeyDown={(e) =>
-            this.onOnmnibarHotKeyDown(e, SEARCH_CATEGORY_ID.DOCUMENTATION)
           }
         />
         <Hotkey
@@ -188,21 +204,16 @@ class GlobalHotKeys extends React.Component<Props> {
           global
           group="Canvas"
           label="Open Debugger"
-          onKeyDown={() => {
-            this.props.openDebugger();
-            if (this.props.isDebuggerOpen) {
-              AnalyticsUtil.logEvent("OPEN_DEBUGGER", {
-                source: "CANVAS",
-              });
-            }
-          }}
+          onKeyDown={this.props.toggleDebugger}
           preventDefault
         />
         <Hotkey
           combo="mod + c"
           global
           group="Canvas"
-          label="Copy Widget"
+          label="Copy widget"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
             if (this.stopPropagationIfWidgetSelected(e)) {
               this.props.copySelectedWidget();
@@ -226,7 +237,9 @@ class GlobalHotKeys extends React.Component<Props> {
           combo="backspace"
           global
           group="Canvas"
-          label="Delete Widget"
+          label="Delete widget"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
             if (this.stopPropagationIfWidgetSelected(e) && isMacOrIOS()) {
               this.props.deleteSelectedWidget();
@@ -237,7 +250,9 @@ class GlobalHotKeys extends React.Component<Props> {
           combo="del"
           global
           group="Canvas"
-          label="Delete Widget"
+          label="Delete widget"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
             if (this.stopPropagationIfWidgetSelected(e)) {
               this.props.deleteSelectedWidget();
@@ -249,6 +264,8 @@ class GlobalHotKeys extends React.Component<Props> {
           global
           group="Canvas"
           label="Cut Widget"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
             if (this.stopPropagationIfWidgetSelected(e)) {
               this.props.cutSelectedWidget();
@@ -261,6 +278,8 @@ class GlobalHotKeys extends React.Component<Props> {
           global
           group="Canvas"
           label="Select all Widget"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
             if (matchBuilderPath(window.location.pathname)) {
               this.props.selectAllWidgetsInit();
@@ -273,19 +292,26 @@ class GlobalHotKeys extends React.Component<Props> {
           global
           group="Canvas"
           label="Deselect all Widget"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
             this.props.resetSnipingMode();
-            this.props.deselectAllWidgets();
-            this.props.closeProppane();
-            this.props.closeTableFilterProppane();
+
+            if (matchBuilderPath(window.location.pathname)) {
+              this.props.deselectAllWidgets();
+              this.props.closeProppane();
+              this.props.closeTableFilterProppane();
+            }
+
             e.preventDefault();
-            this.props.setPreviewModeAction(false);
           }}
         />
         <Hotkey
           combo="v"
           global
           label="Edit Mode"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
             this.props.resetSnipingMode();
             e.preventDefault();
@@ -329,6 +355,8 @@ class GlobalHotKeys extends React.Component<Props> {
           global
           group="Canvas"
           label="Cut Widgets for grouping"
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onKeyDown={(e: any) => {
             if (this.stopPropagationIfWidgetSelected(e)) {
               this.props.groupSelectedWidget();
@@ -340,39 +368,22 @@ class GlobalHotKeys extends React.Component<Props> {
           global
           label="Save progress"
           onKeyDown={() => {
-            Toaster.show({
-              text: createMessage(SAVE_HOTKEY_TOASTER_MESSAGE),
-              variant: Variant.info,
+            toast.show(createMessage(SAVE_HOTKEY_TOASTER_MESSAGE), {
+              kind: "info",
             });
           }}
           preventDefault
           stopPropagation
         />
         <Hotkey
-          combo="p"
+          combo="alt + p"
           global
           label="Preview Mode"
           onKeyDown={() => {
-            this.props.setPreviewModeAction(!this.props.isPreviewMode);
+            this.props.setPreviewModeInitAction(!this.props.isPreviewMode);
           }}
         />
-        <Hotkey
-          combo="mod + /"
-          global
-          label="Pin/Unpin Entity Explorer"
-          onKeyDown={() => {
-            this.props.setExplorerPinnedAction(!this.props.isExplorerPinned);
-            this.props.hideInstaller();
-          }}
-        />
-        <Hotkey
-          combo="ctrl + shift + g"
-          global
-          label="Show git commit modal"
-          onKeyDown={() => {
-            this.props.showCommitModal();
-          }}
-        />
+        <GitHotKeys />
       </Hotkeys>
     );
   }
@@ -382,44 +393,51 @@ class GlobalHotKeys extends React.Component<Props> {
   }
 }
 
-const mapStateToProps = (state: AppState) => ({
-  selectedWidget: getLastSelectedWidget(state),
-  selectedWidgets: getSelectedWidgets(state),
-  isDebuggerOpen: state.ui.debugger.isOpen,
-  appMode: getAppMode(state),
-  isPreviewMode: previewModeSelector(state),
-  isExplorerPinned: getExplorerPinned(state),
-});
+const mapStateToProps = (state: AppState) => {
+  return {
+    selectedWidget: getLastSelectedWidget(state),
+    selectedWidgets: getSelectedWidgets(state),
+    isDebuggerOpen: showDebuggerFlag(state),
+    appMode: getAppMode(state),
+    isPreviewMode: previewModeSelector(state),
+    isProtectedMode: selectGitApplicationProtectedMode(state),
+    isSignpostingEnabled: getIsFirstTimeUserOnboardingEnabled(state),
+  };
+};
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapDispatchToProps = (dispatch: any) => {
   return {
     copySelectedWidget: () => dispatch(copyWidget(true)),
     pasteCopiedWidget: (mouseLocation: { x: number; y: number }) =>
-      dispatch(pasteWidget(false, mouseLocation)),
+      dispatch(
+        pasteWidget({
+          groupWidgets: false,
+          mouseLocation,
+        }),
+      ),
     deleteSelectedWidget: () => dispatch(deleteSelectedWidget(true)),
     cutSelectedWidget: () => dispatch(cutWidget()),
     groupSelectedWidget: () => dispatch(groupWidgets()),
     setGlobalSearchCategory: (category: SearchCategory) =>
       dispatch(setGlobalSearchCategory(category)),
     resetSnipingMode: () => dispatch(resetSnipingModeAction()),
-    openDebugger: () => dispatch(showDebugger()),
     closeProppane: () => dispatch(closePropertyPane()),
     closeTableFilterProppane: () => dispatch(closeTableFilterPane()),
-    selectAllWidgetsInit: () => dispatch(selectAllWidgetsInCanvasInitAction()),
-    deselectAllWidgets: () => dispatch(deselectAllInitAction()),
+    selectAllWidgetsInit: () =>
+      dispatch(selectWidgetInitAction(SelectionRequestType.All)),
+    deselectAllWidgets: () =>
+      dispatch(selectWidgetInitAction(SelectionRequestType.Empty)),
     executeAction: () => dispatch(runActionViaShortcut()),
     undo: () => dispatch(undoAction()),
     redo: () => dispatch(redoAction()),
-    setPreviewModeAction: (shouldSet: boolean) =>
-      dispatch(setPreviewModeAction(shouldSet)),
-    setExplorerPinnedAction: (shouldSet: boolean) =>
-      dispatch(setExplorerPinnedAction(shouldSet)),
-    showCommitModal: () =>
-      dispatch(
-        setIsGitSyncModalOpen({ isOpen: true, tab: GitSyncModalTab.DEPLOY }),
-      ),
     hideInstaller: () => dispatch(toggleInstaller(false)),
+    setPreviewModeInitAction: (shouldSet: boolean) =>
+      dispatch(setPreviewModeInitAction(shouldSet)),
   };
 };
+
+GlobalHotKeys.contextType = WalkthroughContext;
 
 export default connect(mapStateToProps, mapDispatchToProps)(GlobalHotKeys);

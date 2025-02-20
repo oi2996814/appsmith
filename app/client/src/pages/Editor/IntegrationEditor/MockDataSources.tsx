@@ -1,105 +1,34 @@
 import React from "react";
-import styled from "styled-components";
 import { useDispatch, useSelector } from "react-redux";
-import { MockDatasource } from "entities/Datasource";
-import { getPluginImages } from "selectors/entitiesSelector";
-import { Colors } from "constants/Colors";
+import type { MockDatasource } from "entities/Datasource";
+import { getPluginImages } from "ee/selectors/entitiesSelector";
 import { addMockDatasourceToWorkspace } from "actions/datasourceActions";
-import { getCurrentWorkspaceId } from "@appsmith/selectors/workspaceSelectors";
+import { getCurrentWorkspaceId } from "ee/selectors/selectedWorkspaceSelectors";
 import { getQueryParams } from "utils/URLUtils";
-import { AppState } from "@appsmith/reducers";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import type { AppState } from "ee/reducers";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
+import { DatasourceCreateEntryPoints } from "constants/Datasource";
+import {
+  DatasourceContainer,
+  DatasourceSection,
+  DatasourceSectionHeading,
+  StyledDivider,
+} from "./IntegrationStyledComponents";
+import DatasourceItem from "./DatasourceItem";
+import {
+  createMessage,
+  SAMPLE_DATASOURCE_SUBHEADING,
+  SAMPLE_DATASOURCES,
+} from "ee/constants/messages";
+import { pluginSearchSelector } from "./CreateNewDatasourceHeader";
+import { Flex, Text } from "@appsmith/ads";
+import { filterSearch } from "./util";
 
-const MockDataSourceWrapper = styled.div`
-  overflow: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  min-width: 150px;
-  border-radius: 4px;
-  align-items: center;
-  margin-top: 8px;
-`;
-
-const Description = styled.div`
-  color: ${Colors.GREY_8};
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 17px;
-  letter-spacing: -0.24px;
-`;
-
-function MockDataSources(props: { mockDatasources: MockDatasource[] }) {
-  const workspaceId = useSelector(getCurrentWorkspaceId);
-  return (
-    <MockDataSourceWrapper className="t--mock-datasource-list">
-      {props.mockDatasources.map((datasource: MockDatasource, idx) => {
-        return (
-          <MockDatasourceCard
-            datasource={datasource}
-            key={`${datasource.name}_${datasource.packageName}_${idx}`}
-            workspaceId={workspaceId}
-          />
-        );
-      })}
-    </MockDataSourceWrapper>
-  );
-}
-
-export default MockDataSources;
-
-const CardWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 64px;
-  &:hover {
-    background-color: ${Colors.GREY_1};
-    cursor: pointer;
-  }
-  }
-`;
-
-const DatasourceImage = styled.img`
-  height: 28px;
-  width: auto;
-  margin: 0 auto;
-  max-width: 100%;
-`;
-
-const DatasourceName = styled.span`
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 24px;
-  letter-spacing: -0.24px;
-  color: ${Colors.BLACK};
-`;
-
-const DatasourceCardHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  padding-left: 13.5px;
-`;
-
-const DatasourceIconWrapper = styled.div`
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: ${Colors.GREY_2};
-  display: flex;
-  align-items: center;
-`;
-
-const DatasourceNameWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-type MockDatasourceCardProps = {
+interface MockDatasourceCardProps {
   datasource: MockDatasource;
   workspaceId: string;
-};
+}
 
 function MockDatasourceCard(props: MockDatasourceCardProps) {
   const { datasource, workspaceId } = props;
@@ -111,6 +40,7 @@ function MockDatasourceCard(props: MockDatasourceCardProps) {
   const currentPlugin = plugins.find(
     (eachPlugin) => eachPlugin.packageName === datasource.packageName,
   );
+
   if (!currentPlugin) {
     return null;
   }
@@ -121,13 +51,17 @@ function MockDatasourceCard(props: MockDatasourceCardProps) {
       workspaceId,
       packageName: currentPlugin.packageName,
       pluginName: currentPlugin.name,
+      from: DatasourceCreateEntryPoints.CREATE_NEW_DATASOURCE,
     });
+
     AnalyticsUtil.logEvent("CREATE_DATA_SOURCE_CLICK", {
       mockDatasourceName: datasource.name,
       pluginName: currentPlugin.name,
       pluginPackageName: currentPlugin.packageName,
     });
+
     const queryParams = getQueryParams();
+
     dispatch(
       addMockDatasourceToWorkspace(
         datasource.name,
@@ -140,24 +74,68 @@ function MockDatasourceCard(props: MockDatasourceCardProps) {
   };
 
   return (
-    <CardWrapper className="t--mock-datasource" onClick={addMockDataSource}>
-      <DatasourceCardHeader className="t--datasource-name">
-        <DatasourceIconWrapper data-testid="mock-datasource-icon-wrapper">
-          <DatasourceImage
-            alt="Datasource"
-            data-testid="mock-datasource-image"
-            src={pluginImages[currentPlugin.id]}
-          />
-        </DatasourceIconWrapper>
-        <DatasourceNameWrapper data-testid="mock-datasource-name-wrapper">
-          <DatasourceName data-testid="mockdatasource-name">
-            {datasource.name}
-          </DatasourceName>
-          <Description data-testid="mockdatasource-description">
-            {datasource.description}
-          </Description>
-        </DatasourceNameWrapper>
-      </DatasourceCardHeader>
-    </CardWrapper>
+    <DatasourceItem
+      className="t--mock-datasource"
+      dataCardDescriptionTestId="mockdatasource-description"
+      dataCardImageTestId="mock-datasource-image"
+      dataCardWrapperTestId="mock-datasource-name-wrapper"
+      dataNameTestId="mockdatasource-name"
+      description={datasource.description}
+      handleOnClick={addMockDataSource}
+      icon={getAssetUrl(pluginImages[currentPlugin.id])}
+      name={datasource.name}
+    />
+  );
+}
+
+interface MockDataSourcesProps {
+  mockDatasources: MockDatasource[];
+  preDivider?: boolean;
+  postDivider?: boolean;
+}
+
+export default function MockDataSources({
+  mockDatasources,
+  postDivider,
+  preDivider,
+}: MockDataSourcesProps) {
+  const workspaceId = useSelector(getCurrentWorkspaceId);
+  let searchedPlugin = useSelector((state) =>
+    pluginSearchSelector(state, "search"),
+  );
+
+  searchedPlugin = (searchedPlugin || "").toLocaleLowerCase();
+
+  const filteredDatasources = filterSearch(
+    mockDatasources,
+    searchedPlugin,
+  ) as MockDatasource[];
+
+  if (filteredDatasources.length === 0) return null;
+
+  return (
+    <>
+      {preDivider && <StyledDivider />}
+      <DatasourceSection id="mock-database">
+        <Flex flexDirection="column">
+          <DatasourceSectionHeading kind="heading-m">
+            {createMessage(SAMPLE_DATASOURCES)}
+          </DatasourceSectionHeading>
+          <Text>{createMessage(SAMPLE_DATASOURCE_SUBHEADING)}</Text>
+        </Flex>
+        <DatasourceContainer className="t--mock-datasource-list">
+          {filteredDatasources.map((datasource: MockDatasource, idx) => {
+            return (
+              <MockDatasourceCard
+                datasource={datasource}
+                key={`${datasource.name}_${datasource.packageName}_${idx}`}
+                workspaceId={workspaceId}
+              />
+            );
+          })}
+        </DatasourceContainer>
+      </DatasourceSection>
+      {postDivider && <StyledDivider />}
+    </>
   );
 }

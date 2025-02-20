@@ -3,8 +3,8 @@ import { LabelPosition } from "components/constants";
 import { BlueprintControlTransform } from "constants/DefaultTheme";
 import React from "react";
 import styled from "styled-components";
-import { ComponentProps } from "widgets/BaseComponent";
-import { AlignWidgetTypes } from "widgets/constants";
+import type { ComponentProps } from "widgets/BaseComponent";
+import { AlignWidgetTypes } from "WidgetProvider/constants";
 import { Colors } from "constants/Colors";
 import { FontStyleTypes } from "constants/WidgetConstants";
 import { darkenColor } from "widgets/WidgetUtils";
@@ -17,20 +17,32 @@ export interface SwitchComponentProps extends ComponentProps {
   alignWidget: AlignWidgetTypes;
   labelPosition: LabelPosition;
   accentColor: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   inputRef?: (ref: HTMLInputElement | null) => any;
   labelTextColor?: string;
   labelTextSize?: string;
   labelStyle?: string;
   isDynamicHeightEnabled?: boolean;
+  minHeight?: number;
+  isLabelInline?: boolean;
 }
 
 const SwitchComponentContainer = styled.div<{
   accentColor: string;
+  minHeight?: number;
+  width?: string;
 }>`
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: stretch;
+
+  ${({ minHeight }) => `
+    ${minHeight ? `min-height: ${minHeight}px;` : undefined}`};
+
+  width: 100%;
+
   ${BlueprintControlTransform}
 `;
 
@@ -41,6 +53,7 @@ const SwitchLabel = styled.div<{
   labelTextSize?: string;
   labelStyle?: string;
   isDynamicHeightEnabled?: boolean;
+  isLabelInline?: boolean;
 }>`
   width: 100%;
   display: inline-block;
@@ -57,6 +70,15 @@ const SwitchLabel = styled.div<{
 
   ${({ isDynamicHeightEnabled }) =>
     isDynamicHeightEnabled ? "&& { word-break: break-all; }" : ""};
+
+  ${({ isLabelInline }) =>
+    isLabelInline &&
+    `
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-wrap: normal;
+  `}
 `;
 
 export const StyledSwitch = styled(Switch)<{
@@ -68,13 +90,13 @@ export const StyledSwitch = styled(Switch)<{
       background: ${({ $accentColor }) => `${$accentColor}`} !important;
       border: 1px solid ${({ $accentColor }) => `${$accentColor}`} !important;
     }
+    margin: 0px;
 
     &:hover input:checked:not(:disabled) ~ .bp3-control-indicator,
     input:checked:not(:disabled):focus ~ .bp3-control-indicator {
       background: ${({ $accentColor }) =>
         `${darkenColor($accentColor)}`} !important;
-      border: 1px solid ${({ $accentColor }) =>
-        `${darkenColor($accentColor)}`} !important;
+      border: 1px solid ${({ $accentColor }) => `${darkenColor($accentColor)}`} !important;
     }
   }
 
@@ -92,6 +114,7 @@ function SwitchComponent({
   inputRef,
   isDisabled,
   isDynamicHeightEnabled,
+  isLabelInline,
   isLoading,
   isSwitchedOn,
   label,
@@ -99,13 +122,14 @@ function SwitchComponent({
   labelStyle,
   labelTextColor,
   labelTextSize,
+  minHeight,
   onChange,
 }: SwitchComponentProps): JSX.Element {
   const switchAlignClass =
     labelPosition === LabelPosition.Right ? "left" : "right";
 
   return (
-    <SwitchComponentContainer accentColor={accentColor}>
+    <SwitchComponentContainer accentColor={accentColor} minHeight={minHeight}>
       <StyledSwitch
         $accentColor={accentColor}
         alignIndicator={switchAlignClass}
@@ -127,6 +151,7 @@ function SwitchComponent({
             className="t--switch-widget-label"
             disabled={isDisabled}
             isDynamicHeightEnabled={isDynamicHeightEnabled}
+            isLabelInline={isLabelInline}
             labelStyle={labelStyle}
             labelTextColor={labelTextColor}
             labelTextSize={labelTextSize}

@@ -1,19 +1,20 @@
-import { PositionedContainerProps } from "components/designSystems/appsmith/PositionedContainer";
 import { Layers } from "constants/Layers";
 
 import { useMemo } from "react";
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { isWidgetSelected } from "selectors/widgetSelectors";
 import { useSelector } from "react-redux";
 
 export const usePositionedContainerZIndex = (
-  props: PositionedContainerProps,
   droppableWidget: boolean,
+  widgetId: string,
+  focused?: boolean,
+  selected?: boolean,
 ) => {
   const isDragging = useSelector(
     (state: AppState) => state.ui.widgetDragResize.isDragging,
   );
-  const isSelected = useSelector(isWidgetSelected(props.widgetId));
+  const isSelected = useSelector(isWidgetSelected(widgetId));
   const isThisWidgetDragging = isDragging && isSelected;
 
   const zIndex = useMemo(() => {
@@ -29,22 +30,17 @@ export const usePositionedContainerZIndex = (
     } else {
       // common use case when nothing is dragged
 
-      return props.focused
+      return focused
         ? Layers.focusedWidget
-        : props.selected
-        ? Layers.selectedWidget
-        : Layers.positionedWidget;
+        : selected
+          ? Layers.selectedWidget
+          : Layers.positionedWidget;
     }
-  }, [
-    isDragging,
-    isThisWidgetDragging,
-    droppableWidget,
-    props.selected,
-    props.focused,
-  ]);
+  }, [isDragging, isThisWidgetDragging, droppableWidget, selected, focused]);
 
   const zIndicesObj = useMemo(() => {
     const onHoverZIndex = isDragging ? zIndex : Layers.positionedWidget + 1;
+
     return { zIndex, onHoverZIndex };
   }, [isDragging, zIndex, Layers.positionedWidget]);
 

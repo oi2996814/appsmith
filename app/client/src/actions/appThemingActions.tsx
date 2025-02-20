@@ -1,6 +1,7 @@
-import { AppTheme } from "entities/AppTheming";
-import { AppThemingMode } from "selectors/appThemingSelectors";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import type { AppTheme } from "entities/AppTheming";
+import type { AppThemingMode } from "selectors/appThemingSelectors";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { ApiResponse } from "api/ApiResponses";
 
 /**
  * ----------------------------------------------------------------------------
@@ -8,39 +9,41 @@ import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
  * ----------------------------------------------------------------------------
  */
 
-export type FetchAppThemesAction = {
+export interface FetchAppThemesAction {
   applicationId: string;
-};
+  themes?: ApiResponse<AppTheme>;
+}
 
-export type FetchSelectedAppThemeAction = {
+export interface FetchSelectedAppThemeAction {
   applicationId: string;
-};
+  currentTheme?: ApiResponse<AppTheme[]>;
+}
 
-export type UpdateSelectedAppThemeAction = {
-  applicationId: string;
-  theme: AppTheme;
-  shouldReplay?: boolean;
-};
-
-export type ChangeSelectedAppThemeAction = {
+export interface UpdateSelectedAppThemeAction {
   applicationId: string;
   theme: AppTheme;
   shouldReplay?: boolean;
-};
+}
 
-export type HydrateSelectedAppThemeAction = {
+export interface ChangeSelectedAppThemeAction {
+  applicationId: string;
   theme: AppTheme;
-};
+  shouldReplay?: boolean;
+}
 
-export type SaveAppThemeAction = {
+export interface HydrateSelectedAppThemeAction {
+  theme: AppTheme;
+}
+
+export interface SaveAppThemeAction {
   applicationId: string;
   name: string;
-};
+}
 
-export type DeleteAppThemeAction = {
+export interface DeleteAppThemeAction {
   themeId: string;
   name: string;
-};
+}
 
 /**
  * ----------------------------------------------------------------------------
@@ -65,10 +68,14 @@ export const setAppThemingModeStackAction = (stack: AppThemingMode[]) => ({
  * @param mode
  * @returns
  */
-export const fetchAppThemesAction = (applicationId: string) => ({
+export const fetchAppThemesAction = (
+  applicationId: string,
+  themes?: ApiResponse<AppTheme>,
+) => ({
   type: ReduxActionTypes.FETCH_APP_THEMES_INIT,
   payload: {
     applicationId,
+    themes,
   },
 });
 
@@ -78,10 +85,14 @@ export const fetchAppThemesAction = (applicationId: string) => ({
  * @param mode
  * @returns
  */
-export const fetchSelectedAppThemeAction = (applicationId: string) => ({
+export const fetchSelectedAppThemeAction = (
+  applicationId: string,
+  currentTheme?: ApiResponse<AppTheme[]>,
+) => ({
   type: ReduxActionTypes.FETCH_SELECTED_APP_THEME_INIT,
   payload: {
     applicationId,
+    currentTheme,
   },
 });
 

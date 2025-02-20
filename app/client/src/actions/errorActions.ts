@@ -1,4 +1,27 @@
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { ERROR_CODES } from "ee/constants/ApiConstants";
+
+export const safeCrashAppRequest = (code?: ERROR_CODES) => {
+  return {
+    type: ReduxActionTypes.SAFE_CRASH_APPSMITH_REQUEST,
+    payload: {
+      code,
+    },
+  };
+};
+
+export interface ErrorPayloadType {
+  code?: number | string;
+  message?: string;
+  crash?: boolean;
+}
+
+export const safeCrashApp = (payload: ErrorPayloadType) => {
+  return {
+    type: ReduxActionTypes.SAFE_CRASH_APPSMITH,
+    payload,
+  };
+};
 
 export const flushErrors = () => {
   return {

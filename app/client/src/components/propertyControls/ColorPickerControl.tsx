@@ -1,13 +1,15 @@
 import React from "react";
-import BaseControl, { ControlData, ControlProps } from "./BaseControl";
+import type { ControlData, ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 import ColorPickerComponent from "components/propertyControls/ColorPickerComponentV2";
 import { isDynamicValue } from "utils/DynamicBindingUtils";
+import type { DSEventDetail } from "utils/AppsmithUtils";
 import {
-  DSEventDetail,
   DSEventTypes,
   DS_EVENT,
   emitInteractionAnalyticsEvent,
 } from "utils/AppsmithUtils";
+import tinycolor from "tinycolor2";
 
 class ColorPickerControl extends BaseControl<ColorPickerControlProps> {
   componentRef = React.createRef<HTMLDivElement>();
@@ -39,7 +41,11 @@ class ColorPickerControl extends BaseControl<ColorPickerControlProps> {
   };
 
   handleChangeColor = (color: string, isUpdatedViaKeyboard: boolean) => {
-    this.updateProperty(this.props.propertyName, color, isUpdatedViaKeyboard);
+    let _color = color;
+
+    _color = tinycolor(color).isValid() ? tinycolor(color).toString() : color;
+
+    this.updateProperty(this.props.propertyName, _color, isUpdatedViaKeyboard);
   };
 
   render() {
@@ -66,6 +72,8 @@ class ColorPickerControl extends BaseControl<ColorPickerControlProps> {
     return "COLOR_PICKER";
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     return !isDynamicValue(value);
   }

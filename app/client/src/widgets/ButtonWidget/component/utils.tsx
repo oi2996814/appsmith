@@ -2,7 +2,7 @@ import { css } from "styled-components";
 
 import { ButtonVariantTypes } from "components/constants";
 import { getCustomHoverColor } from "widgets/WidgetUtils";
-import { ButtonContainerProps } from "./DragContainer";
+import type { ButtonContainerProps } from "./DragContainer";
 
 /*
   Created a css util so that we don't repeat our styles.
@@ -19,10 +19,10 @@ export const buttonHoverActiveStyles = css<ButtonContainerProps>`
           getCustomHoverColor(theme, buttonVariant, buttonColor) !== "none"
             ? getCustomHoverColor(theme, buttonVariant, buttonColor)
             : buttonVariant === ButtonVariantTypes.SECONDARY
-            ? theme.colors.button.primary.secondary.hoverColor
-            : buttonVariant === ButtonVariantTypes.TERTIARY
-            ? theme.colors.button.primary.tertiary.hoverColor
-            : theme.colors.button.primary.primary.hoverColor
+              ? theme.colors.button.primary.secondary.hoverColor
+              : buttonVariant === ButtonVariantTypes.TERTIARY
+                ? theme.colors.button.primary.tertiary.hoverColor
+                : theme.colors.button.primary.primary.hoverColor
         } !important;
       `;
     }

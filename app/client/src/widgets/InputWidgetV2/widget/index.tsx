@@ -1,12 +1,14 @@
-import React from "react";
-import { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import { WidgetType } from "constants/WidgetConstants";
-import InputComponent, { InputComponentProps } from "../component";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { ICON_NAMES } from "WidgetProvider/constants";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
+import { LabelPosition } from "components/constants";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import {
-  ValidationTypes,
-  ValidationResponse,
-} from "constants/WidgetValidation";
+import type { ValidationResponse } from "constants/WidgetValidation";
+import { ValidationTypes } from "constants/WidgetValidation";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
 import {
   createMessage,
   FIELD_REQUIRED_ERROR,
@@ -14,33 +16,61 @@ import {
   INPUT_DEFAULT_TEXT_MAX_NUM_ERROR,
   INPUT_DEFAULT_TEXT_MIN_NUM_ERROR,
   INPUT_TEXT_MAX_CHAR_ERROR,
-} from "@appsmith/constants/messages";
-import { DerivedPropertiesMap } from "utils/WidgetFactory";
-import { GRID_DENSITY_MIGRATION_V1, ICON_NAMES } from "widgets/constants";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
-import BaseInputWidget from "widgets/BaseInputWidget";
+} from "ee/constants/messages";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
 import { isNil, isNumber, merge, toString } from "lodash";
-import derivedProperties from "./parsedDerivedProperties";
-import { BaseInputWidgetProps } from "widgets/BaseInputWidget/widget";
+import React from "react";
+import { DynamicHeight } from "utils/WidgetFeatures";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
 import { mergeWidgetConfig } from "utils/helpers";
+import BaseInputWidget from "widgets/BaseInputWidget";
 import {
   InputTypes,
   NumberInputStepButtonPosition,
 } from "widgets/BaseInputWidget/constants";
-import { getParsedText } from "./Utilities";
-import { Stylesheet } from "entities/AppTheming";
-import { isAutoHeightEnabledForWidget } from "widgets/WidgetUtils";
 import { checkInputTypeTextByProps } from "widgets/BaseInputWidget/utils";
-import { DynamicHeight } from "utils/WidgetFeatures";
+import type { BaseInputWidgetProps } from "widgets/BaseInputWidget/widget";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import {
+  DefaultAutocompleteDefinitions,
+  isAutoHeightEnabledForWidget,
+  isCompactMode,
+} from "widgets/WidgetUtils";
+import type { InputComponentProps } from "../component";
+import InputComponent from "../component";
+import { getParsedText, isInputTypeEmailOrPassword } from "./Utilities";
+import derivedProperties from "./parsedDerivedProperties";
+
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+
+import type {
+  PropertyUpdates,
+  SnipingModeProperty,
+} from "WidgetProvider/constants";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
 
 export function defaultValueValidation(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   props: InputWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _?: any,
 ): ValidationResponse {
-  const STRING_ERROR_MESSAGE = "This value must be string";
-  const NUMBER_ERROR_MESSAGE = "This value must be number";
-  const EMPTY_ERROR_MESSAGE = "";
+  const STRING_ERROR_MESSAGE = {
+    name: "TypeError",
+    message: "This value must be string",
+  };
+  const NUMBER_ERROR_MESSAGE = {
+    name: "TypeError",
+    message: "This value must be number",
+  };
+  const EMPTY_ERROR_MESSAGE = { name: "", message: "" };
+
   if (_.isObject(value)) {
     return {
       isValid: false,
@@ -50,14 +80,21 @@ export function defaultValueValidation(
   }
 
   const { inputType } = props;
+
+  if (_.isBoolean(value) || _.isNil(value) || _.isUndefined(value)) {
+    return {
+      isValid: false,
+      parsed: value,
+      messages: [STRING_ERROR_MESSAGE],
+    };
+  }
+
   let parsed;
+
   switch (inputType) {
     case "NUMBER":
-      if (_.isNil(value)) {
-        parsed = null;
-      } else {
-        parsed = Number(value);
-      }
+      parsed = Number(value);
+
       let isValid, messages;
 
       if (_.isString(value) && value.trim() === "") {
@@ -92,6 +129,7 @@ export function defaultValueValidation(
     case "PASSWORD":
     case "EMAIL":
       parsed = value;
+
       if (!_.isString(parsed)) {
         try {
           parsed = _.toString(parsed);
@@ -103,6 +141,7 @@ export function defaultValueValidation(
           };
         }
       }
+
       return {
         isValid: _.isString(parsed),
         parsed: parsed,
@@ -117,66 +156,112 @@ export function defaultValueValidation(
   }
 }
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function minValueValidation(min: any, props: InputWidgetProps, _?: any) {
   const max = props.maxNum;
   const value = min;
+
   min = Number(min);
 
   if (_?.isNil(value) || value === "") {
     return {
       isValid: true,
       parsed: undefined,
-      messages: [""],
+      messages: [
+        {
+          name: "",
+          message: "",
+        },
+      ],
     };
   } else if (!Number.isFinite(min)) {
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value must be number",
+        },
+      ],
     };
   } else if (max !== undefined && min >= max) {
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be lesser than max value"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be lesser than max value",
+        },
+      ],
     };
   } else {
     return {
       isValid: true,
       parsed: Number(min),
-      messages: [""],
+      messages: [
+        {
+          name: "",
+          message: "",
+        },
+      ],
     };
   }
 }
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function maxValueValidation(max: any, props: InputWidgetProps, _?: any) {
   const min = props.minNum;
   const value = max;
+
   max = Number(max);
 
   if (_?.isNil(value) || value === "") {
     return {
       isValid: true,
       parsed: undefined,
-      messages: [""],
+      messages: [
+        {
+          name: "",
+          message: "",
+        },
+      ],
     };
   } else if (!Number.isFinite(max)) {
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value must be number",
+        },
+      ],
     };
   } else if (min !== undefined && max <= min) {
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be greater than min value"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be greater than min value",
+        },
+      ],
     };
   } else {
     return {
       isValid: true,
       parsed: Number(max),
-      messages: [""],
+      messages: [
+        {
+          name: "",
+          message: "",
+        },
+      ],
     };
   }
 }
@@ -184,7 +269,9 @@ export function maxValueValidation(max: any, props: InputWidgetProps, _?: any) {
 function InputTypeUpdateHook(
   props: WidgetProps,
   propertyName: string,
-  propertyValue: unknown,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  propertyValue: any,
 ) {
   const updates = [
     {
@@ -202,10 +289,134 @@ function InputTypeUpdateHook(
     }
   }
 
+  //if input type is email or password default the autofill state to be true
+  // the user needs to explicity set autofill to fault disable autofill
+  updates.push({
+    propertyPath: "shouldAllowAutofill",
+    propertyValue: isInputTypeEmailOrPassword(propertyValue),
+  });
+
   return updates;
 }
 
 class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
+  constructor(props: InputWidgetProps) {
+    super(props);
+    this.state = {
+      isFocused: false,
+    };
+  }
+
+  static type = "INPUT_WIDGET_V2";
+
+  static getConfig() {
+    return {
+      name: "Input",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.SUGGESTED_WIDGETS, WIDGET_TAGS.INPUTS],
+      needsMeta: true,
+      searchTags: ["form", "text input", "number", "textarea"],
+    };
+  }
+
+  static getFeatures() {
+    return {
+      dynamicHeight: {
+        sectionIndex: 3,
+        defaultValue: DynamicHeight.FIXED,
+        active: true,
+      },
+    };
+  }
+
+  static getDefaults() {
+    return {
+      ...BaseInputWidget.getDefaults(),
+      rows: 7,
+      labelPosition: LabelPosition.Top,
+      inputType: "TEXT",
+      widgetName: "Input",
+      version: 2,
+      showStepArrows: false,
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "defaultText",
+            propertyValue: propValueMap.data,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      disabledPropsDefaults: {
+        labelPosition: LabelPosition.Top,
+        labelTextSize: "0.875rem",
+      },
+      autoDimension: (props: BaseInputWidgetProps) => ({
+        height: props.inputType !== "MULTI_LINE_TEXT",
+      }),
+      defaults: {
+        rows: 6.6,
+      },
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "120px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: (props: BaseInputWidgetProps) => ({
+        vertical: props.inputType !== "MULTI_LINE_TEXT",
+      }),
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "70px" },
+        minWidth: { base: "120px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    const definitions: AutocompletionDefinitions = {
+      "!doc":
+        "An input text field is used to capture a users textual input such as their names, numbers, emails etc. Inputs are used in forms and can have custom validations.",
+      "!url": "https://docs.appsmith.com/widget-reference/input",
+      text: {
+        "!type": "string",
+        "!doc": "The text value of the input",
+        "!url": "https://docs.appsmith.com/widget-reference/input",
+      },
+      isValid: "bool",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      isDisabled: "bool",
+    };
+
+    return definitions;
+  }
   static getPropertyPaneContentConfig() {
     return mergeWidgetConfig(
       [
@@ -215,7 +426,7 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
             {
               helpText: "Changes the type of data captured in the input",
               propertyName: "inputType",
-              label: "Data Type",
+              label: "Data type",
               controlType: "DROP_DOWN",
               options: [
                 {
@@ -248,7 +459,7 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
               helpText:
                 "Sets the default text of the widget. The text is updated if the default text changes",
               propertyName: "defaultText",
-              label: "Default Value",
+              label: "Default value",
               controlType: "INPUT_TEXT",
               placeholderText: "John Doe",
               isBindProperty: true,
@@ -288,7 +499,7 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
             {
               helpText: "Sets maximum allowed text length",
               propertyName: "maxChars",
-              label: "Max Characters",
+              label: "Max characters",
               controlType: "INPUT_TEXT",
               placeholderText: "255",
               isBindProperty: true,
@@ -353,7 +564,23 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
           ],
         },
       ],
-      super.getPropertyPaneContentConfig(),
+      super.getPropertyPaneContentConfig([
+        {
+          propertyName: "rtl",
+          label: "Enable RTL",
+          helpText: "Enables right to left text direction",
+          controlType: "SWITCH",
+          isJSConvertible: true,
+          isBindProperty: true,
+          isTriggerProperty: false,
+          validation: { type: ValidationTypes.BOOLEAN },
+          hidden: () => {
+            return !super.getFeatureFlag(
+              FEATURE_FLAG.license_widget_rtl_support_enabled,
+            );
+          },
+        },
+      ]),
     );
   }
 
@@ -385,14 +612,15 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
               label: "Position",
               helpText: "Sets the icon alignment of input field",
               controlType: "ICON_TABS",
-              fullWidth: true,
+              defaultValue: "left",
+              fullWidth: false,
               options: [
                 {
-                  icon: "VERTICAL_LEFT",
+                  startIcon: "skip-left-line",
                   value: "left",
                 },
                 {
-                  icon: "VERTICAL_RIGHT",
+                  startIcon: "skip-right-line",
                   value: "right",
                 },
               ],
@@ -417,8 +645,12 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
     });
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
-    return merge(super.getMetaPropertiesMap(), {
+    const baseMetaProperties = BaseInputWidget.getMetaPropertiesMap();
+
+    return merge(baseMetaProperties, {
       inputText: "",
       text: "",
     });
@@ -440,8 +672,10 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
   }
 
   handleFocusChange = (focusState: boolean) => {
+    this.setState({ isFocused: focusState });
+
     if (focusState) {
-      this.props.updateWidgetMetaProperty("isFocused", focusState, {
+      this.executeAction({
         triggerPropertyName: "onFocus",
         dynamicString: this.props.onFocus,
         event: {
@@ -449,8 +683,9 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
         },
       });
     }
+
     if (!focusState) {
-      this.props.updateWidgetMetaProperty("isFocused", focusState, {
+      this.executeAction({
         triggerPropertyName: "onBlur",
         dynamicString: this.props.onBlur,
         event: {
@@ -458,6 +693,7 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
         },
       });
     }
+
     super.handleFocusChange(focusState);
   };
 
@@ -486,6 +722,7 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
         getParsedText(this.props.inputText, this.props.inputType),
       );
     }
+
     // If defaultText property has changed, reset isDirty to false
     if (
       this.props.defaultText !== prevProps.defaultText &&
@@ -514,10 +751,35 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
         type: EventType.ON_TEXT_CHANGE,
       },
     });
+
     if (!this.props.isDirty) {
       this.props.updateWidgetMetaProperty("isDirty", true);
     }
   };
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+        setRequired: {
+          path: "isRequired",
+          type: "boolean",
+        },
+        setValue: {
+          path: "defaultText",
+          type: "string",
+          accessor: "text",
+        },
+      },
+    };
+  }
 
   resetWidgetText = () => {
     this.props.updateWidgetMetaProperty("inputText", "");
@@ -527,9 +789,10 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
     );
   };
 
-  getPageView() {
+  getWidgetView() {
     const value = this.props.inputText ?? "";
     let isInvalid = false;
+
     if (this.props.isDirty) {
       isInvalid = "isValid" in this.props && !this.props.isValid;
     } else {
@@ -537,7 +800,9 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
     }
 
     const conditionalProps: Partial<InputComponentProps> = {};
+
     conditionalProps.errorMessage = this.props.errorMessage;
+
     if (this.props.isRequired && value.length === 0) {
       conditionalProps.errorMessage = createMessage(FIELD_REQUIRED_ERROR);
     }
@@ -553,6 +818,7 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
     if (checkInputTypeTextByProps(this.props) && this.props.maxChars) {
       // pass maxChars only for Text type inputs, undefined for other types
       conditionalProps.maxChars = this.props.maxChars;
+
       if (
         this.props.defaultText &&
         this.props.defaultText.toString().length > this.props.maxChars
@@ -604,20 +870,23 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
       conditionalProps.buttonPosition = NumberInputStepButtonPosition.NONE;
     }
 
+    const { componentHeight } = this.props;
+
+    const autoFillProps =
+      !this.props.shouldAllowAutofill &&
+      isInputTypeEmailOrPassword(this.props.inputType)
+        ? { autoComplete: "off" }
+        : {};
+
     return (
       <InputComponent
         accentColor={this.props.accentColor}
+        {...autoFillProps}
         // show label and Input side by side if true
         autoFocus={this.props.autoFocus}
         borderRadius={this.props.borderRadius}
         boxShadow={this.props.boxShadow}
-        compactMode={
-          !(
-            (this.props.bottomRow - this.props.topRow) /
-              GRID_DENSITY_MIGRATION_V1 >
-            1
-          )
-        }
+        compactMode={isCompactMode(componentHeight)}
         defaultValue={this.props.defaultText}
         disableNewLineOnPressEnterKey={!!this.props.onSubmit}
         disabled={this.props.isDisabled}
@@ -633,13 +902,14 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
         labelStyle={this.props.labelStyle}
         labelTextColor={this.props.labelTextColor}
         labelTextSize={this.props.labelTextSize}
-        labelWidth={this.getLabelWidth()}
+        labelWidth={this.props.labelComponentWidth}
         multiline={this.props.inputType === InputTypes.MULTI_LINE_TEXT}
         onFocusChange={this.handleFocusChange}
         onKeyDown={this.handleKeyDown}
         onValueChange={this.onValueChange}
         placeholder={this.props.placeholderText}
-        showError={!!this.props.isFocused}
+        rtl={this.props.rtl}
+        showError={!!this.state.isFocused}
         spellCheck={!!this.props.isSpellCheck}
         stepSize={1}
         tooltip={this.props.tooltip}
@@ -648,10 +918,6 @@ class InputWidget extends BaseInputWidget<InputWidgetProps, WidgetState> {
         {...conditionalProps}
       />
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "INPUT_WIDGET_V2";
   }
 }
 
@@ -662,6 +928,7 @@ export interface InputWidgetProps extends BaseInputWidgetProps {
   maxNum?: number;
   minNum?: number;
   inputText: string;
+  rtl?: boolean;
 }
 
 export default InputWidget;

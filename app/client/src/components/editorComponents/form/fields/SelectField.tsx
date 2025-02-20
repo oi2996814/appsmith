@@ -1,11 +1,8 @@
 import React from "react";
-import {
-  Field,
-  WrappedFieldMetaProps,
-  WrappedFieldInputProps,
-} from "redux-form";
-import { DropdownOption, RenderOption } from "design-system";
+import type { WrappedFieldMetaProps, WrappedFieldInputProps } from "redux-form";
+import { Field } from "redux-form";
 import DropdownWrapper from "./DropdownWrapper";
+import type { SelectOptionProps } from "@appsmith/ads";
 
 const renderComponent = (
   componentProps: SelectFieldProps & {
@@ -16,27 +13,31 @@ const renderComponent = (
   return <DropdownWrapper {...componentProps} />;
 };
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type DropdownOnSelect = (value?: string, dropdownOption?: any) => void;
 
-type SelectFieldProps = {
+interface SelectFieldProps {
   allowDeselection?: boolean;
   isMultiSelect?: boolean;
   name: string;
   placeholder: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSelect?: (val: any, option: any) => void;
-  options: Partial<DropdownOption>[];
-  selected?: Partial<DropdownOption> | Partial<DropdownOption>[];
+  options: Partial<SelectOptionProps>[];
+  selected?: Partial<SelectOptionProps> | Partial<SelectOptionProps>[];
   size?: "large" | "small";
   outline?: boolean;
   removeSelectedOption?: DropdownOnSelect;
   showLabelOnly?: boolean;
-  labelRenderer?: (selected: Partial<DropdownOption>[]) => JSX.Element;
+  labelRenderer?: (selected: Partial<SelectOptionProps>[]) => JSX.Element;
   fillOptions?: boolean;
   disabled?: boolean;
-  renderOption?: RenderOption;
   dropdownMaxHeight?: string;
   enableSearch?: boolean;
-};
+  testId?: string;
+}
 
 export function SelectField(props: SelectFieldProps) {
   return (
@@ -55,10 +56,10 @@ export function SelectField(props: SelectFieldProps) {
       outline={props.outline}
       placeholder={props.placeholder}
       removeSelectedOption={props.removeSelectedOption}
-      renderOption={props?.renderOption}
       selected={props.selected}
       showLabelOnly={props.showLabelOnly}
       size={props.size}
+      testId={props.testId}
     />
   );
 }

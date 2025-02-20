@@ -1,6 +1,6 @@
 import * as Factory from "factory.ts";
 import { generateReactKey } from "utils/generators";
-import { WidgetProps } from "widgets/BaseWidget";
+import type { WidgetProps } from "widgets/BaseWidget";
 
 export const ModalFactory = Factory.Sync.makeFactory<WidgetProps>({
   rightColumn: 0,
@@ -199,7 +199,7 @@ export const ModalFactory = Factory.Sync.makeFactory<WidgetProps>({
         {
           widgetName: "Icon1",
           rightColumn: 16,
-          onClick: "{{closeModal('TestModal')}}",
+          onClick: "{{closeModal(TestModal.name)}}",
           color: "#040627",
           iconName: "cross",
           widgetId: "n5fc0ven2a",

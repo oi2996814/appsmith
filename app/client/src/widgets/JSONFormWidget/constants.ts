@@ -1,6 +1,6 @@
-import { ControllerRenderProps } from "react-hook-form/dist/types/controller";
+import type { ControllerRenderProps } from "react-hook-form/dist/types/controller";
 
-import { InputType } from "widgets/InputWidget/constants";
+import type { InputType } from "widgets/InputWidget/constants";
 import {
   ArrayField,
   CheckboxField,
@@ -40,11 +40,16 @@ export type FieldTypeKey = keyof typeof FieldType;
 
 export const inverseFieldType = Object.entries(FieldType).reduce<
   Record<FieldType, FieldTypeKey>
->((previousValue, currentValue) => {
-  const [key, value] = currentValue;
-  previousValue[value] = key as FieldTypeKey;
-  return previousValue;
-}, {} as Record<FieldType, FieldTypeKey>);
+>(
+  (previousValue, currentValue) => {
+    const [key, value] = currentValue;
+
+    previousValue[value] = key as FieldTypeKey;
+
+    return previousValue;
+  },
+  {} as Record<FieldType, FieldTypeKey>,
+);
 
 export enum DataType {
   STRING = "string",
@@ -59,12 +64,15 @@ export enum DataType {
   FUNCTION = "function",
 }
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Obj = Record<string, any>;
 export type JSON = Obj | Obj[];
 
-export type FieldComponentBaseProps = {
+export interface FieldComponentBaseProps {
   defaultValue?: string | number;
   isDisabled: boolean;
+  shouldAllowAutofill?: boolean;
   isRequired?: boolean;
   isVisible: boolean;
   label: string;
@@ -72,14 +80,16 @@ export type FieldComponentBaseProps = {
   labelTextColor?: string;
   labelTextSize?: string;
   tooltip?: string;
-};
+}
 
-export type FieldEventProps = {
+export interface FieldEventProps {
   onFocus?: string;
   onBlur?: string;
-};
+}
 
-export type BaseFieldComponentProps<TProps = any> = {
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface BaseFieldComponentProps<TProps = any> {
   hideLabel?: boolean;
   isRootField?: boolean;
   fieldClassName: string;
@@ -87,7 +97,7 @@ export type BaseFieldComponentProps<TProps = any> = {
   propertyPath: string;
   passedDefaultValue?: unknown;
   schemaItem: SchemaItem & TProps;
-};
+}
 
 export type Schema = Record<string, SchemaItem>;
 
@@ -117,10 +127,14 @@ export type SchemaItem = FieldComponentBaseProps & {
   isCustomField: boolean;
   originalIdentifier: string;
   position: number;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sourceData: any;
 };
 
-export type ComponentDefaultValuesFnProps<TSourceData = any> = {
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface ComponentDefaultValuesFnProps<TSourceData = any> {
   sourceDataPath?: string;
   fieldType: FieldType;
   bindingTemplate: {
@@ -130,16 +144,18 @@ export type ComponentDefaultValuesFnProps<TSourceData = any> = {
   isCustomField: boolean;
   sourceData: TSourceData;
   skipDefaultValueProcessing: boolean;
-};
+}
 
 // This defines a react component with componentDefaultValues property attached to it.
-export type FieldComponent = {
+export interface FieldComponent {
   (props: BaseFieldComponentProps): JSX.Element | null;
   componentDefaultValues?:
     | FieldComponentBaseProps
     | ((props: ComponentDefaultValuesFnProps) => FieldComponentBaseProps);
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   isValidType?: (value: any, options?: any) => boolean;
-};
+}
 
 export type FieldState<TObj> =
   | {
@@ -149,7 +165,12 @@ export type FieldState<TObj> =
   | TObj;
 
 export type HookResponse =
-  | Array<{ propertyPath: string; propertyValue: any }>
+  | Array<{
+      propertyPath: string;
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      propertyValue: any;
+    }>
   | undefined;
 
 export type FieldThemeStylesheet = Record<
@@ -201,15 +222,16 @@ export const INPUT_TYPES = [
  * As InputField would handle all the below types (Text/Number), this map
  * would help use identify what inputType it is based on the FieldType.
  */
-export const INPUT_FIELD_TYPE: Record<typeof INPUT_TYPES[number], InputType> = {
-  [FieldType.CURRENCY_INPUT]: "CURRENCY",
-  [FieldType.EMAIL_INPUT]: "EMAIL",
-  [FieldType.NUMBER_INPUT]: "NUMBER",
-  [FieldType.PASSWORD_INPUT]: "PASSWORD",
-  [FieldType.PHONE_NUMBER_INPUT]: "PHONE_NUMBER",
-  [FieldType.TEXT_INPUT]: "TEXT",
-  [FieldType.MULTILINE_TEXT_INPUT]: "TEXT",
-};
+export const INPUT_FIELD_TYPE: Record<(typeof INPUT_TYPES)[number], InputType> =
+  {
+    [FieldType.CURRENCY_INPUT]: "CURRENCY",
+    [FieldType.EMAIL_INPUT]: "EMAIL",
+    [FieldType.NUMBER_INPUT]: "NUMBER",
+    [FieldType.PASSWORD_INPUT]: "PASSWORD",
+    [FieldType.PHONE_NUMBER_INPUT]: "PHONE_NUMBER",
+    [FieldType.TEXT_INPUT]: "TEXT",
+    [FieldType.MULTILINE_TEXT_INPUT]: "TEXT",
+  };
 
 export const FIELD_EXPECTING_OPTIONS = [
   FieldType.MULTISELECT,
@@ -232,6 +254,8 @@ export const DATA_TYPE_POTENTIAL_FIELD = {
 // The potential value here is just for representation i.e it won't be used to set default value anywhere.
 // This will just help to transform a field type (when modified in custom field) to appropriate schemaItem
 // using schemaParser.
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const FIELD_TYPE_TO_POTENTIAL_DATA: Record<FieldType, any> = {
   [FieldType.ARRAY]: [{ firstField: "" }],
   [FieldType.CHECKBOX]: true,
@@ -292,3 +316,10 @@ export const getBindingTemplate = (widgetName: string) => {
 
   return { prefixTemplate, suffixTemplate };
 };
+
+export const itemHeight = 45;
+
+export const noOfItemsToDisplay = 4;
+
+// 12px for the (noOfItemsToDisplay+ 1) item to let the user know there are more items to scroll
+export const extraSpace = 12;

@@ -1,50 +1,54 @@
 import React from "react";
 import log from "loglevel";
-import styled from "styled-components";
-import { klona } from "klona";
 import { isEmpty, isString, maxBy, set, sortBy } from "lodash";
 
-import BaseControl, { ControlProps } from "./BaseControl";
-import EmptyDataState from "components/utils/EmptyDataState";
+import type { ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 import SchemaParser, {
   getKeysFromSchema,
 } from "widgets/JSONFormWidget/schemaParser";
-import { ARRAY_ITEM_KEY, Schema } from "widgets/JSONFormWidget/constants";
-import { Category, Size } from "design-system";
-import { BaseItemProps } from "./DraggableListComponent";
+import type { Schema } from "widgets/JSONFormWidget/constants";
+import { ARRAY_ITEM_KEY } from "widgets/JSONFormWidget/constants";
+import { Button, Text } from "@appsmith/ads";
+import type { BaseItemProps } from "./DraggableListComponent";
 import { DraggableListCard } from "components/propertyControls/DraggableListCard";
-import { StyledPropertyPaneButton } from "./StyledControls";
 import { getNextEntityName } from "utils/AppsmithUtils";
 import { InputText } from "./InputTextControl";
-import { JSONFormWidgetProps } from "widgets/JSONFormWidget/widget";
+import type { JSONFormWidgetProps } from "widgets/JSONFormWidget/widget";
 import { DraggableListControl } from "pages/Editor/PropertyPane/DraggableListControl";
+import styled from "styled-components";
+import { NO_FIELDS_ADDED, createMessage } from "ee/constants/messages";
+
+import {
+  itemHeight,
+  noOfItemsToDisplay,
+  extraSpace,
+} from "widgets/JSONFormWidget/constants";
+
+import { klonaRegularWithTelemetry } from "utils/helpers";
 
 type DroppableItem = BaseItemProps & {
   index: number;
   isCustomField: boolean;
 };
 
-type State = {
+interface State {
   focusedIndex: number | null;
-};
+}
 
-const TabsWrapper = styled.div`
-  width: 100%;
+const DEFAULT_FIELD_NAME = "customField";
+
+const fixedHeight = itemHeight * noOfItemsToDisplay + extraSpace;
+
+const FlexContainer = styled.div`
   display: flex;
   flex-direction: column;
 `;
 
-const AddFieldButton = styled(StyledPropertyPaneButton)`
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  &&&& {
-    margin-top: 12px;
-    margin-bottom: 8px;
-  }
+const StyledText = styled(Text)`
+  margin: 20px;
+  text-align: center;
 `;
-
-const DEFAULT_FIELD_NAME = "customField";
 
 class FieldConfigurationControl extends BaseControl<ControlProps, State> {
   constructor(props: ControlProps) {
@@ -57,6 +61,7 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
 
   isArrayItem = () => {
     const schema: Schema = this.props.propertyValue;
+
     return Boolean(schema?.[ARRAY_ITEM_KEY]);
   };
 
@@ -64,6 +69,7 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
     const schema: Schema = this.props.propertyValue;
     const schemaItems = Object.values(schema);
     const sortedSchemaItems = sortBy(schemaItems, ({ position }) => position);
+
     return sortedSchemaItems[index];
   };
 
@@ -72,6 +78,7 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
 
     if (schemaItem) {
       this.props.openNextPanel({
+        index,
         ...schemaItem,
         propPaneId: this.props.widgetProperties.widgetId,
       });
@@ -117,16 +124,14 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
   addNewField = () => {
     if (this.isArrayItem()) return;
 
-    const { propertyValue = {}, propertyName, widgetProperties } = this.props;
-    const {
-      childStylesheet,
-      widgetName,
-    } = widgetProperties as JSONFormWidgetProps;
+    const { propertyName, propertyValue = {}, widgetProperties } = this.props;
+    const { childStylesheet, widgetName } =
+      widgetProperties as JSONFormWidgetProps;
     const schema: Schema = propertyValue;
     const existingKeys = getKeysFromSchema(schema, ["identifier", "accessor"]);
     const schemaItems = Object.values(schema);
     const lastSchemaItem = maxBy(schemaItems, ({ position }) => position);
-    const lastSchemaItemPosition = lastSchemaItem?.position || -1;
+    const lastSchemaItemPosition = lastSchemaItem?.position ?? -1;
     const nextFieldKey = getNextEntityName(DEFAULT_FIELD_NAME, existingKeys);
     const schemaItem = SchemaParser.getSchemaItemFor(nextFieldKey, {
       currSourceData: "",
@@ -146,11 +151,16 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
 
     if (isEmpty(widgetProperties.schema)) {
       const newSchema = {
-        schema: SchemaParser.parse(widgetProperties.widgetName, {}),
+        schema: SchemaParser.parse(widgetProperties.widgetName, {
+          currSourceData: {},
+        }), // since we need sourceData to generate root schema, we initialize the parser with {} object if there is no source data.
       };
-      set(newSchema, path, schemaItem);
 
-      this.updateProperty("schema", newSchema.schema);
+      const { schema: schemaObject } = newSchema; // This is {schema:{__root_schema__},..rest}
+
+      set(schemaObject, path, schemaItem);
+
+      this.updateProperty("schema", schemaObject.schema); // This updates the schema property with the schema property of the newSchema object {schema:{schema:{__root_schema__:{}}}} => {schema:{__root_schema__:{}}}
     } else {
       /**
        * TODO(Ashit): Not suppose to update the whole schema but just
@@ -158,9 +168,14 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
        * the new added paths gets into the dynamicBindingPathList until
        * the updateProperty function is fixed.
        */
+
       const updatedSchema = {
-        schema: klona(widgetProperties.schema),
+        schema: klonaRegularWithTelemetry(
+          widgetProperties.schema,
+          "FieldConfigurationControl.addNewField",
+        ),
       };
+
       set(updatedSchema, path, schemaItem);
 
       this.updateProperty("schema", updatedSchema.schema);
@@ -172,6 +187,7 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
 
     try {
       const parsedValue = JSON.parse(value);
+
       this.updateProperty(this.props.propertyName, parsedValue);
     } catch (e) {
       log.error(e);
@@ -180,7 +196,10 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
 
   updateItems = (items: DroppableItem[]) => {
     const { propertyName, propertyValue } = this.props;
-    const clonedSchema: Schema = klona(propertyValue);
+    const clonedSchema: Schema = klonaRegularWithTelemetry(
+      propertyValue,
+      "FieldConfigurationControl.updateItems",
+    );
 
     items.forEach((item, index) => {
       clonedSchema[item.id].position = index;
@@ -194,29 +213,30 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
   };
 
   render() {
-    const { propertyValue = {}, panelConfig } = this.props;
+    const { panelConfig, propertyValue = {} } = this.props;
     const schema: Schema = propertyValue;
     const schemaItems = Object.values(schema);
 
     const addNewFieldButton = (
-      <AddFieldButton
-        category={Category.secondary}
-        className="t--add-column-btn"
-        icon="plus"
+      <Button
+        className="self-end t--add-column-btn"
+        kind="tertiary"
         onClick={this.addNewField}
-        size={Size.medium}
-        tag="button"
-        text="Add a new field"
-        type="button"
-      />
+        size="sm"
+        startIcon="plus"
+      >
+        Add new field
+      </Button>
     );
 
     if (isEmpty(schema)) {
       return (
-        <>
-          <EmptyDataState />
+        <FlexContainer>
+          <StyledText color="var(--ads-v2-color-fg-muted)" kind="body-s">
+            {createMessage(NO_FIELDS_ADDED)}
+          </StyledText>
           {addNewFieldButton}
-        </>
+        </FlexContainer>
       );
     }
 
@@ -261,14 +281,17 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
     }
 
     return (
-      <TabsWrapper>
+      <div className="flex flex-col w-full gap-1">
         <DraggableListControl
           deleteOption={this.onDeleteOption}
+          fixedHeight={fixedHeight}
           focusedIndex={this.state.focusedIndex}
-          itemHeight={45}
+          itemHeight={itemHeight}
           items={draggableComponentColumns}
           onEdit={this.onEdit}
           propertyPath={this.props.dataTreePath}
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           renderComponent={(props: any) => {
             const { id, isCustomField } = props.item;
 
@@ -286,7 +309,7 @@ class FieldConfigurationControl extends BaseControl<ControlProps, State> {
           updateOption={this.updateOption}
         />
         {!this.isArrayItem() && addNewFieldButton}
-      </TabsWrapper>
+      </div>
     );
   }
 

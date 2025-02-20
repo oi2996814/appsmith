@@ -2,57 +2,45 @@ import {
   createMessage,
   FETCHING_TEMPLATES,
   FORKING_TEMPLATE,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
+import type { AppState } from "ee/reducers";
 import {
   getSimilarTemplatesInit,
   getTemplateInformation,
-  importTemplateIntoApplication,
 } from "actions/templateActions";
-import { Text, TextType } from "design-system";
-import React, { useEffect, useState, useRef } from "react";
+import type { Template } from "api/TemplatesApi";
+import { VIEWER_PATH, VIEWER_PATH_DEPRECATED } from "constants/routes";
+import React, { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { generatePath, matchPath } from "react-router";
 import {
   getActiveTemplateSelector,
   isFetchingTemplateSelector,
   isImportingTemplateToAppSelector,
 } from "selectors/templatesSelectors";
 import styled from "styled-components";
-import { IframeTopBar, IframeWrapper } from "../TemplateView";
-import PageSelection from "./PageSelection";
-import LoadingScreen from "./LoadingScreen";
-import { Template } from "api/TemplatesApi";
-import { generatePath, matchPath } from "react-router";
 import { isURLDeprecated, trimQueryString } from "utils/helpers";
-import { VIEWER_PATH, VIEWER_PATH_DEPRECATED } from "constants/routes";
-import TemplateModalHeader from "./Header";
-import TemplateDescription from "../Template/TemplateDescription";
 import SimilarTemplates from "../Template/SimilarTemplates";
-import { AppState } from "@appsmith/reducers";
-
-const breakpointColumns = {
-  default: 4,
-  2100: 3,
-  1600: 2,
-  1100: 1,
-};
+import TemplateDescription from "../Template/TemplateDescription";
+import { IframeTopBar, IframeWrapper } from "../TemplateView";
+import TemplateDetailedViewHeader from "./Components/TemplateDetailedViewHeader";
+import LoadingScreen from "./LoadingScreen";
+import PageSelection from "./PageSelection";
 
 const Wrapper = styled.div`
   height: 85vh;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  .back-button {
+    margin-right: 8px;
+  }
 `;
 
 const Body = styled.div`
-  padding: 0 ${(props) => props.theme.spaces[11]}px;
-  padding-top: ${(props) => props.theme.spaces[7]}px;
-  height: 80vh;
+  margin-bottom: ${(props) => props.theme.spaces[7]}px;
+  height: 70vh;
   overflow: auto;
-  &&::-webkit-scrollbar-thumb {
-    background-color: ${(props) => props.theme.colors.modal.scrollbar};
-  }
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
 `;
 
 const StyledSimilarTemplatesWrapper = styled(SimilarTemplates)`
@@ -63,11 +51,12 @@ const TemplateDescriptionWrapper = styled.div`
   padding-bottom: 52px;
 `;
 
-type TemplateDetailedViewProps = {
+interface TemplateDetailedViewProps {
+  isStartWithTemplateFlow: boolean;
   templateId: string;
   onBackPress: () => void;
   onClose: () => void;
-};
+}
 
 function TemplateDetailedView(props: TemplateDetailedViewProps) {
   const [currentTemplateId, setCurrentTemplateId] = useState(props.templateId);
@@ -99,13 +88,10 @@ function TemplateDetailedView(props: TemplateDetailedViewProps) {
 
   const onSimilarTemplateClick = (template: Template) => {
     setCurrentTemplateId(template.id);
+
     if (containerRef.current) {
       containerRef.current.scrollTo({ top: 0 });
     }
-  };
-
-  const onForkTemplateClick = (template: Template) => {
-    dispatch(importTemplateIntoApplication(template.id, template.title));
   };
 
   if (isFetchingTemplate || isImportingTemplateToApp) {
@@ -125,6 +111,7 @@ function TemplateDetailedView(props: TemplateDetailedViewProps) {
     const matchViewerPath = matchPath(url.pathname, {
       path: [trimQueryString(path)],
     });
+
     url.pathname = generatePath(path, {
       ...matchViewerPath?.params,
       pageId,
@@ -134,33 +121,33 @@ function TemplateDetailedView(props: TemplateDetailedViewProps) {
 
   return (
     <Wrapper ref={containerRef}>
-      <TemplateModalHeader
-        onBackPress={props.onBackPress}
-        onClose={props.onClose}
-      />
-      <Body className="flex flex-row">
+      <Body className="flex flex-row templates-body">
         <div className="flex flex-col flex-1">
-          <Text type={TextType.DANGER_HEADING}>{currentTemplate.title}</Text>
+          <TemplateDetailedViewHeader
+            onBackPress={props.onBackPress}
+            title={currentTemplate.title}
+          />
           <IframeWrapper>
             <IframeTopBar>
               <div className="round red" />
               <div className="round yellow" />
               <div className="round green" />
             </IframeTopBar>
-            <iframe src={`${previewUrl}?embed=true`} />
+            <iframe src={previewUrl} />
           </IframeWrapper>
           <TemplateDescriptionWrapper>
-            <TemplateDescription hideForkButton template={currentTemplate} />
+            <TemplateDescription template={currentTemplate} />
           </TemplateDescriptionWrapper>
           <StyledSimilarTemplatesWrapper
-            breakpointCols={breakpointColumns}
+            isForkingEnabled={false}
             onBackPress={props.onBackPress}
             onClick={onSimilarTemplateClick}
-            onFork={onForkTemplateClick}
+            onFork={onSimilarTemplateClick}
             similarTemplates={similarTemplates}
           />
         </div>
         <PageSelection
+          isStartWithTemplateFlow={props.isStartWithTemplateFlow}
           onPageSelection={onPageSelection}
           pages={currentTemplate.pages || []}
           template={currentTemplate}

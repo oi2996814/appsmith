@@ -1,37 +1,17 @@
 import React from "react";
-import styled from "styled-components";
-import BaseControl, { ControlProps } from "./BaseControl";
-import { StyledPropertyPaneButton } from "./StyledControls";
+import type { ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
 import { generateReactKey } from "utils/generators";
-import { getNextEntityName } from "utils/AppsmithUtils";
 import orderBy from "lodash/orderBy";
 import isString from "lodash/isString";
 import isUndefined from "lodash/isUndefined";
-import { Category, Size } from "design-system";
 import { DraggableListControl } from "pages/Editor/PropertyPane/DraggableListControl";
 import { DraggableListCard } from "components/propertyControls/DraggableListCard";
+import { Button } from "@appsmith/ads";
 
-const StyledPropertyPaneButtonWrapper = styled.div`
-  display: flex;
-  width: 100%;
-  justify-content: center;
-  margin-top: 10px;
-`;
-
-const MenuItemsWrapper = styled.div`
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-`;
-
-const AddMenuItemButton = styled(StyledPropertyPaneButton)`
-  justify-content: center;
-  flex-grow: 1;
-`;
-
-type State = {
+interface State {
   focusedIndex: number | null;
-};
+}
 
 class MenuItemsControl extends BaseControl<ControlProps, State> {
   constructor(props: ControlProps) {
@@ -53,14 +33,20 @@ class MenuItemsControl extends BaseControl<ControlProps, State> {
       this.updateFocus(Object.keys(this.props.propertyValue).length - 1, true);
     }
   }
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateItems = (items: Array<Record<string, any>>) => {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const menuItems = items.reduce((obj: any, each: any, index) => {
       obj[each.id] = {
         ...each,
         index,
       };
+
       return obj;
     }, {});
+
     this.updateProperty(this.props.propertyName, menuItems);
   };
 
@@ -83,6 +69,7 @@ class MenuItemsControl extends BaseControl<ControlProps, State> {
   onEdit = (index: number) => {
     const menuItems = this.getMenuItems();
     const targetMenuItem = menuItems[index];
+
     this.props.openNextPanel({
       index,
       ...targetMenuItem,
@@ -92,7 +79,7 @@ class MenuItemsControl extends BaseControl<ControlProps, State> {
 
   render() {
     return (
-      <MenuItemsWrapper>
+      <div className="flex flex-col gap-1">
         <DraggableListControl
           deleteOption={this.deleteOption}
           fixedHeight={370}
@@ -101,6 +88,8 @@ class MenuItemsControl extends BaseControl<ControlProps, State> {
           items={this.getMenuItems()}
           onEdit={this.onEdit}
           propertyPath={this.props.dataTreePath}
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           renderComponent={(props: any) =>
             DraggableListCard({
               ...props,
@@ -113,19 +102,16 @@ class MenuItemsControl extends BaseControl<ControlProps, State> {
           updateItems={this.updateItems}
           updateOption={this.updateOption}
         />
-        <StyledPropertyPaneButtonWrapper>
-          <AddMenuItemButton
-            category={Category.secondary}
-            className="t--add-menu-item-btn"
-            icon="plus"
-            onClick={this.addOption}
-            size={Size.medium}
-            tag="button"
-            text="Add a new Menu Item"
-            type="button"
-          />
-        </StyledPropertyPaneButtonWrapper>
-      </MenuItemsWrapper>
+
+        <Button
+          className="self-end t--add-menu-item-btn"
+          kind="tertiary"
+          onClick={this.addOption}
+          startIcon="plus"
+        >
+          Add new menu item
+        </Button>
+      </div>
     );
   }
 
@@ -139,33 +125,44 @@ class MenuItemsControl extends BaseControl<ControlProps, State> {
           isVisible: isVisible,
         };
       }
+
       return item;
     });
+
     this.updateProperty(this.props.propertyName, updatedMenuItems);
   };
 
   deleteOption = (index: number) => {
     const menuItemsArray = this.getMenuItems();
+
     if (menuItemsArray.length === 1) return;
+
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatedArray = menuItemsArray.filter((eachItem: any, i: number) => {
       return i !== index;
     });
     const updatedObj = updatedArray.reduce(
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (obj: any, each: any, index: number) => {
         obj[each.id] = {
           ...each,
           index,
         };
+
         return obj;
       },
       {},
     );
+
     this.updateProperty(this.props.propertyName, updatedObj);
   };
 
   updateOption = (index: number, updatedLabel: string) => {
     const menuItemsArray = this.getMenuItems();
     const itemId = menuItemsArray[index].id;
+
     this.updateProperty(
       `${this.props.propertyName}.${itemId}.label`,
       updatedLabel,
@@ -176,16 +173,13 @@ class MenuItemsControl extends BaseControl<ControlProps, State> {
     let menuItems = this.props.propertyValue || [];
     const menuItemsArray = this.getMenuItems();
     const newMenuItemId = generateReactKey({ prefix: "menuItem" });
-    const newMenuItemLabel = getNextEntityName(
-      "Menu Item ",
-      menuItemsArray.map((menuItem: any) => menuItem.label),
-    );
+
     menuItems = {
       ...menuItems,
       [newMenuItemId]: {
         id: newMenuItemId,
         index: menuItemsArray.length,
-        label: newMenuItemLabel,
+        label: "Menu Item",
         widgetId: generateReactKey(),
         isDisabled: false,
         isVisible: true,

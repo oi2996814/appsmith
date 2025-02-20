@@ -21,6 +21,7 @@ export const formatCurrencyNumber = (
   decimalSeparator: string,
 ) => {
   if (value === "") return "";
+
   let valueToFormat = value;
   const fractionDigits = decimalsInCurrency || 0;
   const currentIndexOfDecimal = value.indexOf(decimalSeparator);
@@ -30,18 +31,17 @@ export const formatCurrencyNumber = (
     currentIndexOfDecimal <= requiredDigitsAfterDecimal;
   const missingFractDigitsCount =
     fractionDigits - (value.length - currentIndexOfDecimal - 1);
+
   if (missingFractDigitsCount > 0) {
-    valueToFormat =
-      value +
-      Array(missingFractDigitsCount)
-        .fill("0")
-        .join("");
+    valueToFormat = value + Array(missingFractDigitsCount).fill("0").join("");
   }
+
   const locale = getLocale();
   const formatter = new Intl.NumberFormat(locale, {
     style: "decimal",
     maximumFractionDigits: hasDecimal ? fractionDigits : 0,
   });
+
   return formatter.format(parseFloat(valueToFormat));
 };
 
@@ -58,8 +58,10 @@ export const limitDecimalValue = (
   groupSeparator: string,
 ) => {
   let value = valueAsString.split(groupSeparator).join("");
+
   if (value) {
     const decimalValueArray = value.split(decimalSeparator);
+
     //remove extra digits after decimal point
     if (
       decimalsInCurrency &&
@@ -70,6 +72,7 @@ export const limitDecimalValue = (
         decimalSeparator +
         decimalValueArray[1].slice(0, decimalsInCurrency);
     }
+
     return value;
   } else {
     return "";
@@ -85,6 +88,7 @@ Return the type of decimal separator for decimal digit numbers
 export const getDecimalSeparator = (locale: string) => {
   const numberWithDecimalSeparator = 1.1;
   const formatter = new Intl.NumberFormat(locale);
+
   return (
     formatter
       ?.formatToParts(numberWithDecimalSeparator)
@@ -101,6 +105,7 @@ Return the type of decimal separator for decimal digit numbers
 export const getGroupSeparator = (locale: string) => {
   const numberWithDecimalSeparator = 1000.1;
   const formatter = new Intl.NumberFormat(locale);
+
   return (
     formatter
       ?.formatToParts(numberWithDecimalSeparator)
@@ -112,6 +117,7 @@ export const getLocale = () => navigator.languages?.[0] || "en-US";
 
 export const getSeparators = () => {
   const locale = getLocale();
+
   return {
     decimalSeparator: getDecimalSeparator(locale),
     groupSeparator: getGroupSeparator(locale),

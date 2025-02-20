@@ -1,0 +1,24 @@
+@import "../../../shared/colors/colors.module.css";
+
+.text {
+  /* using auto instead of 100% so that text does not push everything to the edge when the parent is flex layout ( this happens in case of switch ) */
+  width: auto;
+  color: inherit;
+
+  @each $color in colors {
+    &[data-color="$(color)"] {
+      color: var(--color-fg-$(color));
+    }
+  }
+
+  /* Adding as special case as we can't add neutral-subtle to $colors variable, as that variable is used generically for many components ( button ). */
+  &[data-color="neutral-subtle"] {
+    color: var(--color-fg-neutral-subtle);
+  }
+}
+
+.clampedText {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

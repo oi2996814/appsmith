@@ -1,5 +1,5 @@
-import React, { memo, useMemo, useState } from "react";
-import { ControlProps } from "components/formControls/BaseControl";
+import React, { memo, useEffect, useMemo, useState } from "react";
+import type { ControlProps } from "components/formControls/BaseControl";
 import {
   getViewType,
   isHidden,
@@ -9,19 +9,30 @@ import { useSelector, shallowEqual, useDispatch } from "react-redux";
 import { getFormValues, change } from "redux-form";
 import FormControlFactory from "utils/formControl/FormControlFactory";
 
-import { AppState } from "@appsmith/reducers";
-import { Action } from "entities/Action";
-import { EvaluationError } from "utils/DynamicBindingUtils";
+import type { AppState } from "ee/reducers";
+import type { Action } from "entities/Action";
+import type { EvaluationError } from "utils/DynamicBindingUtils";
 import { getConfigErrors } from "selectors/formSelectors";
 import ToggleComponentToJson from "components/editorComponents/form/ToggleComponentToJson";
 import FormConfig from "./FormConfig";
 import { QUERY_BODY_FIELDS } from "constants/QueryEditorConstants";
 import { convertObjectToQueryParams, getQueryParams } from "utils/URLUtils";
-import { QUERY_EDITOR_FORM_NAME } from "@appsmith/constants/forms";
+import { QUERY_EDITOR_FORM_NAME } from "ee/constants/forms";
 import history from "utils/history";
-import TemplateMenu from "pages/Editor/QueryEditor/TemplateMenu";
-import { getAction } from "selectors/entitiesSelector";
+import {
+  getAction,
+  getDatasourceStructureById,
+  getPluginNameFromId,
+  getPluginTemplates,
+} from "ee/selectors/entitiesSelector";
 import { get } from "lodash";
+import { SQL_PLUGINS_DEFAULT_TEMPLATE_TYPE } from "constants/Datasource";
+import TemplateMenu from "PluginActionEditor/components/PluginActionForm/components/UQIEditor/TemplateMenu";
+import { SQL_DATASOURCES } from "constants/QueryEditorConstants";
+import type { Datasource, DatasourceStructure } from "entities/Datasource";
+import { getCurrentEditingEnvironmentId } from "ee/selectors/environmentSelectors";
+import { selectFeatureFlags } from "ee/selectors/featureFlagsSelectors";
+import { getCurrentWorkspaceId } from "ee/selectors/selectedWorkspaceSelectors";
 
 export interface FormControlProps {
   config: ControlProps;
@@ -30,20 +41,33 @@ export interface FormControlProps {
 }
 
 function FormControl(props: FormControlProps) {
-  const formValues: Partial<Action> = useSelector((state: AppState) =>
-    getFormValues(props.formName)(state),
+  const formValues: Partial<Action | Datasource> = useSelector(
+    (state: AppState) => getFormValues(props.formName)(state),
   );
   const actionValues = useSelector((state: AppState) =>
     getAction(state, formValues?.id || ""),
   );
 
   const dispatch = useDispatch();
+  const currentEditingEnvId = useSelector(getCurrentEditingEnvironmentId);
+  const featureFlags = useSelector(selectFeatureFlags);
 
   // adding this to prevent excessive rerendering
   const [convertFormToRaw, setConvertFormToRaw] = useState(false);
 
   const viewType = getViewType(formValues, props.config.configProperty);
-  const hidden = isHidden(formValues, props.config.hidden);
+  let formValueForEvaluatingHiddenObj = formValues;
+
+  if (!!formValues && formValues.hasOwnProperty("datasourceStorages")) {
+    formValueForEvaluatingHiddenObj = (formValues as Datasource)
+      .datasourceStorages[currentEditingEnvId];
+  }
+
+  const hidden = isHidden(
+    formValueForEvaluatingHiddenObj,
+    props.config.hidden,
+    featureFlags,
+  );
   const configErrors: EvaluationError[] = useSelector(
     (state: AppState) =>
       getConfigErrors(state, {
@@ -52,6 +76,26 @@ function FormControl(props: FormControlProps) {
       }),
     shallowEqual,
   );
+  const dsId =
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((formValues as Action)?.datasource as any)?.id ||
+    (formValues as Datasource)?.id;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pluginTemplates: Record<string, any> = useSelector((state: AppState) =>
+    getPluginTemplates(state),
+  );
+  const dsStructure: DatasourceStructure | undefined = useSelector(
+    (state: AppState) => getDatasourceStructureById(state, dsId),
+  );
+
+  const pluginId: string = formValues?.pluginId || "";
+  const pluginTemplate = !!pluginId ? pluginTemplates[pluginId] : undefined;
+  const pluginName: string = useSelector((state: AppState) =>
+    getPluginNameFromId(state, pluginId),
+  );
+  const workspaceId = useSelector(getCurrentWorkspaceId);
 
   // moving creation of template to the formControl layer, this way any formControl created can potentially have a template system.
   const isNewQuery =
@@ -61,13 +105,17 @@ function FormControl(props: FormControlProps) {
   );
 
   const showTemplate =
-    isNewQuery && formValues?.datasource?.pluginId && isQueryBodyField;
+    isNewQuery &&
+    (formValues as Action)?.datasource?.pluginId &&
+    isQueryBodyField;
 
   const updateQueryParams = () => {
     const params = getQueryParams();
+
     if (params.showTemplate) {
       params.showTemplate = "false";
     }
+
     history.replace({
       ...window.location,
       search: convertObjectToQueryParams(params),
@@ -78,6 +126,7 @@ function FormControl(props: FormControlProps) {
   if (isQueryBodyField && actionValues) {
     // get the misc data object
     const miscFormData = actionValues?.actionConfiguration?.formData?.misc;
+
     // if the misc data object is available and if the status of the form to raw conversion is successful
     if (
       !!miscFormData &&
@@ -85,6 +134,7 @@ function FormControl(props: FormControlProps) {
       miscFormData.formToNativeQuery?.status === "SUCCESS"
     ) {
       const configPathValue = get(actionValues, props.config?.configProperty);
+
       if (
         !convertFormToRaw &&
         typeof configPathValue === "undefined" &&
@@ -103,6 +153,53 @@ function FormControl(props: FormControlProps) {
     }
   }
 
+  useEffect(() => {
+    // This adds default template like below to the SQL query editor, when no structure is present
+    // SELECT * FROM <<your_table_name>> LIMIT 10;
+    // -- Please enter a valid table name and hit RUN
+    if (
+      showTemplate &&
+      !convertFormToRaw &&
+      SQL_DATASOURCES.includes(pluginName) &&
+      !dsStructure
+    ) {
+      const defaultTemplate = !!pluginTemplate
+        ? pluginTemplate[SQL_PLUGINS_DEFAULT_TEMPLATE_TYPE]
+        : "";
+
+      dispatch(
+        change(
+          props?.formName || QUERY_EDITOR_FORM_NAME,
+          props.config.configProperty,
+          defaultTemplate,
+        ),
+      );
+      updateQueryParams();
+    }
+  }, [showTemplate]);
+
+  const FormControlRenderMethod = (config = props.config) => {
+    return FormControlFactory.createControl(
+      {
+        ...config,
+        datasourceId: dsId,
+        workspaceId,
+        actionId: actionValues?.id,
+      },
+      props.formName,
+      props?.multipleConfig,
+    );
+  };
+
+  const viewTypes: ViewTypes[] = [];
+
+  if (
+    "alternateViewTypes" in props.config &&
+    Array.isArray(props.config.alternateViewTypes)
+  ) {
+    viewTypes.push(...props.config.alternateViewTypes);
+  }
+
   const createTemplate = (
     template: string,
     formName: string,
@@ -113,22 +210,6 @@ function FormControl(props: FormControlProps) {
       change(formName || QUERY_EDITOR_FORM_NAME, configProperty, template),
     );
   };
-
-  const FormControlRenderMethod = (config = props.config) => {
-    return FormControlFactory.createControl(
-      config,
-      props.formName,
-      props?.multipleConfig,
-    );
-  };
-
-  const viewTypes: ViewTypes[] = [];
-  if (
-    "alternateViewTypes" in props.config &&
-    Array.isArray(props.config.alternateViewTypes)
-  ) {
-    viewTypes.push(...props.config.alternateViewTypes);
-  }
 
   return useMemo(
     () =>
@@ -144,9 +225,11 @@ function FormControl(props: FormControlProps) {
         >
           <div
             className={`t--form-control-${props.config.controlType}`}
-            data-replay-id={btoa(props.config.configProperty)}
+            data-location-id={btoa(props.config.configProperty)}
           >
-            {showTemplate && !convertFormToRaw ? (
+            {showTemplate &&
+            !convertFormToRaw &&
+            !SQL_DATASOURCES.includes(pluginName) ? (
               <TemplateMenu
                 createTemplate={(templateString: string) =>
                   createTemplate(
@@ -155,7 +238,7 @@ function FormControl(props: FormControlProps) {
                     props?.config?.configProperty,
                   )
                 }
-                pluginId={formValues?.datasource?.pluginId || ""}
+                pluginId={(formValues as Action)?.datasource?.pluginId || ""}
               />
             ) : viewTypes.length > 0 && viewTypes.includes(ViewTypes.JSON) ? (
               <ToggleComponentToJson

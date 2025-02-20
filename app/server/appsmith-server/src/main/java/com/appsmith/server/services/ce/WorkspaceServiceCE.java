@@ -10,12 +10,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 public interface WorkspaceServiceCE extends CrudService<Workspace, String> {
-
-    String getDefaultNameForGroupInWorkspace(String prefix, String workspaceName);
 
     Mono<Workspace> create(Workspace workspace);
 
@@ -23,15 +20,15 @@ public interface WorkspaceServiceCE extends CrudService<Workspace, String> {
 
     Mono<Workspace> create(Workspace workspace, User user, Boolean isDefault);
 
-    Mono<Workspace> findById(String id, AclPermission permission);
+    Mono<Workspace> getById(String id);
 
-    Mono<Workspace> findById(String id, Optional<AclPermission> permission);
+    Mono<Workspace> findById(String id, AclPermission permission);
 
     Mono<Workspace> save(Workspace workspace);
 
     Mono<Workspace> findByIdAndPluginsPluginId(String workspaceId, String pluginId);
 
-    Flux<Workspace> findByIdsIn(Set<String> ids, String tenantId, AclPermission permission);
+    Flux<Workspace> findByIdsIn(Set<String> ids, String organizationId, AclPermission permission);
 
     Flux<Workspace> getAll(AclPermission permission);
 
@@ -44,4 +41,6 @@ public interface WorkspaceServiceCE extends CrudService<Workspace, String> {
     Flux<Workspace> getAll();
 
     Mono<Workspace> archiveById(String s);
+
+    Mono<String> getDefaultEnvironmentId(String workspaceId, AclPermission aclPermission);
 }

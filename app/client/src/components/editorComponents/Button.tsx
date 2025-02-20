@@ -1,19 +1,20 @@
 import React from "react";
-import {
-  Intent,
-  BlueprintButtonIntentsCSS,
-  Skin,
-} from "constants/DefaultTheme";
+import type { Intent, Skin } from "constants/DefaultTheme";
+import { BlueprintButtonIntentsCSS } from "constants/DefaultTheme";
 import styled, { css } from "styled-components";
-import {
-  AnchorButton as BlueprintAnchorButton,
-  Button as BlueprintButton,
+import type {
   Intent as BlueprintIntent,
   IconName,
   MaybeElement,
   IButtonProps,
+  IAnchorButtonProps,
 } from "@blueprintjs/core";
-import { Direction, Directions } from "utils/helpers";
+import {
+  AnchorButton as BlueprintAnchorButton,
+  Button as BlueprintButton,
+} from "@blueprintjs/core";
+import type { Direction } from "utils/helpers";
+import { Directions } from "utils/helpers";
 import { omit } from "lodash";
 
 const outline = css`
@@ -49,8 +50,8 @@ const buttonStyles = css<Partial<ButtonProps>>`
         props.skin === undefined
           ? "center"
           : props.iconAlignment === Directions.RIGHT
-          ? "space-between"
-          : "flex-start"};
+            ? "space-between"
+            : "flex-start"};
     }
   }
   ${(props) => (props.outline ? outline : "")}
@@ -71,7 +72,7 @@ const StyledButton = styled((props: IButtonProps & Partial<ButtonProps>) => (
   ${buttonStyles}
 `;
 const StyledAnchorButton = styled(
-  (props: IButtonProps & Partial<ButtonProps>) => (
+  (props: IAnchorButtonProps & Partial<ButtonProps>) => (
     <BlueprintAnchorButton
       {...omit(props, ["iconAlignment", "fluid", "filled", "outline"])}
     />
@@ -80,7 +81,7 @@ const StyledAnchorButton = styled(
   ${buttonStyles}
 `;
 
-export type ButtonProps = {
+export interface ButtonProps {
   outline?: boolean;
   filled?: boolean;
   intent?: Intent;
@@ -100,7 +101,7 @@ export type ButtonProps = {
   borderRadius?: string;
   boxShadow?: string;
   boxShadowColor?: string;
-};
+}
 
 export const Button = (props: ButtonProps) => {
   const icon: IconName | undefined =
@@ -130,6 +131,7 @@ export const Button = (props: ButtonProps) => {
     skin: props.skin,
     iconAlignment: props.iconAlignment ? props.iconAlignment : undefined,
   };
+
   if (props.href) {
     return (
       <StyledAnchorButton

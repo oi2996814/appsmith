@@ -1,15 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import styled from "styled-components";
-import { FormIcons } from "icons/FormIcons";
-import {
-  ControlWrapper,
-  StyledInputGroup,
-  StyledPropertyPaneButton,
-} from "./StyledControls";
-import { DropDownOptionWithKey } from "./OptionControl";
-import { DropdownOption } from "components/constants";
+import { ControlWrapper, InputGroup } from "./StyledControls";
+import type { SegmentedControlOption } from "@appsmith/ads";
+import { Button } from "@appsmith/ads";
 import { generateReactKey } from "utils/generators";
-import { Category, Size } from "design-system";
 import { debounce } from "lodash";
 import { getNextEntityName } from "utils/AppsmithUtils";
 
@@ -22,6 +16,7 @@ function updateOptionLabel<T>(
     if (index !== optionIndex) {
       return option;
     }
+
     return {
       ...option,
       label: updatedLabel,
@@ -38,6 +33,7 @@ function updateOptionValue<T>(
     if (index !== optionIndex) {
       return option;
     }
+
     return {
       ...option,
       value: updatedValue,
@@ -45,81 +41,59 @@ function updateOptionValue<T>(
   });
 }
 
-const StyledDeleteIcon = styled(FormIcons.DELETE_ICON)`
-  cursor: pointer;
-
-  && svg path {
-    fill: ${(props) => props.theme.colors.propertyPane.deleteIconColor};
-  }
-
-  &&:hover {
-    svg path {
-      fill: ${(props) => props.theme.colors.propertyPane.title};
-    }
-  }
-`;
-
 const StyledBox = styled.div`
   width: 10px;
 `;
 
-const StyledButton = styled.button`
-  width: 28px;
-  height: 28px;
+type UpdatePairFunction = (
+  pair: SegmentedControlOption[],
+  isUpdatedViaKeyboard?: boolean,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+) => any;
 
-  &&& svg {
-    width: 14px;
-    height: 14px;
-  }
+interface KeyValueComponentProps {
+  pairs: SegmentedControlOption[];
+  updatePairs: UpdatePairFunction;
+  addLabel?: string;
+}
 
-  &&:focus {
-    svg path {
-      fill: ${(props) => props.theme.colors.propertyPane.title};
-    }
+type SegmentedControlOptionWithKey = SegmentedControlOption & {
+  key: string;
+};
+
+const StyledInputGroup = styled(InputGroup)`
+  > .ads-v2-input__input-section > div {
+    min-width: 0px;
   }
 `;
 
-type UpdatePairFunction = (
-  pair: DropdownOption[],
-  isUpdatedViaKeyboard?: boolean,
-) => any;
-
-type KeyValueComponentProps = {
-  pairs: DropdownOption[];
-  updatePairs: UpdatePairFunction;
-  addLabel?: string;
-};
 export function KeyValueComponent(props: KeyValueComponentProps) {
-  const [renderPairs, setRenderPairs] = useState<DropDownOptionWithKey[]>([]);
+  const [renderPairs, setRenderPairs] = useState<
+    SegmentedControlOptionWithKey[]
+  >([]);
   const [typing, setTyping] = useState<boolean>(false);
   const { pairs } = props;
+
   useEffect(() => {
     let { pairs } = props;
+
     pairs = Array.isArray(pairs) ? pairs.slice() : [];
 
-    const newRenderPairs: DropDownOptionWithKey[] = pairs.map((pair) => {
-      return {
-        ...pair,
-        key: generateReactKey(),
-      };
-    });
+    const newRenderPairs: SegmentedControlOptionWithKey[] = pairs.map(
+      (pair) => {
+        return {
+          ...pair,
+          key: generateReactKey(),
+        };
+      },
+    );
 
     pairs.length !== 0 && !typing && setRenderPairs(newRenderPairs);
   }, [props, pairs.length, renderPairs.length]);
 
-  function deletePair(index: number, isUpdatedViaKeyboard = false) {
-    let { pairs } = props;
-    pairs = Array.isArray(pairs) ? pairs : [];
-
-    const newPairs = pairs.filter((o, i) => i !== index);
-    const newRenderPairs = renderPairs.filter((o, i) => i !== index);
-
-    setRenderPairs(newRenderPairs);
-    props.updatePairs(newPairs, isUpdatedViaKeyboard);
-  }
-
   const debouncedUpdatePairs = useCallback(
-    debounce((updatedPairs: DropdownOption[]) => {
+    debounce((updatedPairs: SegmentedControlOption[]) => {
       props.updatePairs(updatedPairs, true);
     }, 200),
     [props.updatePairs],
@@ -127,6 +101,7 @@ export function KeyValueComponent(props: KeyValueComponentProps) {
 
   function updateKey(index: number, updatedKey: string) {
     let { pairs } = props;
+
     pairs = Array.isArray(pairs) ? pairs : [];
     const updatedPairs = updateOptionLabel(pairs, index, updatedKey);
     const updatedRenderPairs = updateOptionLabel(
@@ -141,6 +116,7 @@ export function KeyValueComponent(props: KeyValueComponentProps) {
 
   function updateValue(index: number, updatedValue: string) {
     let { pairs } = props;
+
     pairs = Array.isArray(pairs) ? pairs : [];
     const updatedPairs = updateOptionValue(pairs, index, updatedValue);
     const updatedRenderPairs = updateOptionValue(
@@ -153,31 +129,55 @@ export function KeyValueComponent(props: KeyValueComponentProps) {
     debouncedUpdatePairs(updatedPairs);
   }
 
+  function deletePair(index: number, isUpdatedViaKeyboard = false) {
+    let { pairs } = props;
+
+    pairs = Array.isArray(pairs) ? pairs : [];
+
+    const newPairs = pairs.filter((o, i) => i !== index);
+    const newRenderPairs = renderPairs.filter((o, i) => i !== index);
+
+    setRenderPairs(newRenderPairs);
+    props.updatePairs(newPairs, isUpdatedViaKeyboard);
+  }
+
   function addPair(e: React.MouseEvent) {
     let { pairs } = props;
+
     pairs = Array.isArray(pairs) ? pairs.slice() : [];
     pairs.push({
       label: getNextEntityName(
         "Option",
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         pairs.map((pair: any) => pair.label),
       ),
       value: getNextEntityName(
         "OPTION",
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         pairs.map((pair: any) => pair.value),
       ),
     });
     const updatedRenderPairs = renderPairs.slice();
+
     updatedRenderPairs.push({
       label: getNextEntityName(
         "Option",
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         renderPairs.map((pair: any) => pair.label),
       ),
       value: getNextEntityName(
         "OPTION",
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         renderPairs.map((pair: any) => pair.value),
       ),
       key: getNextEntityName(
         "OPTION",
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         renderPairs.map((pair: any) => pair.value),
       ),
     });
@@ -196,7 +196,7 @@ export function KeyValueComponent(props: KeyValueComponentProps) {
 
   return (
     <>
-      {renderPairs.map((pair: DropDownOptionWithKey, index) => {
+      {renderPairs.map((pair: SegmentedControlOptionWithKey, index) => {
         return (
           <ControlWrapper key={pair.key} orientation={"HORIZONTAL"}>
             <StyledInputGroup
@@ -207,6 +207,7 @@ export function KeyValueComponent(props: KeyValueComponentProps) {
               }}
               onFocus={onInputFocus}
               placeholder={"Name"}
+              // @ts-expect-error fix this the next time the file is edited
               value={pair.label}
             />
             <StyledBox />
@@ -221,27 +222,33 @@ export function KeyValueComponent(props: KeyValueComponentProps) {
               value={pair.value}
             />
             <StyledBox />
-            <StyledButton
+            <Button
+              // At least one pair must be present
+              isDisabled={renderPairs.length <= 1}
+              isIconButton
+              kind="tertiary"
               onClick={(e: React.MouseEvent) => {
                 deletePair(index, e.detail === 0);
               }}
-            >
-              <StyledDeleteIcon />
-            </StyledButton>
+              size="sm"
+              startIcon="delete-bin-line"
+              style={{ width: "50px" }}
+            />
           </ControlWrapper>
         );
       })}
 
-      <StyledPropertyPaneButton
-        category={Category.secondary}
-        className="t--property-control-options-add"
-        icon="plus"
-        onClick={addPair}
-        size={Size.medium}
-        tag="button"
-        text={props.addLabel || "Option"}
-        type="button"
-      />
+      <div className="flex flex-row-reverse mt-1">
+        <Button
+          className="t--property-control-options-add"
+          kind="tertiary"
+          onClick={addPair}
+          size="sm"
+          startIcon="plus"
+        >
+          {props.addLabel || "Add option"}
+        </Button>
+      </div>
     </>
   );
 }

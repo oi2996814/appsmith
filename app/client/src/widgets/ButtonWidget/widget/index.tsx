@@ -1,24 +1,40 @@
-import React from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import { WidgetType } from "constants/WidgetConstants";
-import ButtonComponent, { ButtonType } from "../component";
-import {
-  EventType,
-  ExecutionResult,
-} from "constants/AppsmithActionConstants/ActionConstants";
-import { ValidationTypes } from "constants/WidgetValidation";
-import { DerivedPropertiesMap } from "utils/WidgetFactory";
 import { Alignment } from "@blueprintjs/core";
-import { IconName } from "@blueprintjs/icons";
-import {
+import type { IconName } from "@blueprintjs/icons";
+import type {
+  ButtonPlacement,
   ButtonVariant,
+  RecaptchaType,
+} from "components/constants";
+import {
+  ButtonPlacementTypes,
   ButtonVariantTypes,
   RecaptchaTypes,
-  RecaptchaType,
-  ButtonPlacementTypes,
-  ButtonPlacement,
 } from "components/constants";
-import { Stylesheet } from "entities/AppTheming";
+import type { ExecutionResult } from "constants/AppsmithActionConstants/ActionConstants";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import { ValidationTypes } from "constants/WidgetValidation";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import React from "react";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
+import ButtonComponent, { ButtonType } from "../component";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+} from "WidgetProvider/constants";
+import { isAirgapped } from "ee/utils/airgapHelpers";
+import { BUTTON_MIN_WIDTH } from "constants/minWidthConstants";
+import { ResponsiveBehavior } from "layoutSystems/common/utils/constants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+
+import type {
+  PropertyUpdates,
+  SnipingModeProperty,
+} from "WidgetProvider/constants";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
 
 class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
   onButtonClickBound: (event: React.MouseEvent<HTMLElement>) => void;
@@ -29,6 +45,108 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
     this.clickWithRecaptchaBound = this.clickWithRecaptcha.bind(this);
     this.state = {
       isLoading: false,
+    };
+  }
+
+  static type = "BUTTON_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Button",
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.BUTTONS],
+      needsMeta: true,
+      searchTags: ["click", "submit"],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      animateLoading: true,
+      text: "Submit",
+      buttonVariant: ButtonVariantTypes.PRIMARY,
+      placement: ButtonPlacementTypes.CENTER,
+      rows: 4,
+      columns: 16,
+      widgetName: "Button",
+      isDisabled: false,
+      isVisible: true,
+      isDefaultClickDisabled: true,
+      disabledWhenInvalid: false,
+      resetFormOnClick: false,
+      recaptchaType: RecaptchaTypes.V3,
+      version: 1,
+      responsiveBehavior: ResponsiveBehavior.Hug,
+      minWidth: BUTTON_MIN_WIDTH,
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "onClick",
+            propertyValue: propValueMap.run,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      defaults: {
+        rows: 4,
+        columns: 6.453,
+      },
+      autoDimension: {
+        width: true,
+      },
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "120px",
+              maxWidth: "360px",
+              minHeight: "40px",
+            };
+          },
+        },
+      ],
+      disableResizeHandles: {
+        horizontal: true,
+        vertical: true,
+      },
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: { base: "360px" },
+        minHeight: { base: "40px" },
+        minWidth: { base: "120px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Buttons are used to capture user intent and trigger actions based on that intent",
+      "!url": "https://docs.appsmith.com/widget-reference/button",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      text: "string",
+      isDisabled: "bool",
+      recaptchaToken: "string",
     };
   }
 
@@ -48,7 +166,7 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
             validation: { type: ValidationTypes.TEXT },
           },
           {
-            helpText: "Triggers an action when the button is clicked",
+            helpText: "when the button is clicked",
             propertyName: "onClick",
             label: "onClick",
             controlType: "ACTION_SELECTOR",
@@ -93,7 +211,7 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -106,10 +224,11 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
       },
       {
         sectionName: "Validation",
+        hidden: isAirgapped,
         children: [
           {
             propertyName: "googleRecaptchaKey",
-            label: "Google reCAPTCHA Key",
+            label: "Google reCAPTCHA key",
             helpText: "Sets Google reCAPTCHA site key for the button",
             controlType: "INPUT_TEXT",
             placeholderText: "reCAPTCHA Key",
@@ -119,7 +238,7 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
           },
           {
             propertyName: "recaptchaType",
-            label: "Google reCAPTCHA Version",
+            label: "Google reCAPTCHA version",
             controlType: "DROP_DOWN",
             helpText: "Select reCAPTCHA version",
             options: [
@@ -146,13 +265,13 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
       },
       // TODO: refactor widgetParentProps implementation when we address #10659
       {
-        sectionName: "Form Settings",
+        sectionName: "Form settings",
         children: [
           {
             helpText:
               "Disabled if the form is invalid, if this widget exists directly within a Form widget.",
             propertyName: "disabledWhenInvalid",
-            label: "Disabled Invalid Forms",
+            label: "Disable when form is invalid",
             controlType: "SWITCH",
             isJSConvertible: true,
             isBindProperty: true,
@@ -163,7 +282,7 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
             helpText:
               "Resets the fields of the form, on click, if this widget exists directly within a Form widget.",
             propertyName: "resetFormOnClick",
-            label: "Reset Form on Success",
+            label: "Reset form on success",
             controlType: "SWITCH",
             isJSConvertible: true,
             isBindProperty: true,
@@ -182,8 +301,9 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
         children: [
           {
             propertyName: "buttonVariant",
-            label: "Button Variant",
+            label: "Button variant",
             controlType: "ICON_TABS",
+            defaultValue: ButtonVariantTypes.PRIMARY,
             fullWidth: true,
             helpText: "Sets the variant of the icon button",
             options: [
@@ -222,7 +342,7 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
         children: [
           {
             propertyName: "iconName",
-            label: "Select Icon",
+            label: "Select icon",
             helpText: "Sets the icon to be used for the button",
             controlType: "ICON_SELECT",
             isJSConvertible: true,
@@ -234,12 +354,14 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
               propertyValue: string,
             ) => {
               const propertiesToUpdate = [{ propertyPath, propertyValue }];
+
               if (!props.iconAlign) {
                 propertiesToUpdate.push({
                   propertyPath: "iconAlign",
                   propertyValue: Alignment.LEFT,
                 });
               }
+
               return propertiesToUpdate;
             },
             dependencies: ["iconAlign"],
@@ -252,14 +374,15 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
             label: "Position",
             helpText: "Sets the icon alignment of the button",
             controlType: "ICON_TABS",
-            fullWidth: true,
+            defaultValue: "left",
+            fullWidth: false,
             options: [
               {
-                icon: "VERTICAL_LEFT",
+                startIcon: "skip-left-line",
                 value: "left",
               },
               {
-                icon: "VERTICAL_RIGHT",
+                startIcon: "skip-right-line",
                 value: "right",
               },
             ],
@@ -316,7 +439,7 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
           {
             propertyName: "buttonColor",
             helpText: "Changes the color of the button",
-            label: "Button Color",
+            label: "Button color",
             controlType: "COLOR_PICKER",
             isJSConvertible: true,
             isBindProperty: true,
@@ -326,11 +449,11 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
         ],
       },
       {
-        sectionName: "Border and Shadow",
+        sectionName: "Border and shadow",
         children: [
           {
             propertyName: "borderRadius",
-            label: "Border Radius",
+            label: "Border radius",
             helpText:
               "Rounds the corners of the icon button's outer border edge",
             controlType: "BORDER_RADIUS_OPTIONS",
@@ -343,7 +466,7 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
           },
           {
             propertyName: "boxShadow",
-            label: "Box Shadow",
+            label: "Box shadow",
             helpText:
               "Enables you to cast a drop shadow from the frame of the widget",
             controlType: "BOX_SHADOW_OPTIONS",
@@ -365,6 +488,8 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       recaptchaToken: undefined,
@@ -375,9 +500,7 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
     return {};
   }
 
-  onButtonClick(e: React.MouseEvent<HTMLElement>) {
-    e.stopPropagation();
-
+  onButtonClick() {
     if (this.props.onClick) {
       this.setState({
         isLoading: true,
@@ -394,6 +517,12 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
       this.props.onReset();
     }
   }
+
+  hasOnClickAction = () => {
+    const { isDisabled, onClick, onReset, resetFormOnClick } = this.props;
+
+    return Boolean((onClick || onReset || resetFormOnClick) && !isDisabled);
+  };
 
   clickWithRecaptcha(token: string) {
     this.props.updateWidgetMetaProperty("recaptchaToken", token, {
@@ -416,18 +545,43 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
     this.setState({
       isLoading: false,
     });
+
     if (result.success) {
       if (this.props.resetFormOnClick && this.props.onReset)
         this.props.onReset();
     }
   };
 
-  getPageView() {
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+        setDisabled: {
+          path: "isDisabled",
+          type: "boolean",
+        },
+        setLabel: {
+          path: "text",
+          type: "string",
+        },
+        setColor: {
+          path: "buttonColor",
+          type: "string",
+        },
+      },
+    };
+  }
+
+  getWidgetView() {
     const disabled =
       this.props.disabledWhenInvalid &&
       "isFormValid" in this.props &&
       !this.props.isFormValid;
     const isDisabled = this.props.isDisabled || disabled;
+
     return (
       <ButtonComponent
         borderRadius={this.props.borderRadius}
@@ -442,9 +596,13 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
         isDisabled={isDisabled}
         isLoading={this.props.isLoading || this.state.isLoading}
         key={this.props.widgetId}
-        onClick={isDisabled ? undefined : this.onButtonClickBound}
+        maxWidth={this.props.maxWidth}
+        minHeight={this.props.minHeight}
+        minWidth={this.props.minWidth}
+        onClick={this.hasOnClickAction() ? this.onButtonClickBound : undefined}
         placement={this.props.placement}
         recaptchaType={this.props.recaptchaType}
+        shouldFitContent={this.isAutoLayoutMode}
         text={this.props.text}
         tooltip={this.props.tooltip}
         type={this.props.buttonType || ButtonType.BUTTON}
@@ -452,10 +610,6 @@ class ButtonWidget extends BaseWidget<ButtonWidgetProps, ButtonWidgetState> {
         widgetName={this.props.widgetName}
       />
     );
-  }
-
-  static getWidgetType(): WidgetType {
-    return "BUTTON_WIDGET";
   }
 }
 

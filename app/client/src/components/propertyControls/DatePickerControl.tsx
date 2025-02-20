@@ -1,36 +1,12 @@
 import React from "react";
-import BaseControl, { ControlData, ControlProps } from "./BaseControl";
-import moment from "moment-timezone";
-import styled from "styled-components";
+import type { ControlData, ControlProps } from "./BaseControl";
+import BaseControl from "./BaseControl";
+import moment from "moment";
 import { TimePrecision } from "@blueprintjs/datetime";
-import { WidgetProps } from "widgets/BaseWidget";
+import type { WidgetProps } from "widgets/BaseWidget";
 import { ISO_DATE_FORMAT } from "constants/WidgetValidation";
-import { DatePicker } from "design-system";
+import { DatePicker } from "@appsmith/ads";
 import { isDynamicValue } from "utils/DynamicBindingUtils";
-
-const DatePickerControlWrapper = styled.div<{ isValid: boolean }>`
-  display: flex;
-  flex-direction: column;
-  margin: 8px 0 0 0;
-
-  &:focus .bp3-input-group input {
-    border: 1px solid var(--appsmith-input-focus-border-color);
-  }
-
-  .vertical-center {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin: 16px 0 4px 0;
-    .label {
-      color: ${(props) => props.theme.colors.paneText};
-      font-size: ${(props) => props.theme.fontSizes[3]}px;
-    }
-    .bp3-control {
-      margin-bottom: 0px;
-    }
-  }
-`;
 
 class DatePickerControl extends BaseControl<
   DatePickerControlProps,
@@ -73,12 +49,14 @@ class DatePickerControl extends BaseControl<
           this.inputRef?.current?.focus();
           e.preventDefault();
         }
+
         break;
       case "Escape":
         if (document.activeElement === this.inputRef?.current) {
           this.wrapperRef?.current?.focus();
           e.preventDefault();
         }
+
         break;
     }
   };
@@ -100,27 +78,32 @@ class DatePickerControl extends BaseControl<
         : null;
 
     return (
-      <DatePickerControlWrapper isValid ref={this.wrapperRef} tabIndex={0}>
+      <div ref={this.wrapperRef} tabIndex={0}>
         <DatePicker
           closeOnSelection
+          dateFormat="yyyy-MM-dd'T'HH:mm:ss z"
           formatDate={this.formatDate}
           inputRef={this.inputRef}
           maxDate={this.maxDate}
           minDate={this.minDate}
+          // @ts-expect-error types methods and component do not match
           onChange={this.onDateSelected}
           parseDate={this.parseDate}
-          placeholder="YYYY-MM-DD HH:mm"
+          placeholderText="YYYY-MM-DD HH:mm"
+          portalId="date-picker-control"
+          selected={value}
           showActionsBar
+          showTimeInput
           tabIndex={-1}
           timePrecision={TimePrecision.MINUTE}
-          value={value}
         />
-      </DatePickerControlWrapper>
+      </div>
     );
   }
 
   getValidDate = (date: string, format: string) => {
     const _date = moment(date, format);
+
     return _date.isValid() ? _date.toDate() : undefined;
   };
 
@@ -139,7 +122,9 @@ class DatePickerControl extends BaseControl<
           : this.formatDate(date)
         : undefined;
       const isValid = date ? this.validateDate(date) : true;
+
       if (!isValid) return;
+
       // if everything is ok, put date in state
       this.setState({ selectedDate: selectedDate });
       this.updateProperty(this.props.propertyName, selectedDate);
@@ -154,12 +139,14 @@ class DatePickerControl extends BaseControl<
       this.props.widgetProperties.version === 2
         ? ISO_DATE_FORMAT
         : this.props.widgetProperties.dateFormat || ISO_DATE_FORMAT;
+
     return date ? moment(date, dateFormat).isValid() : true;
   };
 
   formatDate = (date: Date): string => {
     const dateFormat =
       this.props.widgetProperties.dateFormat || ISO_DATE_FORMAT;
+
     return moment(date).format(dateFormat);
   };
 
@@ -178,6 +165,8 @@ class DatePickerControl extends BaseControl<
     }
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     return !isDynamicValue(value);
   }

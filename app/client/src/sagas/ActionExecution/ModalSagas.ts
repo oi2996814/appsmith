@@ -1,14 +1,19 @@
-import {
-  CloseModalActionDescription,
-  ShowModalActionDescription,
-} from "@appsmith/entities/DataTree/actionTriggers";
 import { put } from "redux-saga/effects";
 import AppsmithConsole from "utils/AppsmithConsole";
 import { ActionValidationError } from "sagas/ActionExecution/errorUtils";
 import { getType, Types } from "utils/TypeHelpers";
+import type {
+  TCloseModalDescription,
+  TShowModalDescription,
+} from "workers/Evaluation/fns/modalFns";
+import type { SourceEntity } from "entities/AppsmithConsole";
 
-export function* openModalSaga(action: ShowModalActionDescription) {
+export function* openModalSaga(
+  action: TShowModalDescription,
+  source?: SourceEntity,
+) {
   const { modalName } = action.payload;
+
   if (typeof modalName !== "string") {
     throw new ActionValidationError(
       "SHOW_MODAL_BY_NAME",
@@ -17,14 +22,23 @@ export function* openModalSaga(action: ShowModalActionDescription) {
       getType(modalName),
     );
   }
+
   yield put(action);
   AppsmithConsole.info({
-    text: `openModal(${modalName}) was triggered`,
+    source,
+    text: `showModal triggered`,
+    state: {
+      modalName,
+    },
   });
 }
 
-export function* closeModalSaga(action: CloseModalActionDescription) {
+export function* closeModalSaga(
+  action: TCloseModalDescription,
+  source?: SourceEntity,
+) {
   const { modalName } = action.payload;
+
   if (typeof modalName !== "string") {
     throw new ActionValidationError(
       "CLOSE_MODAL",
@@ -33,8 +47,13 @@ export function* closeModalSaga(action: CloseModalActionDescription) {
       getType(modalName),
     );
   }
+
   yield put(action);
   AppsmithConsole.info({
-    text: `closeModal(${modalName}) was triggered`,
+    source,
+    text: `closeModal triggered`,
+    state: {
+      modalName,
+    },
   });
 }

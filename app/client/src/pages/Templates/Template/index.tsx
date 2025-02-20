@@ -1,36 +1,31 @@
 import React, { useState } from "react";
 import styled from "styled-components";
 import history from "utils/history";
-import { Template as TemplateInterface } from "api/TemplatesApi";
-import {
-  Button,
-  getTypographyByKey,
-  Size,
-  TooltipComponent as Tooltip,
-} from "design-system";
+import type { Template as TemplateInterface } from "api/TemplatesApi";
+import { Button, Tooltip, Text } from "@appsmith/ads";
 import ForkTemplateDialog from "../ForkTemplate";
 import DatasourceChip from "../DatasourceChip";
-import LargeTemplate from "./LargeTemplate";
-import { Colors } from "constants/Colors";
-import {
-  createMessage,
-  FORK_THIS_TEMPLATE,
-} from "@appsmith/constants/messages";
-import { templateIdUrl } from "RouteBuilder";
+import { createMessage, FORK_THIS_TEMPLATE } from "ee/constants/messages";
+import { templateIdUrl } from "ee/RouteBuilder";
 import { Position } from "@blueprintjs/core";
-import { getForkableWorkspaces } from "selectors/templatesSelectors";
+import {
+  activeLoadingTemplateId,
+  isImportingTemplateToAppSelector,
+} from "selectors/templatesSelectors";
 import { useSelector } from "react-redux";
 
 const TemplateWrapper = styled.div`
-  border: 1px solid ${Colors.GEYSER_LIGHT};
-  margin-bottom: ${(props) => props.theme.spaces[12]}px;
-  transition: all 1s ease-out;
+  border: 1px solid var(--ads-v2-color-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin-bottom: 24px;
   cursor: pointer;
-  background-color: ${Colors.WHITE};
+  background-color: var(--ads-v2-color-bg);
+  border-radius: var(--ads-v2-border-radius);
 
   &:hover {
-    box-shadow: 0px 20px 24px -4px rgba(16, 24, 40, 0.1),
-      0px 8px 8px -4px rgba(16, 24, 40, 0.04);
+    border-color: var(--ads-v2-color-border-emphasis);
   }
 `;
 
@@ -40,33 +35,28 @@ const ImageWrapper = styled.div`
 `;
 
 const StyledImage = styled.img`
-  box-shadow: 0px 17.52px 24.82px rgba(0, 0, 0, 0.09);
   object-fit: contain;
   width: 100%;
   height: 236px;
 `;
 
 const TemplateContent = styled.div`
-  border-top: 0.73px solid ${Colors.GEYSER_LIGHT};
-  padding: 16px 25px;
+  padding: 0 25px 0 25px;
   display: flex;
   flex-direction: column;
   flex: 1;
 
   .title {
-    ${getTypographyByKey("h1")}
-    color: ${Colors.EBONY_CLAY};
+    color: var(--ads-v2-color-fg-emphasis-plus);
   }
   .categories {
-    ${getTypographyByKey("h4")}
-    font-weight: normal;
-    color: var(--appsmith-color-black-800);
+    // font-weight: normal;
+    color: var(--ads-v2-color-fg-emphasis);
     margin-top: ${(props) => props.theme.spaces[1]}px;
   }
   .description {
     margin-top: ${(props) => props.theme.spaces[2]}px;
-    color: var(--appsmith-color-black-700);
-    ${getTypographyByKey("p1")}
+    color: var(--ads-v2-color-fg);
   }
 `;
 
@@ -75,6 +65,7 @@ const TemplateContentFooter = styled.div`
   justify-content: space-between;
   align-items: center;
   margin-top: ${(props) => props.theme.spaces[7]}px;
+  padding: 0 25px 20px 25px;
 `;
 
 const TemplateDatasources = styled.div`
@@ -83,23 +74,8 @@ const TemplateDatasources = styled.div`
   gap: ${(props) => props.theme.spaces[1]}px;
 `;
 
-const StyledButton = styled(Button)`
-  border-radius: 18px;
-  && {
-    & > span {
-      margin-right: ${(props) => props.theme.spaces[0]}px;
-    }
-  }
-  height: 31px;
-  width: 31px;
-
-  svg {
-    height: 20px;
-    width: 20px;
-  }
-`;
-
 export interface TemplateProps {
+  hideForkTemplateButton: boolean;
   template: TemplateInterface;
   size?: string;
   onClick?: (id: string) => void;
@@ -107,31 +83,22 @@ export interface TemplateProps {
 }
 
 const Template = (props: TemplateProps) => {
-  if (props.size) {
-    return <LargeTemplate {...props} />;
-  } else {
-    return <TemplateLayout {...props} />;
-  }
+  return <TemplateLayout {...props} />;
 };
 
-export interface TemplateLayoutProps {
-  template: TemplateInterface;
+export interface TemplateLayoutProps extends TemplateProps {
   className?: string;
-  onClick?: (id: string) => void;
-  onForkTemplateClick?: (template: TemplateInterface) => void;
 }
 
 export function TemplateLayout(props: TemplateLayoutProps) {
-  const {
-    datasources,
-    description,
-    functions,
-    id,
-    screenshotUrls,
-    title,
-  } = props.template;
+  const { datasources, description, functions, id, screenshotUrls, title } =
+    props.template;
+
   const [showForkModal, setShowForkModal] = useState(false);
-  const workspaceList = useSelector(getForkableWorkspaces);
+  const loadingTemplateId = useSelector(activeLoadingTemplateId);
+  const isImportingTemplateToApp = useSelector(
+    isImportingTemplateToAppSelector,
+  );
   const onClick = () => {
     if (props.onClick) {
       props.onClick(id);
@@ -143,6 +110,7 @@ export function TemplateLayout(props: TemplateLayoutProps) {
   const onForkButtonTrigger = (e: React.MouseEvent<HTMLElement>) => {
     if (props.onForkTemplateClick) {
       e.preventDefault();
+      e.stopPropagation();
       props.onForkTemplateClick(props.template);
     } else {
       e.stopPropagation();
@@ -156,18 +124,39 @@ export function TemplateLayout(props: TemplateLayoutProps) {
   };
 
   return (
-    <TemplateWrapper
-      className={props.className}
-      data-cy="template-card"
-      onClick={onClick}
-    >
-      <ImageWrapper className="image-wrapper">
-        <StyledImage src={screenshotUrls[0]} />
-      </ImageWrapper>
-      <TemplateContent>
-        <div className="title">{title}</div>
-        <div className="categories">{functions.join(" • ")}</div>
-        <div className="description">{description}</div>
+    <>
+      <ForkTemplateDialog
+        onClose={onForkModalClose}
+        showForkModal={showForkModal}
+        templateId={id}
+      />
+      <TemplateWrapper
+        className={props.className}
+        data-testid="template-card"
+        onClick={onClick}
+      >
+        <ImageWrapper className="image-wrapper">
+          <StyledImage alt="Template Thumbnail" src={screenshotUrls[0]} />
+        </ImageWrapper>
+        <TemplateContent className="template-content">
+          <Tooltip content={title} placement="right">
+            <Text
+              className="title"
+              data-testid="template-content-title"
+              kind="heading-m"
+              renderAs="h1"
+            >
+              {title}
+            </Text>
+          </Tooltip>
+          <Text className="categories" kind="heading-s" renderAs="h4">
+            {functions.join(" • ")}
+          </Text>
+          <Text className="description" kind="body-m">
+            {description}
+          </Text>
+        </TemplateContent>
+
         <TemplateContentFooter>
           <TemplateDatasources>
             {datasources.map((pluginPackageName) => {
@@ -179,32 +168,28 @@ export function TemplateLayout(props: TemplateLayoutProps) {
               );
             })}
           </TemplateDatasources>
-          {!!workspaceList.length && (
-            <div onClick={onForkButtonTrigger}>
-              <ForkTemplateDialog
-                onClose={onForkModalClose}
-                showForkModal={showForkModal}
-                templateId={id}
-              >
-                <Tooltip
-                  content={createMessage(FORK_THIS_TEMPLATE)}
-                  minimal
-                  position={Position.BOTTOM}
-                >
-                  <StyledButton
-                    className="t--fork-template fork-button"
-                    icon="plus"
-                    onClick={onForkButtonTrigger}
-                    size={Size.medium}
-                    tag="button"
-                  />
-                </Tooltip>
-              </ForkTemplateDialog>
-            </div>
+          {!props.hideForkTemplateButton && (
+            <Tooltip
+              content={createMessage(FORK_THIS_TEMPLATE)}
+              placement={Position.BOTTOM}
+            >
+              <Button
+                className="t--fork-template fork-button"
+                data-testid="t--fork-template-button"
+                isDisabled={isImportingTemplateToApp || !!loadingTemplateId}
+                isIconButton
+                isLoading={
+                  props.onForkTemplateClick && loadingTemplateId === id
+                }
+                onClick={onForkButtonTrigger}
+                size="sm"
+                startIcon="plus"
+              />
+            </Tooltip>
           )}
         </TemplateContentFooter>
-      </TemplateContent>
-    </TemplateWrapper>
+      </TemplateWrapper>
+    </>
   );
 }
 

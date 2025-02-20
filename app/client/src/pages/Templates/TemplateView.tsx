@@ -3,60 +3,43 @@ import styled from "styled-components";
 import { Classes } from "@blueprintjs/core";
 import { useParams } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
-import { Icon, IconSize, Text, TextType } from "design-system";
 import EntityNotFoundPane from "pages/Editor/EntityNotFoundPane";
-import { Template as TemplateInterface } from "api/TemplatesApi";
+import type { Template as TemplateInterface } from "api/TemplatesApi";
 import {
   getActiveTemplateSelector,
+  getForkableWorkspaces,
   isFetchingTemplateSelector,
 } from "selectors/templatesSelectors";
 import {
   getSimilarTemplatesInit,
   getTemplateInformation,
 } from "actions/templateActions";
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import history from "utils/history";
 import { TEMPLATES_PATH } from "constants/routes";
 import { Colors } from "constants/Colors";
-import { createMessage, GO_BACK } from "@appsmith/constants/messages";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import ReconnectDatasourceModal from "pages/Editor/gitSync/ReconnectDatasourceModal";
 import TemplateDescription from "./Template/TemplateDescription";
 import SimilarTemplates from "./Template/SimilarTemplates";
-import { templateIdUrl } from "RouteBuilder";
-
-const breakpointColumnsObject = {
-  default: 4,
-  1600: 3,
-  1100: 2,
-  700: 1,
-};
+import { templateIdUrl } from "ee/RouteBuilder";
+import TemplateViewHeader from "./TemplateViewHeader";
+import { registerEditorWidgets } from "utils/editor/EditorUtils";
 
 const Wrapper = styled.div`
   overflow: auto;
   position: relative;
+  width: 100%;
 `;
 
-const TemplateViewWrapper = styled.div`
-  padding-right: 132px;
-  padding-left: 132px;
-  padding-top: ${(props) => props.theme.spaces[12]}px;
+const TemplateViewWrapper = styled.div<{ isModalLayout?: boolean }>`
+  ${(props) =>
+    props.isModalLayout
+      ? `padding-right: 12px; padding-left: 12px;`
+      : `padding-right: 132px; padding-left: 132px;`}
+  padding-top: var(--ads-v2-spaces-7);
   padding-bottom: 80px;
-  background-color: ${Colors.WHITE};
-`;
-
-const HeaderWrapper = styled.div`
-  display: flex;
-  align-items: center;
-
-  .left,
-  .right {
-    flex: 1;
-  }
-`;
-
-const Title = styled(Text)`
-  display: inline-block;
+  background-color: var(--ads-v2-color-bg);
 `;
 
 export const IframeWrapper = styled.div`
@@ -65,7 +48,8 @@ export const IframeWrapper = styled.div`
 
   iframe {
     border-radius: 0px 0px 16px 16px;
-    box-shadow: 0px 20px 24px -4px rgba(16, 24, 40, 0.1),
+    box-shadow:
+      0px 20px 24px -4px rgba(16, 24, 40, 0.1),
       0px 8px 8px -4px rgba(16, 24, 40, 0.04);
     width: 100%;
     height: 734px;
@@ -74,7 +58,7 @@ export const IframeWrapper = styled.div`
 
 export const IframeTopBar = styled.div`
   width: 100%;
-  background-color: ${Colors.GEYSER_LIGHT};
+  background-color: var(--ads-v2-color-bg-muted);
   border-radius: 8px 8px 0px 0px;
   display: flex;
   gap: ${(props) => props.theme.spaces[3]}px;
@@ -85,7 +69,7 @@ export const IframeTopBar = styled.div`
   .round {
     height: 12px;
     width: 12px;
-    border-radius: 6px;
+    border-radius: var(--ads-v2-border-radius-circle);
   }
 
   .red {
@@ -105,16 +89,9 @@ const PageWrapper = styled.div`
   height: calc(100vh - ${(props) => props.theme.homePage.header}px);
 `;
 
-const BackButtonWrapper = styled.div<{ width?: number }>`
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: ${(props) => props.theme.spaces[2]}px;
-  ${(props) => props.width && `width: ${props.width};`}
-`;
-
 const LoadingWrapper = styled.div`
-  width: calc(100vw);
+  height: 100vh;
+  width: 100%;
   .title-placeholder {
     margin-top: ${(props) => props.theme.spaces[11]}px;
     height: 28px;
@@ -142,31 +119,51 @@ function TemplateNotFound() {
   return <EntityNotFoundPane />;
 }
 
-function TemplateView() {
+interface TemplateViewProps {
+  isModalLayout?: boolean;
+  onClickUseTemplate?: (id: string) => void;
+  showBack?: boolean;
+  showSimilarTemplate?: boolean;
+  templateId: string;
+  handleBackPress?: () => void;
+  handleSimilarTemplateClick?: (templateId: TemplateInterface) => void;
+  similarTemplatesClassName?: string;
+}
+
+export function TemplateView({
+  handleBackPress,
+  handleSimilarTemplateClick,
+  isModalLayout = false,
+  onClickUseTemplate,
+  showBack = true,
+  showSimilarTemplate = true,
+  similarTemplatesClassName = "",
+  templateId,
+}: TemplateViewProps) {
   const dispatch = useDispatch();
   const similarTemplates = useSelector(
     (state: AppState) => state.ui.templates.similarTemplates,
   );
   const isFetchingTemplate = useSelector(isFetchingTemplateSelector);
-  const params = useParams<{ templateId: string }>();
+  const workspaceList = useSelector(getForkableWorkspaces);
   const currentTemplate = useSelector(getActiveTemplateSelector);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const goToTemplateListView = () => {
-    history.push(TEMPLATES_PATH);
+    handleBackPress ? handleBackPress() : history.push(TEMPLATES_PATH);
   };
 
   useEffect(() => {
-    dispatch(getTemplateInformation(params.templateId));
-    dispatch(getSimilarTemplatesInit(params.templateId));
+    registerEditorWidgets();
+  }, []);
+  useEffect(() => {
+    dispatch(getTemplateInformation(templateId));
+    dispatch(getSimilarTemplatesInit(templateId));
+
     if (containerRef.current) {
       containerRef.current.scrollTo({ top: 0 });
     }
-  }, [params.templateId]);
-
-  const goBack = () => {
-    history.goBack();
-  };
+  }, [templateId]);
 
   const onSimilarTemplateClick = (template: TemplateInterface) => {
     AnalyticsUtil.logEvent("SIMILAR_TEMPLATE_CLICK", {
@@ -179,54 +176,56 @@ function TemplateView() {
         name: template.title,
       },
     });
-    history.push(templateIdUrl({ id: template.id }));
+    handleSimilarTemplateClick
+      ? handleSimilarTemplateClick(template)
+      : history.push(templateIdUrl({ id: template.id }));
   };
+
+  return isFetchingTemplate ? (
+    <TemplateViewLoader />
+  ) : !currentTemplate ? (
+    <TemplateNotFound />
+  ) : (
+    <Wrapper ref={containerRef}>
+      <ReconnectDatasourceModal />
+      <TemplateViewWrapper isModalLayout={isModalLayout}>
+        <TemplateViewHeader
+          handleBackPress={handleBackPress}
+          onClickUseTemplate={onClickUseTemplate}
+          showBack={showBack}
+          templateId={templateId}
+        />
+        <IframeWrapper>
+          <IframeTopBar>
+            <div className="round red" />
+            <div className="round yellow" />
+            <div className="round green" />
+          </IframeTopBar>
+          <iframe src={currentTemplate.appUrl} width={"100%"} />
+        </IframeWrapper>
+        <TemplateDescription template={currentTemplate} />
+      </TemplateViewWrapper>
+      {showSimilarTemplate && (
+        <SimilarTemplates
+          className={similarTemplatesClassName}
+          isForkingEnabled={!!workspaceList.length}
+          onBackPress={goToTemplateListView}
+          onClick={onSimilarTemplateClick}
+          similarTemplates={similarTemplates}
+        />
+      )}
+    </Wrapper>
+  );
+}
+
+function TemplateViewContainer() {
+  const params = useParams<{ templateId: string }>();
 
   return (
     <PageWrapper>
-      {isFetchingTemplate ? (
-        <TemplateViewLoader />
-      ) : !currentTemplate ? (
-        <TemplateNotFound />
-      ) : (
-        <Wrapper ref={containerRef}>
-          <ReconnectDatasourceModal />
-          <TemplateViewWrapper>
-            <HeaderWrapper>
-              <div className="left">
-                <BackButtonWrapper onClick={goBack}>
-                  <Icon name="view-less" size={IconSize.XL} />
-                  <Text type={TextType.P4}>{createMessage(GO_BACK)}</Text>
-                </BackButtonWrapper>
-              </div>
-              <Title type={TextType.DANGER_HEADING}>
-                {currentTemplate.title}
-              </Title>
-              <div className="right" />
-            </HeaderWrapper>
-            <IframeWrapper>
-              <IframeTopBar>
-                <div className="round red" />
-                <div className="round yellow" />
-                <div className="round green" />
-              </IframeTopBar>
-              <iframe
-                src={`${currentTemplate.appUrl}?embed=true`}
-                width={"100%"}
-              />
-            </IframeWrapper>
-            <TemplateDescription template={currentTemplate} />
-          </TemplateViewWrapper>
-          <SimilarTemplates
-            breakpointCols={breakpointColumnsObject}
-            onBackPress={goToTemplateListView}
-            onClick={onSimilarTemplateClick}
-            similarTemplates={similarTemplates}
-          />
-        </Wrapper>
-      )}
+      <TemplateView templateId={params.templateId} />
     </PageWrapper>
   );
 }
 
-export default TemplateView;
+export default TemplateViewContainer;

@@ -18,6 +18,7 @@ const DividerWrapper = styled.div<{
   ${(props) => {
     const paddingVal = props.thickness / 2;
     let padStyle: string;
+
     if (props.isHorizontal) {
       padStyle = `padding: 0px ${
         props.showEndCap ? paddingVal + "px" : "0px"
@@ -27,6 +28,7 @@ const DividerWrapper = styled.div<{
         props.showStartCap ? paddingVal + "px" : "0px"
       } 0px ${props.showEndCap ? paddingVal + "px" : "0px"} 0px;`;
     }
+
     return padStyle;
   }}
 `;
@@ -34,15 +36,17 @@ const HorizontalDivider = styled.div<Partial<DividerComponentProps>>`
   height: 0px;
   width: 100%;
   border-top: ${(props) =>
-    `${props.thickness || 1}px ${props.strokeStyle ||
-      "solid"} ${props.dividerColor || "transparent"};`};
+    `${props.thickness || 1}px ${props.strokeStyle || "solid"} ${
+      props.dividerColor || "transparent"
+    };`};
 `;
 const VerticalDivider = styled.div<Partial<DividerComponentProps>>`
   width: 0px;
   height: 100%;
   border-right: ${(props) =>
-    `${props.thickness || 1}px ${props.strokeStyle ||
-      "solid"} ${props.dividerColor || "transparent"};`};
+    `${props.thickness || 1}px ${props.strokeStyle || "solid"} ${
+      props.dividerColor || "transparent"
+    };`};
 `;
 
 const CapWrapper = styled.div<{
@@ -59,8 +63,8 @@ const CapWrapper = styled.div<{
         ? "left: 0px;"
         : "top: 0px;"
       : props.isHorizontal
-      ? "right: 0px;"
-      : "bottom: 0px;"}
+        ? "right: 0px;"
+        : "bottom: 0px;"}
   ${(props) => (props.isHorizontal ? "top" : "left")}: 50%;
   ${(props) =>
     props.isHorizontal
@@ -81,8 +85,8 @@ const CapWrapper = styled.div<{
             ? "transform: rotate(0deg);"
             : "transform: rotate(90deg);"
           : props.isHorizontal
-          ? "transform: rotate(180deg);"
-          : "transform: rotate(270deg);"}
+            ? "transform: rotate(180deg);"
+            : "transform: rotate(270deg);"}
 
       path {
         transform: translateX(-3px);

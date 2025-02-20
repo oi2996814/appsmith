@@ -12,7 +12,10 @@ import com.appsmith.external.models.Endpoint;
 import com.appsmith.external.models.RequestParamDTO;
 import com.appsmith.external.plugins.BasePlugin;
 import com.appsmith.external.plugins.PluginExecutor;
+import com.external.plugins.exceptions.ElasticSearchErrorMessages;
+import com.external.plugins.exceptions.ElasticSearchPluginError;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
@@ -49,6 +52,7 @@ import java.util.regex.Pattern;
 
 import static com.appsmith.external.constants.ActionConstants.ACTION_CONFIGURATION_BODY;
 import static com.appsmith.external.constants.ActionConstants.ACTION_CONFIGURATION_PATH;
+import static org.apache.commons.lang3.StringUtils.isBlank;
 
 public class ElasticSearchPlugin extends BasePlugin {
 
@@ -64,31 +68,27 @@ public class ElasticSearchPlugin extends BasePlugin {
 
         private final Scheduler scheduler = Schedulers.boundedElastic();
 
-        private static final String NOT_FOUND_ERROR_MESSAGE = "Either your host URL is invalid or the page you are trying to access does not exist";
+        private static final Pattern patternForUnauthorized =
+                Pattern.compile(".*unauthorized.*", Pattern.CASE_INSENSITIVE);
 
-        private static final String UNAUTHORIZED_ERROR_MESSAGE = "Your username or password is not correct";
-
-        private static final Pattern patternForUnauthorized = Pattern.compile(
-                ".*unauthorized.*",
-                Pattern.CASE_INSENSITIVE
-        );
-
-        private static final Pattern patternForNotFound = Pattern.compile(
-                ".*not.?found|refused|not.?known|timed?\\s?out.*",
-                Pattern.CASE_INSENSITIVE
-        );
+        private static final Pattern patternForNotFound =
+                Pattern.compile(".*not.?found|refused|not.?known|timed?\\s?out.*", Pattern.CASE_INSENSITIVE);
 
         @Override
-        public Mono<ActionExecutionResult> execute(RestClient client,
-                                                   DatasourceConfiguration datasourceConfiguration,
-                                                   ActionConfiguration actionConfiguration) {
+        public Mono<ActionExecutionResult> execute(
+                RestClient client,
+                DatasourceConfiguration datasourceConfiguration,
+                ActionConfiguration actionConfiguration) {
 
+            log.debug(Thread.currentThread().getName() + ": execute() called for ElasticSearch plugin.");
             final Map<String, Object> requestData = new HashMap<>();
 
             String query = actionConfiguration.getBody();
             List<RequestParamDTO> requestParams = new ArrayList<>();
 
             return Mono.fromCallable(() -> {
+                        log.debug(Thread.currentThread().getName()
+                                + ": creating action execution result from ElasticSearch plugin.");
                         final ActionExecutionResult result = new ActionExecutionResult();
 
                         String body = query;
@@ -98,8 +98,8 @@ public class ElasticSearchPlugin extends BasePlugin {
 
                         HttpMethod httpMethod = actionConfiguration.getHttpMethod();
                         requestData.put("method", httpMethod.name());
-                        requestParams.add(new RequestParamDTO("actionConfiguration.httpMethod", httpMethod.name(), null,
-                                null, null));
+                        requestParams.add(new RequestParamDTO(
+                                "actionConfiguration.httpMethod", httpMethod.name(), null, null, null));
                         requestParams.add(new RequestParamDTO(ACTION_CONFIGURATION_PATH, path, null, null, null));
                         requestParams.add(new RequestParamDTO(ACTION_CONFIGURATION_BODY, query, null, null, null));
 
@@ -115,12 +115,17 @@ public class ElasticSearchPlugin extends BasePlugin {
                                 try {
                                     List<Object> commands = objectMapper.readValue(body, ArrayList.class);
                                     for (Object object : commands) {
-                                        ndJsonBuilder.append(objectMapper.writeValueAsString(object)).append("\n");
+                                        ndJsonBuilder
+                                                .append(objectMapper.writeValueAsString(object))
+                                                .append("\n");
                                     }
                                 } catch (IOException e) {
                                     final String message = "Error converting array to ND-JSON: " + e.getMessage();
                                     log.warn(message, e);
-                                    return Mono.error(new AppsmithPluginException(AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR, message));
+                                    return Mono.error(new AppsmithPluginException(
+                                            AppsmithPluginError.PLUGIN_EXECUTE_ARGUMENT_ERROR,
+                                            ElasticSearchErrorMessages.ARRAY_TO_ND_JSON_ARRAY_CONVERSION_ERROR_MSG,
+                                            e.getMessage()));
                                 }
                                 body = ndJsonBuilder.toString();
                             }
@@ -131,13 +136,18 @@ public class ElasticSearchPlugin extends BasePlugin {
                         }
 
                         try {
-                            final String responseBody = new String(
-                                    client.performRequest(request).getEntity().getContent().readAllBytes());
+                            final String responseBody = new String(client.performRequest(request)
+                                    .getEntity()
+                                    .getContent()
+                                    .readAllBytes());
                             result.setBody(objectMapper.readValue(responseBody, HashMap.class));
                         } catch (IOException e) {
                             final String message = "Error performing request: " + e.getMessage();
                             log.warn(message, e);
-                            return Mono.error(new AppsmithPluginException(AppsmithPluginError.PLUGIN_ERROR, message));
+                            return Mono.error(new AppsmithPluginException(
+                                    ElasticSearchPluginError.QUERY_EXECUTION_FAILED,
+                                    ElasticSearchErrorMessages.QUERY_EXECUTION_FAILED_ERROR_MSG,
+                                    e.getMessage()));
                         }
 
                         result.setIsExecutionSuccess(true);
@@ -149,11 +159,19 @@ public class ElasticSearchPlugin extends BasePlugin {
                     .onErrorResume(error -> {
                         ActionExecutionResult result = new ActionExecutionResult();
                         result.setIsExecutionSuccess(false);
+                        if (!(error instanceof AppsmithPluginException)) {
+                            error = new AppsmithPluginException(
+                                    ElasticSearchPluginError.QUERY_EXECUTION_FAILED,
+                                    ElasticSearchErrorMessages.QUERY_EXECUTION_FAILED_ERROR_MSG,
+                                    error);
+                        }
                         result.setErrorInfo(error);
                         return Mono.just(result);
                     })
                     // Now set the request in the result to be returned to the server
                     .map(result -> {
+                        log.debug(Thread.currentThread().getName()
+                                + ": setting the request in the result to be returned from ElasticSearch plugin.");
                         ActionExecutionRequest request = new ActionExecutionRequest();
                         request.setProperties(requestData);
                         request.setQuery(query);
@@ -179,7 +197,7 @@ public class ElasticSearchPlugin extends BasePlugin {
 
         @Override
         public Mono<RestClient> datasourceCreate(DatasourceConfiguration datasourceConfiguration) {
-
+            log.debug(Thread.currentThread().getName() + ": datasourceCreate() called for ElasticSearch plugin.");
             final List<HttpHost> hosts = new ArrayList<>();
 
             for (Endpoint endpoint : datasourceConfiguration.getEndpoints()) {
@@ -187,8 +205,9 @@ public class ElasticSearchPlugin extends BasePlugin {
                 try {
                     url = new URL(endpoint.getHost());
                 } catch (MalformedURLException e) {
-                    return Mono.error(new AppsmithPluginException(AppsmithPluginError.PLUGIN_DATASOURCE_ARGUMENT_ERROR,
-                            "Invalid host provided. It should be of the form http(s)://your-es-url.com"));
+                    return Mono.error(new AppsmithPluginException(
+                            AppsmithPluginError.PLUGIN_DATASOURCE_ARGUMENT_ERROR,
+                            ElasticSearchErrorMessages.DS_INVALID_HOST_ERROR_MSG));
                 }
                 String scheme = "http";
                 if (url.getProtocol() != null) {
@@ -198,7 +217,7 @@ public class ElasticSearchPlugin extends BasePlugin {
                 hosts.add(new HttpHost(url.getHost(), getPort(endpoint).intValue(), scheme));
             }
 
-            final RestClientBuilder clientBuilder = RestClient.builder(hosts.toArray(new HttpHost[]{}));
+            final RestClientBuilder clientBuilder = RestClient.builder(hosts.toArray(new HttpHost[] {}));
 
             final DBAuth authentication = (DBAuth) datasourceConfiguration.getAuthentication();
             if (authentication != null
@@ -207,27 +226,19 @@ public class ElasticSearchPlugin extends BasePlugin {
                 final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
                 credentialsProvider.setCredentials(
                         AuthScope.ANY,
-                        new UsernamePasswordCredentials(authentication.getUsername(), authentication.getPassword())
-                );
+                        new UsernamePasswordCredentials(authentication.getUsername(), authentication.getPassword()));
 
-                clientBuilder
-                        .setHttpClientConfigCallback(
-                                httpClientBuilder -> httpClientBuilder
-                                        .setDefaultCredentialsProvider(credentialsProvider)
-                        );
+                clientBuilder.setHttpClientConfigCallback(
+                        httpClientBuilder -> httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider));
             }
 
             if (!CollectionUtils.isEmpty(datasourceConfiguration.getHeaders())) {
-                clientBuilder.setDefaultHeaders(
-                        (Header[]) datasourceConfiguration.getHeaders()
-                                .stream()
-                                .map(h -> new BasicHeader(h.getKey(), (String) h.getValue()))
-                                .toArray()
-                );
+                clientBuilder.setDefaultHeaders((Header[]) datasourceConfiguration.getHeaders().stream()
+                        .map(h -> new BasicHeader(h.getKey(), (String) h.getValue()))
+                        .toArray());
             }
 
-            return Mono.fromCallable(clientBuilder::build)
-                    .subscribeOn(scheduler);
+            return Mono.fromCallable(clientBuilder::build).subscribeOn(scheduler);
         }
 
         @Override
@@ -241,25 +252,24 @@ public class ElasticSearchPlugin extends BasePlugin {
 
         @Override
         public Set<String> validateDatasource(DatasourceConfiguration datasourceConfiguration) {
+            log.debug(Thread.currentThread().getName() + ": validateDatasource() called for ElasticSearch plugin.");
             Set<String> invalids = new HashSet<>();
 
             if (CollectionUtils.isEmpty(datasourceConfiguration.getEndpoints())) {
-                invalids.add("No endpoint provided. Please provide a host:port where ElasticSearch is reachable.");
+                invalids.add(ElasticSearchErrorMessages.DS_NO_ENDPOINT_ERROR_MSG);
             } else {
                 for (Endpoint endpoint : datasourceConfiguration.getEndpoints()) {
 
                     if (endpoint.getHost() == null) {
-                        invalids.add("Missing host for endpoint");
+                        invalids.add(ElasticSearchErrorMessages.DS_MISSING_HOST_ERROR_MSG);
                     } else {
                         try {
                             new URL(endpoint.getHost());
                         } catch (MalformedURLException e) {
-                            invalids.add("Invalid host provided. It should be of the form http(s)://your-es-url.com");
+                            invalids.add(ElasticSearchErrorMessages.DS_INVALID_HOST_ERROR_MSG);
                         }
                     }
-
                 }
-
             }
 
             return invalids;
@@ -267,11 +277,13 @@ public class ElasticSearchPlugin extends BasePlugin {
 
         @Override
         public Mono<DatasourceTestResult> testDatasource(RestClient connection) {
+            log.debug(Thread.currentThread().getName() + ": testDatasource() called for ElasticSearch plugin.");
             return Mono.fromCallable(() -> {
                 if (connection == null) {
                     return new DatasourceTestResult("Null client object to ElasticSearch.");
                 }
-                // This HEAD request is to check if the base of datasource exists. It responds with 200 if the index exists,
+                // This HEAD request is to check if the base of datasource exists. It responds with 200 if the index
+                // exists,
                 // 404 if it doesn't. We just check for either of these two.
                 // Ref: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-exists.html
                 Request request = new Request("HEAD", "/");
@@ -287,11 +299,11 @@ public class ElasticSearchPlugin extends BasePlugin {
                      */
 
                     if (patternForUnauthorized.matcher(message).find()) {
-                        return new DatasourceTestResult(UNAUTHORIZED_ERROR_MESSAGE);
+                        return new DatasourceTestResult(ElasticSearchErrorMessages.UNAUTHORIZED_ERROR_MSG);
                     }
 
                     if (patternForNotFound.matcher(message).find()) {
-                        return new DatasourceTestResult(NOT_FOUND_ERROR_MESSAGE);
+                        return new DatasourceTestResult(ElasticSearchErrorMessages.NOT_FOUND_ERROR_MSG);
                     }
 
                     return new DatasourceTestResult("Error running HEAD request: " + message);
@@ -302,16 +314,34 @@ public class ElasticSearchPlugin extends BasePlugin {
                 // earlier it was 404 and 200, now it has been changed to just expect 200 status code
                 // here it checks if it is anything else than 200, even 404 is not allowed!
                 if (statusLine.getStatusCode() == 404) {
-                    return new DatasourceTestResult(NOT_FOUND_ERROR_MESSAGE);
+                    return new DatasourceTestResult(ElasticSearchErrorMessages.NOT_FOUND_ERROR_MSG);
                 }
 
                 if (statusLine.getStatusCode() != 200) {
-                    return new DatasourceTestResult(
-                            "Unexpected response from ElasticSearch: " + statusLine);
+                    return new DatasourceTestResult("Unexpected response from ElasticSearch: " + statusLine);
                 }
 
                 return new DatasourceTestResult();
             });
+        }
+
+        @Override
+        public Mono<String> getEndpointIdentifierForRateLimit(DatasourceConfiguration datasourceConfiguration) {
+            log.debug(Thread.currentThread().getName()
+                    + ": getEndpointIdentifierForRateLimit() called for ElasticSearch plugin.");
+            List<Endpoint> endpoints = datasourceConfiguration.getEndpoints();
+            String identifier = "";
+            // When hostname and port both are available, both will be used as identifier
+            // When port is not present, default port along with hostname will be used
+            // This ensures rate limiting will only be applied if hostname is present
+            if (endpoints.size() > 0) {
+                String hostName = endpoints.get(0).getHost();
+                Long port = endpoints.get(0).getPort();
+                if (!isBlank(hostName)) {
+                    identifier = hostName + "_" + ObjectUtils.defaultIfNull(port, ELASTIC_SEARCH_DEFAULT_PORT);
+                }
+            }
+            return Mono.just(identifier);
         }
     }
 }

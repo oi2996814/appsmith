@@ -1,34 +1,34 @@
 import React from "react";
 import {
-  createMessage,
   ACTION_OPERATION_DESCRIPTION,
-  DOC_DESCRIPTION,
+  createMessage,
   NAV_DESCRIPTION,
-  SNIPPET_DESCRIPTION,
-} from "@appsmith/constants/messages";
-import { ValidationTypes } from "constants/WidgetValidation";
-import { Datasource } from "entities/Datasource";
-import { useEffect, useState } from "react";
-import { fetchRawGithubContentList } from "./githubHelper";
-import { PluginPackageName, PluginType } from "entities/Action";
-import { WidgetType } from "constants/WidgetConstants";
-import { ENTITY_TYPE } from "entities/DataTree/dataTreeFactory";
-import { getPluginByPackageName } from "selectors/entitiesSelector";
-import { AppState } from "@appsmith/reducers";
-import WidgetFactory from "utils/WidgetFactory";
+} from "ee/constants/messages";
+import type { ValidationTypes } from "constants/WidgetValidation";
+import type { Datasource } from "entities/Datasource";
+import { PluginPackageName, PluginType } from "entities/Plugin";
+import type { WidgetType } from "constants/WidgetConstants";
+import type { EntityTypeValue } from "ee/entities/DataTree/types";
+import { getPluginByPackageName } from "ee/selectors/entitiesSelector";
+import type { AppState } from "ee/reducers";
+import WidgetFactory from "WidgetProvider/factory";
 import {
   CurlIconV2,
-  JsFileIconV2,
+  EntityIcon,
   GraphQLIconV2,
+  JsFileIconV2,
 } from "pages/Editor/Explorer/ExplorerIcons";
-import { createNewApiAction } from "actions/apiPaneActions";
-import { createNewJSCollection } from "actions/jsPaneActions";
-import { EventLocation } from "utils/AnalyticsUtil";
-import { getQueryParams } from "utils/URLUtils";
-import history from "utils/history";
-import { curlImportPageURL } from "RouteBuilder";
+import type { EventLocation } from "ee/utils/analyticsUtilTypes";
 import { isMacOrIOS, modText, shiftText } from "utils/helpers";
 import { FocusEntity } from "navigation/FocusEntity";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { Icon } from "@appsmith/ads";
+import type { ActionParentEntityTypeInterface } from "ee/entities/Engine/actionHelpers";
+import {
+  createNewAPIBasedOnParentEntity,
+  createNewJSCollectionBasedOnParentEntity,
+} from "ee/actions/helpers";
+import { openCurlImportModal } from "pages/Editor/CurlImport/store/curlImportActions";
 
 export type SelectEvent =
   | React.MouseEvent
@@ -36,22 +36,19 @@ export type SelectEvent =
   | KeyboardEvent
   | null;
 
-export type RecentEntity = {
+export interface RecentEntity {
   type: FocusEntity;
   id: string;
   pageId: string;
-};
+}
 
 export enum SEARCH_CATEGORY_ID {
-  SNIPPETS = "Snippets",
-  DOCUMENTATION = "Documentation",
   NAVIGATION = "Navigate",
   INIT = "INIT",
-  ACTION_OPERATION = "Create New",
+  ACTION_OPERATION = "Create new",
 }
 
 export enum SEARCH_ITEM_TYPES {
-  document = "document",
   action = "action",
   widget = "widget",
   datasource = "datasource",
@@ -60,24 +57,10 @@ export enum SEARCH_ITEM_TYPES {
   placeholder = "placeholder",
   jsAction = "jsAction",
   category = "category",
-  snippet = "snippet",
   actionOperation = "actionOperation",
 }
 
-export type DocSearchItem = {
-  document?: string;
-  title: string;
-  _highlightResult: {
-    document: { value: string };
-    title: { value: string };
-  };
-  kind: string;
-  path: string;
-};
-
 export const comboHelpText = {
-  [SEARCH_CATEGORY_ID.SNIPPETS]: <>{modText()} J</>,
-  [SEARCH_CATEGORY_ID.DOCUMENTATION]: <>{modText()} L</>,
   [SEARCH_CATEGORY_ID.NAVIGATION]: <>{modText()} P</>,
   [SEARCH_CATEGORY_ID.INIT]: <>{modText()} K</>,
   [SEARCH_CATEGORY_ID.ACTION_OPERATION]: (
@@ -87,15 +70,15 @@ export const comboHelpText = {
   ),
 };
 
-export type Snippet = {
+export interface Snippet {
   entities?: [string];
   fields?: [string];
   dataType?: string;
   language: string;
   body: SnippetBody;
-};
+}
 
-export type SnippetBody = {
+export interface SnippetBody {
   title: string;
   snippet: string;
   isTrigger?: boolean;
@@ -104,44 +87,50 @@ export type SnippetBody = {
   template: string;
   snippetMeta?: string;
   shortTitle?: string;
-};
+}
 
-export type FilterEntity = WidgetType | ENTITY_TYPE;
+export type FilterEntity = WidgetType | EntityTypeValue;
 
-export const filterEntityTypeLabels: Partial<Record<ENTITY_TYPE, string>> = {
-  ACTION: "All Queries",
-  WIDGET: "All Widgets",
-  JSACTION: "JS Objects",
-};
+export const filterEntityTypeLabels: Partial<Record<EntityTypeValue, string>> =
+  {
+    ACTION: "All Queries",
+    WIDGET: "All Widgets",
+    JSACTION: "JS Objects",
+  };
 
 export const getSnippetFilterLabel = (state: AppState, label: string) => {
   return (
     WidgetFactory.widgetConfigMap.get(label as WidgetType)?.widgetName ||
     getPluginByPackageName(state, label)?.name ||
-    filterEntityTypeLabels[label as ENTITY_TYPE] ||
+    filterEntityTypeLabels[label as EntityTypeValue] ||
     label
   );
 };
 
-export type SnippetArgument = {
+export interface SnippetArgument {
   identifier: string;
   name: string;
   type: ValidationTypes;
   placeholder?: boolean;
-};
+}
 
-export type SearchCategory = {
+export interface SearchCategory {
   id: SEARCH_CATEGORY_ID;
   kind?: SEARCH_ITEM_TYPES;
   title?: string;
   desc?: string;
   show?: () => boolean;
-};
+}
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getOptionalFilters(optionalFilterMeta: any) {
   return Object.entries(optionalFilterMeta || {}).reduce(
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (acc: Array<string>, [key, value]: any) => {
       value.forEach((value: string) => acc.push(`${key}:${value}`));
+
       return acc;
     },
     [],
@@ -156,22 +145,10 @@ export const filterCategories: Record<SEARCH_CATEGORY_ID, SearchCategory> = {
     desc: createMessage(NAV_DESCRIPTION),
   },
   [SEARCH_CATEGORY_ID.ACTION_OPERATION]: {
-    title: "Create New",
+    title: "Create new",
     kind: SEARCH_ITEM_TYPES.category,
     id: SEARCH_CATEGORY_ID.ACTION_OPERATION,
     desc: createMessage(ACTION_OPERATION_DESCRIPTION),
-  },
-  [SEARCH_CATEGORY_ID.SNIPPETS]: {
-    title: "Use Snippets",
-    kind: SEARCH_ITEM_TYPES.category,
-    id: SEARCH_CATEGORY_ID.SNIPPETS,
-    desc: createMessage(SNIPPET_DESCRIPTION),
-  },
-  [SEARCH_CATEGORY_ID.DOCUMENTATION]: {
-    title: "Search Documentation",
-    kind: SEARCH_ITEM_TYPES.category,
-    id: SEARCH_CATEGORY_ID.DOCUMENTATION,
-    desc: createMessage(DOC_DESCRIPTION),
   },
   [SEARCH_CATEGORY_ID.INIT]: {
     id: SEARCH_CATEGORY_ID.INIT,
@@ -180,10 +157,6 @@ export const filterCategories: Record<SEARCH_CATEGORY_ID, SearchCategory> = {
 
 export const isNavigation = (category: SearchCategory) =>
   category.id === SEARCH_CATEGORY_ID.NAVIGATION;
-export const isDocumentation = (category: SearchCategory) =>
-  category.id === SEARCH_CATEGORY_ID.DOCUMENTATION;
-export const isSnippet = (category: SearchCategory) =>
-  category.id === SEARCH_CATEGORY_ID.SNIPPETS;
 export const isMenu = (category: SearchCategory) =>
   category.id === SEARCH_CATEGORY_ID.INIT;
 export const isActionOperation = (category: SearchCategory) =>
@@ -194,14 +167,16 @@ export const getFilterCategoryList = () =>
     return cat.show ? cat.show() : true;
   });
 
-export type SearchItem = DocSearchItem | Datasource | any;
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type SearchItem = Datasource | any;
 
 // todo better checks here?
 export const getItemType = (item: SearchItem): SEARCH_ITEM_TYPES => {
   let type: SEARCH_ITEM_TYPES;
+
   if (item.widgetName) type = SEARCH_ITEM_TYPES.widget;
   else if (
-    item.kind === SEARCH_ITEM_TYPES.document ||
     item.kind === SEARCH_ITEM_TYPES.page ||
     item.kind === SEARCH_ITEM_TYPES.sectionTitle ||
     item.kind === SEARCH_ITEM_TYPES.placeholder ||
@@ -212,8 +187,8 @@ export const getItemType = (item: SearchItem): SEARCH_ITEM_TYPES => {
   else if (item.config?.pluginType === PluginType.JS)
     type = SEARCH_ITEM_TYPES.jsAction;
   else if (item.config?.name) type = SEARCH_ITEM_TYPES.action;
-  else if (item.body?.snippet) type = SEARCH_ITEM_TYPES.snippet;
   else type = SEARCH_ITEM_TYPES.datasource;
+
   return type;
 };
 
@@ -232,10 +207,7 @@ export const getItemTitle = (item: SearchItem): string => {
       return item?.pageName;
     case SEARCH_ITEM_TYPES.sectionTitle:
     case SEARCH_ITEM_TYPES.placeholder:
-    case SEARCH_ITEM_TYPES.document:
       return item?.title;
-    case SEARCH_ITEM_TYPES.snippet:
-      return item.title;
     case SEARCH_ITEM_TYPES.actionOperation:
       return item.title;
     default:
@@ -258,58 +230,8 @@ export const getItemPage = (item: SearchItem): string => {
   }
 };
 
-// Helper function to keep calling
-// github fetch until either number
-// of retries is over or the content
-// is succesfully fetched
-export const fetchDefaultDocs = async (
-  updateIsFetching: (b: boolean) => void,
-  setDefaultDocs: (t: DocSearchItem[]) => void,
-  retries: number,
-  maxRetries: number,
-) => {
-  if (maxRetries <= retries) {
-    updateIsFetching(false);
-    return;
-  }
-  updateIsFetching(true);
-  try {
-    const data = await fetchRawGithubContentList();
-    setDefaultDocs(data);
-    updateIsFetching(false);
-  } catch (e) {
-    updateIsFetching(false);
-    // We don't want to fetch
-    // immediately to avoid
-    // same error again
-    setTimeout(
-      () =>
-        fetchDefaultDocs(
-          updateIsFetching,
-          setDefaultDocs,
-          retries + 1,
-          maxRetries,
-        ),
-      500 * maxRetries,
-    );
-  }
-};
-
-export const useDefaultDocumentationResults = (modalOpen: boolean) => {
-  const [defaultDocs, setDefaultDocs] = useState<DocSearchItem[]>([]);
-  const [isFetching, updateIsFetching] = useState(false);
-  useEffect(() => {
-    if (!isFetching && !defaultDocs.length) {
-      // Keep trying to fetch until a max retries is reached
-      fetchDefaultDocs(updateIsFetching, setDefaultDocs, 0, 2);
-    }
-  }, [modalOpen]);
-
-  return defaultDocs;
-};
-
-export const algoliaHighlightTag = "ais-highlight-0000000000";
-
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const attachKind = (source: any[], kind: string) => {
   return source.map((s) => ({
     ...s,
@@ -317,77 +239,171 @@ export const attachKind = (source: any[], kind: string) => {
   }));
 };
 
-export const getEntityId = (entity: any) => {
+export const getEntityId = (entity: {
+  entityType: FocusEntity;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}) => {
   const { entityType } = entity;
+
   switch (entityType) {
-    case "page":
-      return entity.pageId;
-    case "datasource":
+    case FocusEntity.DATASOURCE:
       return entity.id;
-    case "widget":
-      return entity.widgetId;
-    case "action":
-    case "jsAction":
+    case FocusEntity.API:
+    case FocusEntity.QUERY:
+    case FocusEntity.JS_OBJECT:
       return entity.config?.id;
+    case FocusEntity.WIDGET:
+      return entity.widgetId;
+    case FocusEntity.CANVAS:
+    case FocusEntity.EDITOR:
+      return entity.pageId;
+    case FocusEntity.NONE:
+      break;
   }
 };
 
-export type ActionOperation = {
+export interface ActionOperation {
   title: string;
   desc: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon?: any;
   kind: SEARCH_ITEM_TYPES;
-  action?: (pageId: string, location: EventLocation) => any;
-  redirect?: (pageId: string, from: EventLocation) => any;
+  action?: (
+    entityId: string,
+    location: EventLocation,
+    entityType?: ActionParentEntityTypeInterface,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ) => any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  redirect?: (entityId: string, location: EventLocation) => any;
   pluginId?: string;
-};
+  focusEntityType?: FocusEntity;
+  dsName?: string;
+  entityExplorerTitle?: string;
+  isBeta?: boolean;
+  tooltip?: string;
+}
 
 export const actionOperations: ActionOperation[] = [
   {
-    title: "New Blank API",
+    title: "New blank API",
+    entityExplorerTitle: "REST API",
     desc: "Create a new API",
     kind: SEARCH_ITEM_TYPES.actionOperation,
-    action: (pageId: string, location: EventLocation) =>
-      createNewApiAction(pageId, location),
+    action: (
+      entityId: string,
+      location: EventLocation,
+      entityType?: ActionParentEntityTypeInterface,
+    ) =>
+      createNewAPIBasedOnParentEntity(
+        entityId,
+        location,
+        undefined,
+        entityType,
+      ),
+    focusEntityType: FocusEntity.API,
   },
   {
-    title: "New Blank GraphQL API",
+    title: "New blank GraphQL API",
+    entityExplorerTitle: "GraphQL API",
     desc: "Create a new API",
     icon: <GraphQLIconV2 />,
     kind: SEARCH_ITEM_TYPES.actionOperation,
-    action: (pageId: string, location: EventLocation) =>
-      createNewApiAction(pageId, location, PluginPackageName.GRAPHQL),
+    action: (
+      entityId: string,
+      location: EventLocation,
+      entityType?: ActionParentEntityTypeInterface,
+    ) =>
+      createNewAPIBasedOnParentEntity(
+        entityId,
+        location,
+        PluginPackageName.GRAPHQL,
+        entityType,
+      ),
+    focusEntityType: FocusEntity.API,
   },
   {
     title: "New JS Object",
+    entityExplorerTitle: "Import from cURL",
     desc: "Create a new JS Object",
     kind: SEARCH_ITEM_TYPES.actionOperation,
-    icon: JsFileIconV2,
-    action: (pageId: string, from: EventLocation) =>
-      createNewJSCollection(pageId, from),
+    icon: JsFileIconV2(),
+    action: (
+      entityId: string,
+      from: EventLocation,
+      entityType?: ActionParentEntityTypeInterface,
+    ) => createNewJSCollectionBasedOnParentEntity(entityId, from, entityType),
+    focusEntityType: FocusEntity.JS_OBJECT,
   },
   {
-    title: "New cURL Import",
+    title: "New cURL import",
     desc: "Import a cURL Request",
     kind: SEARCH_ITEM_TYPES.actionOperation,
     icon: <CurlIconV2 />,
-    redirect: (pageId: string, from: EventLocation) => {
-      const queryParams = getQueryParams();
-      const curlImportURL = curlImportPageURL({
-        pageId,
-        params: {
-          from,
-          ...queryParams,
-        },
-      });
-      history.push(curlImportURL);
-    },
+    action: () => openCurlImportModal(),
+    focusEntityType: FocusEntity.API,
   },
 ];
+
+export const createQueryOption = {
+  desc: "",
+  title: "Create a query",
+  kind: SEARCH_ITEM_TYPES.sectionTitle,
+  focusEntityType: FocusEntity.QUERY,
+};
+
+export const generateCreateQueryForDSOption = (
+  ds: Datasource,
+  onClick: (entityId: string, from: EventLocation) => void,
+) => {
+  return {
+    title: `New ${ds.name} query`,
+    shortTitle: `${ds.name} query`,
+    desc: `Create a query in ${ds.name}`,
+    pluginId: ds.pluginId,
+    kind: SEARCH_ITEM_TYPES.actionOperation,
+    action: onClick,
+    focusEntityType: FocusEntity.QUERY,
+    dsName: ds.name,
+  };
+};
+
+export const generateCreateNewDSOption = (
+  filteredFileOperations: ActionOperation[],
+  onRedirect: (id: string) => void,
+) => {
+  return [
+    ...filteredFileOperations,
+    {
+      desc: "Create a new datasource in the workspace",
+      title: "New datasource",
+      icon: (
+        <EntityIcon>
+          <Icon name="plus" size="lg" />
+        </EntityIcon>
+      ),
+      kind: SEARCH_ITEM_TYPES.actionOperation,
+      redirect: (id: string, entryPoint: string) => {
+        onRedirect(id);
+        // Event for datasource creation click
+        AnalyticsUtil.logEvent("NAVIGATE_TO_CREATE_NEW_DATASOURCE_PAGE", {
+          entryPoint,
+        });
+      },
+      focusEntityType: FocusEntity.DATASOURCE,
+    },
+  ];
+};
 
 export const isMatching = (text = "", query = "") => {
   if (typeof text === "string" && typeof query === "string") {
     return text.toLowerCase().indexOf(query.toLowerCase()) > -1;
   }
+
   return false;
 };

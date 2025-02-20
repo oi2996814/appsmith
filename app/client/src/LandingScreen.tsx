@@ -1,17 +1,18 @@
 import React from "react";
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { getCurrentUser, getUserAuthError } from "selectors/usersSelectors";
 import { connect } from "react-redux";
-import { ANONYMOUS_USERNAME, User } from "constants/userConstants";
+import type { User } from "constants/userConstants";
+import { ANONYMOUS_USERNAME } from "constants/userConstants";
 import { Redirect } from "react-router";
 import { APPLICATIONS_URL, AUTH_LOGIN_URL, BASE_URL } from "constants/routes";
 import PageLoadingBar from "pages/common/PageLoadingBar";
 import ServerUnavailable from "pages/common/ErrorPages/ServerUnavailable";
 
-type Props = {
+interface Props {
   user?: User;
   authError: string;
-};
+}
 
 function LandingScreen(props: Props) {
   if (props.user && window.location.pathname === BASE_URL) {
@@ -21,9 +22,11 @@ function LandingScreen(props: Props) {
       return <Redirect to={APPLICATIONS_URL} />;
     }
   }
+
   if (props.authError && props.authError.length) {
     return <ServerUnavailable />;
   }
+
   return <PageLoadingBar />;
 }
 

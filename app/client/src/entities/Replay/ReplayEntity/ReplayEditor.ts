@@ -1,12 +1,12 @@
-import { Diff } from "deep-diff";
-import { Action } from "entities/Action";
+import type { Diff } from "deep-diff";
+import type { Action } from "entities/Action";
 import ReplayEntity from "..";
 import { pathArrayToString } from "../replayUtils";
-import { JSActionConfig } from "entities/JSCollection";
-import { Datasource } from "entities/Datasource";
-import { ENTITY_TYPE } from "entities/AppsmithConsole";
+import type { JSActionConfig } from "entities/JSCollection";
+import type { Datasource } from "entities/Datasource";
+import type { ENTITY_TYPE } from "ee/entities/AppsmithConsole/utils";
 import isEmpty from "lodash/isEmpty";
-import { Canvas } from "./ReplayCanvas";
+import type { Canvas } from "./ReplayCanvas";
 
 /*
  This type represents all the form objects that can be undone/redone.
@@ -20,13 +20,13 @@ export type Replayable =
 
 type ReplayEditorDiff = Diff<Replayable, Replayable>;
 
-export type ReplayEditorUpdate = {
+export interface ReplayEditorUpdate {
   modifiedProperty: string;
   index?: number;
   update: Replayable | ReplayEditorDiff;
   kind: "N" | "D" | "E" | "A";
   isUndo?: boolean;
-};
+}
 export default class ReplayEditor extends ReplayEntity<Replayable> {
   constructor(entity: Replayable, entityType: ENTITY_TYPE) {
     super(entity, entityType);
@@ -34,10 +34,13 @@ export default class ReplayEditor extends ReplayEntity<Replayable> {
 
   public processDiff(
     diff: Diff<Replayable, Replayable>,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     replay: any,
     isUndo: boolean,
   ): void {
     if (!diff || !diff.path || !diff.path.length) return;
+
     replay.updates = (replay.updates || []).concat(
       this.getChanges(diff, isUndo) || [],
     );
@@ -53,8 +56,10 @@ export default class ReplayEditor extends ReplayEntity<Replayable> {
     isUndo: boolean,
   ): ReplayEditorUpdate | undefined {
     const { kind, path } = diff;
+
     if (diff.kind === "N") {
       if (isEmpty(diff.rhs)) return;
+
       return {
         modifiedProperty: pathArrayToString(path),
         update: diff.rhs,
@@ -75,6 +80,7 @@ export default class ReplayEditor extends ReplayEntity<Replayable> {
         kind,
       };
     }
+
     return {
       modifiedProperty: pathArrayToString(path),
       update: diff.lhs,

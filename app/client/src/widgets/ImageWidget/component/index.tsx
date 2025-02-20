@@ -1,11 +1,19 @@
 import * as React from "react";
-import { ComponentProps } from "widgets/BaseComponent";
+import type { ComponentProps } from "widgets/BaseComponent";
 import styled from "styled-components";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import { createMessage, IMAGE_LOAD_ERROR } from "@appsmith/constants/messages";
-import { ReactComponent as RotateLeftIcon } from "assets/icons/widget/image/rotate-left.svg";
-import { ReactComponent as RotateRightIcon } from "assets/icons/widget/image/rotate-right.svg";
-import { ReactComponent as DownloadIcon } from "assets/icons/widget/image/download.svg";
+import { createMessage, IMAGE_LOAD_ERROR } from "ee/constants/messages";
+import { importSvg } from "@appsmith/ads-old";
+
+const RotateLeftIcon = importSvg(
+  async () => import("assets/icons/widget/image/rotate-left.svg"),
+);
+const RotateRightIcon = importSvg(
+  async () => import("assets/icons/widget/image/rotate-right.svg"),
+);
+const DownloadIcon = importSvg(
+  async () => import("assets/icons/widget/image/download.svg"),
+);
 
 export interface StyledImageProps {
   defaultImageUrl: string;
@@ -160,15 +168,42 @@ class ImageComponent extends React.Component<
 
   render() {
     const { imageUrl, maxZoomLevel } = this.props;
+
     const { imageError, imageRotation } = this.state;
     const zoomActive =
       maxZoomLevel !== undefined && maxZoomLevel > 1 && !this.isPanning;
     const isZoomingIn = this.state.zoomingState === ZoomingState.MAX_ZOOMED_OUT;
     let cursor = "inherit";
+
     if (zoomActive) {
       cursor = isZoomingIn ? "zoom-in" : "zoom-out";
     }
+
     if (this.props.onClick) cursor = "pointer";
+
+    const hasOnClick = Boolean(zoomActive || this.props.onClick);
+
+    const onClick = (
+      event: React.MouseEvent<HTMLElement>,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      zoomIn: any,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      zoomOut: any,
+    ) => {
+      if (!this.isPanning) {
+        if (isZoomingIn) {
+          zoomIn(event);
+        } else {
+          zoomOut(event);
+        }
+
+        this.props.onClick && this.props.onClick(event);
+      }
+
+      this.isPanning = false;
+    };
 
     if (imageUrl && imageError)
       return (
@@ -198,6 +233,8 @@ class ImageComponent extends React.Component<
           onPanningStop={() => {
             this.props.disableDrag(false);
           }}
+          // TODO: Fix this the next time the file is edited
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onZoomChange={(zoom: any) => {
             if (zoomActive) {
               //Check max zoom
@@ -232,6 +269,8 @@ class ImageComponent extends React.Component<
             disabled: !zoomActive,
           }}
         >
+          {/* TODO: Fix this the next time the file is edited */}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           {({ zoomIn, zoomOut }: any) => (
             <>
               {this.renderImageControl()}
@@ -241,17 +280,9 @@ class ImageComponent extends React.Component<
                   imageError={this.state.imageError}
                   {...this.props}
                   data-testid="styledImage"
-                  onClick={(event: React.MouseEvent<HTMLElement>) => {
-                    if (!this.isPanning) {
-                      if (isZoomingIn) {
-                        zoomIn(event);
-                      } else {
-                        zoomOut(event);
-                      }
-                      this.props.onClick && this.props.onClick(event);
-                    }
-                    this.isPanning = false;
-                  }}
+                  onClick={
+                    hasOnClick ? (e) => onClick(e, zoomIn, zoomOut) : undefined
+                  }
                   // Checking if onClick event is associated, changing cursor to pointer.
                   style={{
                     cursor: cursor,
@@ -315,7 +346,7 @@ class ImageComponent extends React.Component<
           {showDownloadBtn && (
             <ControlBtn
               borderRadius={borderRadius}
-              data-cy="t--image-download"
+              data-testid="t--image-download"
               download
               href={hrefUrl}
               target="_blank"
@@ -328,6 +359,8 @@ class ImageComponent extends React.Component<
     }
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handleImageRotate = (rotateRight: boolean) => (e: any) => {
     const { imageRotation } = this.state;
 
@@ -343,6 +376,7 @@ class ImageComponent extends React.Component<
 
   onMouseEnter = () => {
     const { defaultImageUrl, imageUrl } = this.props;
+
     if (defaultImageUrl || imageUrl) {
       this.setState({ showImageControl: true });
     }

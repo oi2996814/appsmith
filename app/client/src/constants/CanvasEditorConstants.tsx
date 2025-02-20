@@ -1,13 +1,13 @@
-export type OccupiedSpace = {
+export interface OccupiedSpace {
   left: number;
   right: number;
   top: number;
   bottom: number;
   id: string;
   parentId?: string;
-};
+}
 
-export type WidgetSpace = {
+export interface WidgetSpace {
   left: number;
   right: number;
   top: number;
@@ -17,10 +17,11 @@ export type WidgetSpace = {
   parentId?: string;
   isDropTarget?: boolean;
   fixedHeight?: number;
-};
+}
 
 export const zIndexLayers = {
   PROPERTY_PANE: "z-[3]",
   ENTITY_EXPLORER: "z-[3]",
   RESIZER: "z-[4]",
+  PEEK_OVERLAY: "z-[10]", // to hover over the header
 };

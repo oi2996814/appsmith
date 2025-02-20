@@ -2,8 +2,12 @@ import React, { useState } from "react";
 
 import { ActionWrapper } from "../TableStyledWrappers";
 import { BaseButton } from "widgets/ButtonWidget/component";
-import { ButtonColumnActions } from "widgets/TableWidgetV2/constants";
+import {
+  ColumnTypes,
+  type ButtonColumnActions,
+} from "widgets/TableWidgetV2/constants";
 import styled from "styled-components";
+import AutoToolTipComponent from "widgets/TableWidgetV2/component/cellComponents/AutoToolTipComponent";
 
 const StyledButton = styled(BaseButton)<{
   compactMode?: string;
@@ -11,21 +15,21 @@ const StyledButton = styled(BaseButton)<{
   min-width: 40px;
 
   min-height: ${({ compactMode }) =>
-    compactMode === "SHORT" ? "24px" : "30px"};
+    compactMode === "SHORT" ? "22px" : "27px"};
   font-size: ${({ compactMode }) =>
     compactMode === "SHORT" ? "12px" : "14px"};
   line-height: ${({ compactMode }) =>
     compactMode === "SHORT" ? "24px" : "28px"};
 `;
 
-type ButtonProps = {
+interface ButtonProps {
   isCellVisible: boolean;
   isSelected: boolean;
   isDisabled?: boolean;
   action: ButtonColumnActions;
   compactMode?: string;
   onCommandClick: (dynamicTrigger: string, onComplete: () => void) => void;
-};
+}
 
 export function Button(props: ButtonProps) {
   const [loading, setLoading] = useState(false);
@@ -37,27 +41,31 @@ export function Button(props: ButtonProps) {
     props.onCommandClick(props.action.dynamicTrigger, onComplete);
   };
 
+  const stopPropagation = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+  };
+
   return (
-    <ActionWrapper
-      disabled={!!props.isDisabled}
-      onClick={(e) => {
-        e.stopPropagation();
-      }}
-    >
-      {props.isCellVisible && props.action.isVisible ? (
-        <StyledButton
-          borderRadius={props.action.borderRadius}
-          boxShadow={props.action.boxShadow}
-          buttonColor={props.action.backgroundColor}
-          buttonVariant={props.action.variant}
-          compactMode={props.compactMode}
-          disabled={props.isDisabled}
-          iconAlign={props.action.iconAlign}
-          iconName={props.action.iconName}
-          loading={loading}
-          onClick={handleClick}
-          text={props.action.label}
-        />
+    <ActionWrapper disabled={!!props.isDisabled} onClick={stopPropagation}>
+      {props.isCellVisible && props.action.isVisible && props.action.label ? (
+        <AutoToolTipComponent
+          columnType={ColumnTypes.BUTTON}
+          title={props.action.label}
+        >
+          <StyledButton
+            borderRadius={props.action.borderRadius}
+            boxShadow={props.action.boxShadow}
+            buttonColor={props.action.backgroundColor}
+            buttonVariant={props.action.variant}
+            compactMode={props.compactMode}
+            disabled={props.isDisabled}
+            iconAlign={props.action.iconAlign}
+            iconName={props.action.iconName}
+            loading={loading}
+            onClick={handleClick}
+            text={props.action.label}
+          />
+        </AutoToolTipComponent>
       ) : null}
     </ActionWrapper>
   );

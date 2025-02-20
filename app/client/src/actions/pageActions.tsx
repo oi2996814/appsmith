@@ -1,76 +1,91 @@
-import { WidgetType } from "constants/WidgetConstants";
+import type { WidgetType } from "constants/WidgetConstants";
+import type { AnyReduxAction, ReduxAction } from "./ReduxActionTypes";
 import {
-  EvaluationReduxAction,
-  ReduxAction,
-  ReduxActionTypes,
-  UpdateCanvasPayload,
   ReduxActionErrorTypes,
+  ReduxActionTypes,
   WidgetReduxActionTypes,
-  ReplayReduxActionTypes,
-  AnyReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { WidgetOperation } from "widgets/BaseWidget";
-import {
-  FetchPageRequest,
+} from "ee/constants/ReduxActionConstants";
+import type { DynamicPath } from "utils/DynamicBindingUtils";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import type { WidgetOperation, WidgetProps } from "widgets/BaseWidget";
+import type {
+  FetchPageResponse,
   PageLayout,
   SavePageResponse,
   UpdatePageRequest,
   UpdatePageResponse,
 } from "api/PageApi";
-import { UrlDataState } from "reducers/entityReducers/appReducer";
-import { APP_MODE } from "entities/App";
-import { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
-import { GenerateTemplatePageRequest } from "api/PageApi";
-import { ENTITY_TYPE } from "entities/AppsmithConsole";
-import { Replayable } from "entities/Replay/ReplayEntity/ReplayEditor";
+import type { UrlDataState } from "reducers/entityReducers/appReducer";
+import type { APP_MODE } from "entities/App";
+import type { CanvasWidgetsReduxState } from "ee/reducers/entityReducers/canvasWidgetsReducer";
+import type { ENTITY_TYPE } from "ee/entities/AppsmithConsole/utils";
+import type { Replayable } from "entities/Replay/ReplayEntity/ReplayEditor";
+import * as Sentry from "@sentry/react";
+import type { DSLWidget } from "../WidgetProvider/constants";
+import type {
+  LayoutOnLoadActionErrors,
+  PageAction,
+} from "../constants/AppsmithActionConstants/ActionConstants";
+import { ReplayOperation } from "entities/Replay/ReplayEntity/ReplayOperations";
+import type { PACKAGE_PULL_STATUS } from "ee/constants/ModuleConstants";
+import type { ApiResponse } from "api/ApiResponses";
+import type { EvaluationReduxAction } from "./EvaluationReduxActionTypes";
 
 export interface FetchPageListPayload {
   applicationId: string;
   mode: APP_MODE;
 }
 
-export interface ClonePageActionPayload {
-  id: string;
-  blockNavigation?: boolean;
-}
-
-export interface CreatePageActionPayload {
-  applicationId: string;
-  name: string;
-  layouts: Partial<PageLayout>[];
-  blockNavigation?: boolean;
-}
-
-export type updateLayoutOptions = {
+export interface updateLayoutOptions {
   isRetry?: boolean;
   shouldReplay?: boolean;
   updatedWidgetIds?: string[];
-};
+}
 
-export const fetchPage = (
+export interface FetchPageActionPayload {
+  id: string;
+  isFirstLoad?: boolean;
+  pageWithMigratedDsl?: FetchPageResponse;
+}
+
+export const fetchPageAction = (
   pageId: string,
   isFirstLoad = false,
-): ReduxAction<FetchPageRequest> => {
+  pageWithMigratedDsl?: FetchPageResponse,
+): ReduxAction<FetchPageActionPayload> => {
   return {
     type: ReduxActionTypes.FETCH_PAGE_INIT,
     payload: {
       id: pageId,
       isFirstLoad,
+      pageWithMigratedDsl,
     },
   };
 };
 
-export const fetchPublishedPage = (
+// fetch a published page
+export interface FetchPublishedPageActionPayload {
+  pageId: string;
+  bustCache?: boolean;
+  pageWithMigratedDsl?: FetchPageResponse;
+}
+
+export interface FetchPublishedPageResourcesPayload {
+  pageId: string;
+  basePageId: string;
+  branch: string;
+}
+
+export const fetchPublishedPageAction = (
   pageId: string,
   bustCache = false,
-  firstLoad = false,
-) => ({
+  pageWithMigratedDsl?: FetchPageResponse,
+): ReduxAction<FetchPublishedPageActionPayload> => ({
   type: ReduxActionTypes.FETCH_PUBLISHED_PAGE_INIT,
   payload: {
     pageId,
     bustCache,
-    firstLoad,
+    pageWithMigratedDsl,
   },
 });
 
@@ -81,10 +96,11 @@ export const fetchPageSuccess = (): EvaluationReduxAction<undefined> => {
   };
 };
 
-export const fetchPublishedPageSuccess = (): EvaluationReduxAction<undefined> => ({
-  type: ReduxActionTypes.FETCH_PUBLISHED_PAGE_SUCCESS,
-  payload: undefined,
-});
+export const fetchPublishedPageSuccess =
+  (): EvaluationReduxAction<undefined> => ({
+    type: ReduxActionTypes.FETCH_PUBLISHED_PAGE_SUCCESS,
+    payload: undefined,
+  });
 
 /**
  * After all page entities are fetched like DSL, actions and JsObjects,
@@ -101,14 +117,33 @@ export const fetchAllPageEntityCompletion = (
   payload: undefined,
 });
 
+export interface UpdateCurrentPagePayload {
+  id: string;
+  slug?: string;
+  permissions?: string[];
+}
+
 export const updateCurrentPage = (
   id: string,
   slug?: string,
   permissions?: string[],
-) => ({
+): ReduxAction<UpdateCurrentPagePayload> => ({
   type: ReduxActionTypes.SWITCH_CURRENT_PAGE_ID,
   payload: { id, slug, permissions },
 });
+
+export interface UpdateCanvasPayload {
+  pageWidgetId: string;
+  widgets: { [widgetId: string]: WidgetProps };
+  currentLayoutId: string;
+  currentPageId: string;
+  currentPageName: string;
+  currentApplicationId: string;
+  dsl: Partial<DSLWidget>;
+  pageActions: PageAction[][];
+  updatedWidgetIds?: string[];
+  layoutOnLoadActionErrors?: LayoutOnLoadActionErrors[];
+}
 
 export const initCanvasLayout = (
   payload: UpdateCanvasPayload,
@@ -148,6 +183,7 @@ export const updateAndSaveLayout = (
   options: updateLayoutOptions = {},
 ) => {
   const { isRetry, shouldReplay, updatedWidgetIds } = options;
+
   return {
     type: ReduxActionTypes.UPDATE_LAYOUT,
     payload: { widgets, isRetry, shouldReplay, updatedWidgetIds },
@@ -161,34 +197,66 @@ export const saveLayout = (isRetry?: boolean) => {
   };
 };
 
-export const createPage = (
+export interface CreatePageActionPayload {
+  applicationId: string;
+  name: string;
+  layouts: Partial<PageLayout>[];
+}
+
+export const createPageAction = (
   applicationId: string,
   pageName: string,
   layouts: Partial<PageLayout>[],
-  blockNavigation?: boolean,
+  workspaceId: string,
+  instanceId?: string,
 ) => {
   AnalyticsUtil.logEvent("CREATE_PAGE", {
     pageName,
+    workspaceId,
+    instanceId,
   });
+
   return {
     type: ReduxActionTypes.CREATE_PAGE_INIT,
     payload: {
       applicationId,
       name: pageName,
       layouts,
-      blockNavigation,
     },
   };
 };
 
-/**
- * action to clone page
- *
- * @param pageId
- * @param blockNavigation
- * @returns
- */
-export const clonePageInit = (pageId: string, blockNavigation?: boolean) => {
+export const createNewPageFromEntities = (
+  applicationId: string,
+  pageName: string,
+  workspaceId: string,
+  instanceId?: string,
+) => {
+  AnalyticsUtil.logEvent("CREATE_PAGE", {
+    pageName,
+    workspaceId,
+    instanceId,
+  });
+
+  return {
+    type: ReduxActionTypes.CREATE_NEW_PAGE_FROM_ENTITIES,
+    payload: {
+      applicationId,
+      name: pageName,
+    },
+  };
+};
+
+// cloning a page
+export interface ClonePageActionPayload {
+  id: string;
+  blockNavigation?: boolean;
+}
+
+export const clonePageInit = (
+  pageId: string,
+  blockNavigation?: boolean,
+): ReduxAction<ClonePageActionPayload> => {
   return {
     type: ReduxActionTypes.CLONE_PAGE_INIT,
     payload: {
@@ -198,24 +266,71 @@ export const clonePageInit = (pageId: string, blockNavigation?: boolean) => {
   };
 };
 
-export const clonePageSuccess = (
-  pageId: string,
-  pageName: string,
-  layoutId: string,
-  pageSlug: string,
-) => {
+export interface ClonePageSuccessPayload {
+  pageName: string;
+  description?: string;
+  pageId: string;
+  basePageId: string;
+  layoutId: string;
+  isDefault: boolean;
+  slug: string;
+}
+
+export const clonePageSuccess = ({
+  basePageId,
+  layoutId,
+  pageId,
+  pageName,
+  slug,
+}: ClonePageSuccessPayload) => {
   return {
     type: ReduxActionTypes.CLONE_PAGE_SUCCESS,
     payload: {
       pageId,
+      basePageId,
       pageName,
       layoutId,
-      pageSlug,
+      slug,
     },
   };
 };
 
-export const updatePage = (payload: UpdatePageRequest) => {
+// Fetches resources required for published page, currently only used for fetching actions
+// In future we can reuse this for fetching other page level resources in published mode
+export const fetchPublishedPageResources = ({
+  basePageId,
+  branch,
+  pageId,
+}: FetchPublishedPageResourcesPayload): ReduxAction<FetchPublishedPageResourcesPayload> => ({
+  type: ReduxActionTypes.FETCH_PUBLISHED_PAGE_RESOURCES_INIT,
+  payload: {
+    pageId,
+    basePageId,
+    branch,
+  },
+});
+
+// update a page
+
+export interface UpdatePageActionPayload {
+  id: string;
+  name?: string;
+  isHidden?: boolean;
+  customSlug?: string;
+}
+
+export const updatePageAction = (
+  payload: UpdatePageActionPayload,
+): ReduxAction<UpdatePageActionPayload> => {
+  // Update page *needs* id to be there. We found certain scenarios
+  // where this was not happening and capturing the error to know gather
+  // more info: https://github.com/appsmithorg/appsmith/issues/16435
+  if (!payload.id) {
+    Sentry.captureException(
+      new Error("Attempting to update page without page id"),
+    );
+  }
+
   return {
     type: ReduxActionTypes.UPDATE_PAGE_INIT,
     payload,
@@ -236,12 +351,12 @@ export const updatePageError = (payload: UpdatePageErrorPayload) => {
   };
 };
 
-export type UpdatePageErrorPayload = {
+export interface UpdatePageErrorPayload {
   request: UpdatePageRequest;
   error: unknown;
-};
+}
 
-export type WidgetAddChild = {
+export interface WidgetAddChild {
   widgetId: string;
   widgetName?: string;
   type: WidgetType;
@@ -253,46 +368,53 @@ export type WidgetAddChild = {
   parentColumnSpace: number;
   newWidgetId: string;
   tabId: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   props?: Record<string, any>;
-};
+  dynamicBindingPathList?: DynamicPath[];
+}
 
-export type WidgetRemoveChild = {
+export interface WidgetRemoveChild {
   widgetId: string;
   childWidgetId: string;
-};
+}
 
-export type WidgetDelete = {
+export interface WidgetDelete {
   widgetId?: string;
   parentId?: string;
   disallowUndo?: boolean;
   isShortcut?: boolean;
-};
+}
 
-export type MultipleWidgetDeletePayload = {
+export interface MultipleWidgetDeletePayload {
   widgetIds: string[];
   disallowUndo?: boolean;
   isShortcut?: boolean;
-};
+}
 
-export type WidgetResize = {
+export interface WidgetResize {
   widgetId: string;
   parentId: string;
-  leftColumn: number;
-  rightColumn: number;
-  topRow: number;
-  bottomRow: number;
+  leftColumn?: number;
+  rightColumn?: number;
+  topRow?: number;
+  bottomRow?: number;
+  mobileLeftColumn?: number;
+  mobileRightColumn?: number;
+  mobileTopRow?: number;
+  mobileBottomRow?: number;
   snapColumnSpace: number;
   snapRowSpace: number;
-};
+}
 
-export type ModalWidgetResize = {
+export interface ModalWidgetResize {
   height: number;
   width: number;
   widgetId: string;
   canvasWidgetId: string;
-};
+}
 
-export type WidgetAddChildren = {
+export interface WidgetAddChildren {
   widgetId: string;
   children: Array<{
     type: WidgetType;
@@ -306,17 +428,21 @@ export type WidgetAddChildren = {
     bottomRow: number;
     isLoading: boolean;
   }>;
-};
+}
 
-export type WidgetUpdateProperty = {
+export interface WidgetUpdateProperty {
   widgetId: string;
   propertyPath: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   propertyValue: any;
-};
+}
 
 export const updateWidget = (
   operation: WidgetOperation,
   widgetId: string,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload: any,
 ): ReduxAction<
   | WidgetAddChild
@@ -357,20 +483,25 @@ export const updateAppStore = (
 };
 
 export interface ReduxActionWithExtraParams<T> extends ReduxAction<T> {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extraParams: Record<any, any>;
 }
 
-export type GenerateCRUDSuccess = {
+export interface GenerateCRUDSuccess {
   page: {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     layouts: Array<any>;
     id: string;
+    baseId: string;
     name: string;
     isDefault?: boolean;
     slug: string;
     description?: string;
   };
   isNewPage: boolean;
-};
+}
 
 export const generateTemplateSuccess = (payload: GenerateCRUDSuccess) => {
   return {
@@ -385,6 +516,19 @@ export const generateTemplateError = () => {
   };
 };
 
+export interface GenerateTemplatePageActionPayload {
+  pageId: string;
+  tableName: string;
+  datasourceId: string;
+  applicationId: string;
+  columns?: string[];
+  searchColumn?: string;
+  mode?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pluginSpecificParams?: Record<any, any>;
+}
+
 export const generateTemplateToUpdatePage = ({
   applicationId,
   columns,
@@ -394,7 +538,7 @@ export const generateTemplateToUpdatePage = ({
   pluginSpecificParams,
   searchColumn,
   tableName,
-}: GenerateTemplatePageRequest): ReduxActionWithExtraParams<GenerateTemplatePageRequest> => {
+}: GenerateTemplatePageActionPayload): ReduxActionWithExtraParams<GenerateTemplatePageActionPayload> => {
   return {
     type: ReduxActionTypes.GENERATE_TEMPLATE_PAGE_INIT,
     payload: {
@@ -427,7 +571,7 @@ export function undoAction() {
   return {
     type: ReduxActionTypes.UNDO_REDO_OPERATION,
     payload: {
-      operation: ReplayReduxActionTypes.UNDO,
+      operation: ReplayOperation.UNDO,
     },
   };
 }
@@ -436,19 +580,20 @@ export function redoAction() {
   return {
     type: ReduxActionTypes.UNDO_REDO_OPERATION,
     payload: {
-      operation: ReplayReduxActionTypes.REDO,
+      operation: ReplayOperation.REDO,
     },
   };
 }
 
-/**
- * action for delete page
- *
- * @param pageId
- * @param pageName
- * @returns
- */
-export const deletePage = (pageId: string) => {
+// delete a page
+
+export interface DeletePageActionPayload {
+  id: string;
+}
+
+export const deletePageAction = (
+  pageId: string,
+): ReduxAction<DeletePageActionPayload> => {
   return {
     type: ReduxActionTypes.DELETE_PAGE_INIT,
     payload: {
@@ -457,14 +602,15 @@ export const deletePage = (pageId: string) => {
   };
 };
 
-/**
- * action for set page as default
- *
- * @param pageId
- * @param applicationId
- * @returns
- */
-export const setPageAsDefault = (pageId: string, applicationId?: string) => {
+export interface SetDefaultPageActionPayload {
+  id: string;
+  applicationId: string;
+}
+
+export const setPageAsDefault = (
+  pageId: string,
+  applicationId: string,
+): ReduxAction<SetDefaultPageActionPayload> => {
   return {
     type: ReduxActionTypes.SET_DEFAULT_APPLICATION_PAGE_INIT,
     payload: {
@@ -474,18 +620,17 @@ export const setPageAsDefault = (pageId: string, applicationId?: string) => {
   };
 };
 
-/**
- * action for updating order of a page
- *
- * @param pageId
- * @param applicationId
- * @returns
- */
+export interface SetPageOrderActionPayload {
+  pageId: string;
+  order: number;
+  applicationId: string;
+}
+
 export const setPageOrder = (
   applicationId: string,
   pageId: string,
   order: number,
-) => {
+): ReduxAction<SetPageOrderActionPayload> => {
   return {
     type: ReduxActionTypes.SET_PAGE_ORDER_INIT,
     payload: {
@@ -504,6 +649,50 @@ export const resetApplicationWidgets = () => ({
   type: ReduxActionTypes.RESET_APPLICATION_WIDGET_STATE_REQUEST,
 });
 
-export const fetchPageDSLs = () => ({
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const fetchPageDSLs = (payload?: any) => ({
   type: ReduxActionTypes.POPULATE_PAGEDSLS_INIT,
+  payload,
+});
+
+export interface SetupPageActionPayload {
+  id: string;
+  isFirstLoad?: boolean;
+  pageWithMigratedDsl?: FetchPageResponse;
+  packagePullStatus?: ApiResponse<PACKAGE_PULL_STATUS>;
+}
+
+export const setupPageAction = ({
+  id,
+  isFirstLoad = false,
+  packagePullStatus,
+  pageWithMigratedDsl,
+}: SetupPageActionPayload) => ({
+  type: ReduxActionTypes.SETUP_PAGE_INIT,
+  payload: {
+    id,
+    isFirstLoad,
+    pageWithMigratedDsl,
+    packagePullStatus,
+  },
+});
+
+export interface SetupPublishedPageActionPayload {
+  pageId: string;
+  bustCache: boolean;
+  pageWithMigratedDsl?: FetchPageResponse;
+}
+
+export const setupPublishedPage = (
+  pageId: string,
+  bustCache = false,
+  pageWithMigratedDsl?: FetchPageResponse,
+): ReduxAction<SetupPublishedPageActionPayload> => ({
+  type: ReduxActionTypes.SETUP_PUBLISHED_PAGE_INIT,
+  payload: {
+    pageId,
+    bustCache,
+    pageWithMigratedDsl,
+  },
 });

@@ -1,25 +1,12 @@
 package com.appsmith.server.dtos;
 
+import com.appsmith.server.dtos.ce.UserUpdateCE_DTO;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  * Includes **only** those fields that can be updated for a user, via an API call.
  */
 @Data
-public class UserUpdateDTO {
-
-    private String name;
-
-    private String role;
-
-    private String useCase;
-
-    public boolean hasUserUpdates() {
-        return name != null;
-    }
-
-    public boolean hasUserDataUpdates() {
-        return role != null || useCase != null;
-    }
-
-}
+@EqualsAndHashCode(callSuper = true)
+public class UserUpdateDTO extends UserUpdateCE_DTO {}

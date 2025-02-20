@@ -1,20 +1,19 @@
 import React from "react";
 import PropertyControlFactory from "./PropertyControlFactory";
-import {
-  PropertyControls,
-  PropertyControlPropsType,
-} from "components/propertyControls";
-import BaseControl, {
-  ControlProps,
-} from "components/propertyControls/BaseControl";
+import type { PropertyControlPropsType } from "components/propertyControls";
+import { PropertyControls } from "components/propertyControls";
+import type { ControlProps } from "components/propertyControls/BaseControl";
+import type BaseControl from "components/propertyControls/BaseControl";
+import type { InteractionAnalyticsEventDetail } from "./AppsmithUtils";
 import {
   interactionAnalyticsEvent,
-  InteractionAnalyticsEventDetail,
   INTERACTION_ANALYTICS_EVENT,
 } from "./AppsmithUtils";
 
 function withAnalytics(WrappedControl: typeof BaseControl) {
   return class AnalyticsHOC extends React.PureComponent<ControlProps> {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     containerRef = React.createRef<any>();
 
     constructor(props: ControlProps) {
@@ -37,6 +36,7 @@ function withAnalytics(WrappedControl: typeof BaseControl) {
 
     handleKbdEvent = (e: Event) => {
       const event = e as CustomEvent<InteractionAnalyticsEventDetail>;
+
       if (!event.detail?.propertyName) {
         e.stopPropagation();
         this.containerRef.current?.dispatchEvent(
@@ -70,6 +70,7 @@ class PropertyControlRegistry {
       (Control: typeof BaseControl & { getControlType: () => string }) => {
         const ControlWithAnalytics = withAnalytics(Control);
         const controlType = ControlWithAnalytics.getControlType();
+
         PropertyControlFactory.registerControlBuilder(
           controlType,
           {
@@ -79,7 +80,11 @@ class PropertyControlRegistry {
               return <ControlWithAnalytics {...controlProps} />;
             },
           },
-          Control.canDisplayValueInUI,
+          {
+            canDisplayValueInUI: Control.canDisplayValueInUI,
+            shouldValidateValueOnDynamicPropertyOff:
+              Control.shouldValidateValueOnDynamicPropertyOff,
+          },
           Control.getInputComputedValue,
         );
       },

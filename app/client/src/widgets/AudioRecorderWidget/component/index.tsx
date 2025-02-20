@@ -4,15 +4,27 @@ import { Button, Icon } from "@blueprintjs/core";
 import { useReactMediaRecorder } from "react-media-recorder";
 import { useStopwatch } from "react-timer-hook";
 
-import { ReactComponent as RecorderDefaultIcon } from "assets/icons/widget/recorder/recorder_default.svg";
-import { ReactComponent as RecorderRecordingIcon } from "assets/icons/widget/recorder/recorder_recording.svg";
-import { ReactComponent as RecorderPauseIcon } from "assets/icons/widget/recorder/recorder_pause.svg";
-import { ReactComponent as RecorderCompleteIcon } from "assets/icons/widget/recorder/recorder_complete.svg";
-import { ReactComponent as RecorderNoPermissionIcon } from "assets/icons/widget/recorder/recorder_no_permission.svg";
 import { WIDGET_PADDING } from "constants/WidgetConstants";
 import { darkenHover } from "constants/DefaultTheme";
 import { Colors } from "constants/Colors";
-import { ThemeProp } from "widgets/constants";
+import type { ThemeProp } from "WidgetProvider/constants";
+import { importSvg } from "@appsmith/ads-old";
+
+const RecorderDefaultIcon = importSvg(
+  async () => import("assets/icons/widget/recorder/recorder_default.svg"),
+);
+const RecorderRecordingIcon = importSvg(
+  async () => import("assets/icons/widget/recorder/recorder_recording.svg"),
+);
+const RecorderPauseIcon = importSvg(
+  async () => import("assets/icons/widget/recorder/recorder_pause.svg"),
+);
+const RecorderCompleteIcon = importSvg(
+  async () => import("assets/icons/widget/recorder/recorder_complete.svg"),
+);
+const RecorderNoPermissionIcon = importSvg(
+  async () => import("assets/icons/widget/recorder/recorder_no_permission.svg"),
+);
 
 export enum RecorderStatusTypes {
   PERMISSION_PROMPT = "PERMISSION_PROMPT",
@@ -463,6 +475,7 @@ function RecorderRight(props: RecorderRightProps) {
 
   const handleTimeUpdate = () => {
     const totalSeconds = Math.ceil(audioRef.current.currentTime);
+
     setCurrentDays(Math.floor(totalSeconds / (60 * 60 * 24)));
     setCurrentHours(Math.floor((totalSeconds % (60 * 60 * 24)) / (60 * 60)));
     setCurrentMinutes(Math.floor((totalSeconds % (60 * 60)) / 60));
@@ -584,6 +597,7 @@ function AudioRecorderComponent(props: RecorderComponentProps) {
 
   useEffect(() => {
     const recorderContainerElement = recorderContainerRef.current;
+
     if (recorderContainerElement) {
       setContainerWidth(recorderContainerElement.clientWidth);
     }
@@ -700,6 +714,7 @@ function AudioRecorderComponent(props: RecorderComponentProps) {
     if (!isReadyPlayerTimer) {
       setIsReadyPlayerTimer(true);
     }
+
     setPlayerStatus(PlayerStatusTypes.PLAY);
   };
 

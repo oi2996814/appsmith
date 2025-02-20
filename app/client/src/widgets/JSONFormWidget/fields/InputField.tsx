@@ -1,11 +1,9 @@
 import React, { useCallback } from "react";
 
-import BaseInputField, {
-  BaseInputComponentProps,
-  EMAIL_REGEX,
-  parseRegex,
-} from "./BaseInputField";
-import { BaseFieldComponentProps, FieldType } from "../constants";
+import type { BaseInputComponentProps } from "./BaseInputField";
+import BaseInputField, { EMAIL_REGEX, parseRegex } from "./BaseInputField";
+import type { BaseFieldComponentProps } from "../constants";
+import { FieldType } from "../constants";
 import { isNil } from "lodash";
 import { isEmpty } from "../helper";
 import { BASE_LABEL_TEXT_SIZE } from "../component/FieldLabel";
@@ -17,9 +15,9 @@ type InputComponentProps = BaseInputComponentProps & {
 
 export type InputFieldProps = BaseFieldComponentProps<InputComponentProps>;
 
-type IsValidOptions = {
+interface IsValidOptions {
   fieldType: FieldType;
-};
+}
 
 const COMPONENT_DEFAULT_VALUES: InputComponentProps = {
   iconAlign: "left",
@@ -49,6 +47,7 @@ export const isValid = (
   inputValue?: string | null,
 ) => {
   let hasValidValue, value;
+
   switch (schemaItem.fieldType) {
     case FieldType.NUMBER_INPUT:
       try {
@@ -136,6 +135,7 @@ function InputField({
   const transformValue = useCallback(
     (inputValue: string) => {
       let value;
+
       switch (schemaItem.fieldType) {
         case FieldType.NUMBER_INPUT:
           try {
@@ -148,6 +148,7 @@ function InputField({
                 value = null;
               }
             }
+
             break;
           } catch (e) {
             value = inputValue;

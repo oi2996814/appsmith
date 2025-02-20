@@ -3,21 +3,22 @@ import { useDispatch, useSelector } from "react-redux";
 import { IconWrapper } from "constants/IconConstants";
 import styled from "styled-components";
 import { Colors } from "constants/Colors";
-import { ReactComponent as FilterIcon } from "assets/icons/control/filter-icon.svg";
 import { TableIconWrapper } from "./TableStyledWrappers";
 import TableFilterPane from "./TableFilterPane";
 
-import {
-  ReactTableColumnProps,
-  ReactTableFilter,
-  OperatorTypes,
-} from "./Constants";
+import type { ReactTableColumnProps, ReactTableFilter } from "./Constants";
+import { OperatorTypes } from "./Constants";
 
 //TODO(abhinav): All of the following imports should not exist in a widget component
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { generateClassName } from "utils/generators";
 import { getTableFilterState } from "selectors/tableFilterSelectors";
 import TableAction from "./TableAction";
+import { importSvg } from "@appsmith/ads-old";
+
+const FilterIcon = importSvg(
+  async () => import("assets/icons/control/filter-icon.svg"),
+);
 
 const SelectedFilterWrapper = styled.div`
   position: absolute;
@@ -62,6 +63,7 @@ function TableFilters(props: TableFilterProps) {
 
   useEffect(() => {
     const filters: ReactTableFilter[] = props.filters ? [...props.filters] : [];
+
     if (filters.length === 0) {
       filters.push({
         column: "",
@@ -70,6 +72,7 @@ function TableFilters(props: TableFilterProps) {
         condition: "",
       });
     }
+
     updateFilters(filters);
   }, [props.filters]);
 

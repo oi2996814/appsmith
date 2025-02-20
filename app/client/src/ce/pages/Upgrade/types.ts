@@ -1,36 +1,39 @@
-import React from "react";
+import type React from "react";
 
-export type Header = {
+export interface Header {
   heading: string;
   subHeadings: string[];
-};
+}
 
-export type CarouselTrigger = {
+export interface CarouselTrigger {
   icon: string;
   heading: string;
   details: string[];
-};
+}
 
-export type Carousel = {
+export interface Carousel {
   triggers: CarouselTrigger[];
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   targets: any[];
   design:
     | "split-left-trigger"
     | "split-right-trigger"
     | "trigger-contains-target"
     | "no-target";
-};
+}
 
-export type Footer = {
+export interface Footer {
   onClick: ((event: React.MouseEvent<HTMLElement>) => void) | undefined;
   message: string;
   showHeading?: boolean;
-};
-export type UpgradePageProps = {
+  isEnterprise?: boolean;
+}
+export interface UpgradePageProps {
   header: Header;
   carousel: Carousel;
   footer: Footer;
-};
+}
 
 export type HeaderProps = Header;
 

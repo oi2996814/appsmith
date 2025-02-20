@@ -1,22 +1,13 @@
 package com.appsmith.server.services.ce;
 
-import com.appsmith.server.domains.User;
-import com.appsmith.server.featureflags.FeatureFlagEnum;
+import com.appsmith.external.enums.FeatureFlagEnum;
+import com.appsmith.server.domains.Organization;
+import com.appsmith.server.featureflags.CachedFeatures;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
 public interface FeatureFlagServiceCE {
-
-    /**
-     * Used to check if a particular feature is enabled for a given user. Useful in contexts where we already have the
-     * User object and simply wish to do a boolean check
-     *
-     * @param featureEnum
-     * @param user
-     * @return Boolean
-     */
-    Boolean check(FeatureFlagEnum featureEnum, User user);
 
     /**
      * Check if a particular feature is enabled for the current logged in user. Useful in chaining reactive functions
@@ -30,7 +21,23 @@ public interface FeatureFlagServiceCE {
     /**
      * Fetch all the flags and their values for the current logged in user
      *
-     * @return Mono<Map<String, Boolean>>
+     * @return Mono<Map < String, Boolean>>
      */
     Mono<Map<String, Boolean>> getAllFeatureFlagsForUser();
+
+    /**
+     * To get all features of the organization from Cloud Services and store them locally
+     * @return Mono of Void
+     */
+    Mono<Void> getAllRemoteFeaturesForOrganizationAndUpdateFeatureFlagsWithPendingMigrations();
+
+    /**
+     * To get all features of the current organization.
+     * @return Mono of Map
+     */
+    Mono<Map<String, Boolean>> getOrganizationFeatures();
+
+    Mono<Organization> checkAndExecuteMigrationsForOrganizationFeatureFlags(Organization organization);
+
+    CachedFeatures getCachedOrganizationFeatureFlags();
 }

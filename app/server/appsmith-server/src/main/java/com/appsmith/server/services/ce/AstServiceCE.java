@@ -8,8 +8,27 @@ import reactor.util.function.Tuple2;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public interface AstServiceCE {
+
+    Mono<Map<MustacheBindingToken, String>> replaceValueInMustacheKeys(
+            Set<MustacheBindingToken> mustacheKeySet,
+            String oldName,
+            String newName,
+            int evalVersion,
+            Pattern oldNamePattern);
+
+    Mono<Map<MustacheBindingToken, String>> replaceValueInMustacheKeys(
+            Set<MustacheBindingToken> mustacheKeySet,
+            String oldName,
+            String newName,
+            int evalVersion,
+            Pattern oldNamePattern,
+            boolean isJSObject);
+
+    Mono<Map<MustacheBindingToken, String>> replaceValueInMustacheKeys(
+            Set<MustacheBindingToken> mustacheKeySet, Pattern oldNamePattern, String newName);
 
     /**
      * If the RTS AST endpoints are accessible, use the service to find global references in the binding value
@@ -19,10 +38,16 @@ public interface AstServiceCE {
      * to let the user know that their on page load actions have not been updated.
      *
      * @param bindingValues : List of mustache binding value strings to be analyzed
-     * @param evalVersion  : The evaluated value version of the current app to be used while AST parsing
+     * @param evalVersion   : The evaluated value version of the current app to be used while AST parsing
      * @return A mono of list of strings that represent all valid global references in the binding string
      */
-    Flux<Tuple2<String, Set<String>>> getPossibleReferencesFromDynamicBinding(List<String> bindingValues, int evalVersion);
+    Flux<Tuple2<String, Set<String>>> getPossibleReferencesFromDynamicBinding(
+            List<String> bindingValues, int evalVersion);
 
-    Mono<Map<MustacheBindingToken, String>> refactorNameInDynamicBindings(Set<MustacheBindingToken> bindingValues, String oldName, String newName, int evalVersion, boolean isJSObject);
+    Mono<Map<MustacheBindingToken, String>> refactorNameInDynamicBindings(
+            Set<MustacheBindingToken> bindingValues,
+            String oldName,
+            String newName,
+            int evalVersion,
+            boolean isJSObject);
 }

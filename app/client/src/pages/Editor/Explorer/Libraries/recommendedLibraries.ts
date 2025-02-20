@@ -1,22 +1,22 @@
 export default [
   {
-    name: "AWS SDK",
-    url: "https://sdk.amazonaws.com/js/aws-sdk-2.410.0.min.js",
-    docsURL:
-      "https://docs.aws.amazon.com/sdk-for-javascript/v2/developer-guide/configuring-the-jssdk.html",
-    description: "AWS SDK for JavaScript",
-    icon: "https://github.com/aws.png?s=20",
-    author: "aws",
-    version: "2.410.0",
-  },
-  {
     name: "jsonwebtoken",
     description: "JSON Web Token implementation (symmetric and asymmetric)",
     author: "auth0",
     docsURL: "https://github.com/auth0/node-jsonwebtoken#readme",
     version: "8.5.1",
-    url: `/libraries/jsonwebtoken@8.5.1.js`,
+    url: "/libraries/jsonwebtoken@8.5.1.js",
     icon: "https://github.com/auth0.png?s=20",
+  },
+  {
+    name: "fast-xml-parser",
+    description:
+      "Validate XML, Parse XML to JS Object, or Build XML from JS Object without C/C++ based libraries and no callback.",
+    author: "NaturalIntelligence",
+    docsURL: "https://github.com/NaturalIntelligence/fast-xml-parser",
+    url: "https://cdnjs.cloudflare.com/ajax/libs/fast-xml-parser/4.3.2/fxparser.min.js",
+    version: "4.3.2",
+    icon: "https://img.jsdelivr.com/github.com/NaturalIntelligence.png",
   },
   {
     name: "jspdf",
@@ -34,8 +34,7 @@ export default [
     docsURL:
       "https://github.com/amplitude/Amplitude-TypeScript/tree/main/packages/analytics-browser#usage",
     version: "1.6.1",
-    url:
-      "https://cdn.jsdelivr.net/npm/@amplitude/analytics-browser@1.6.1/lib/scripts/amplitude-min.umd.js",
+    url: "https://cdn.jsdelivr.net/npm/@amplitude/analytics-browser@1.6.1/lib/scripts/amplitude-min.umd.js",
     icon: "https://github.com/amplitude.png?s=20",
   },
   {
@@ -43,8 +42,8 @@ export default [
     description: "Isomorphic Javascript client for Supabase",
     author: "supabase",
     docsURL: "https://supabase.com/docs/reference/javascript",
-    version: "2.2.3",
-    url: "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@1",
+    version: "2.4.0",
+    url: "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.4.0/dist/umd/supabase.min.js",
     icon: "https://github.com/supabase.png?s=20",
   },
   {
@@ -57,6 +56,15 @@ export default [
       "https://github.com/LiosK/UUID.js/#uuidjs---rfc-compliant-uuid-generator-for-javascript",
     version: "4.2.12",
     icon: "https://github.com/LiosK.png?s=20",
+  },
+  {
+    name: "bcryptjs",
+    url: "https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js",
+    description: "A library to help you hash passwords",
+    author: "dcodeIO",
+    docsURL: "https://github.com/dcodeIO/bcrypt.js#bcryptjs",
+    version: "2.4.3",
+    icon: "https://github.com/dcodeIO.png?s=20",
   },
   {
     name: "Papa Parse 5",
@@ -123,17 +131,6 @@ export default [
     author: "dchester",
     docsURL: "https://github.com/dchester/jsonpath/#jsonpath",
     icon: "https://github.com/dchester.png?s=20",
-  },
-  {
-    name: "browser-image-compression",
-    url:
-      "https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.0/dist/browser-image-compression.min.js",
-    version: "2.0.0",
-    author: "Donaldcwl",
-    docsURL:
-      "https://github.com/Donaldcwl/browser-image-compression/#browser-image-compression",
-    description: "Compress images in the browser",
-    icon: "https://github.com/Donaldcwl.png?s=20",
   },
   // We'll be enabling support for segment soon
   // {

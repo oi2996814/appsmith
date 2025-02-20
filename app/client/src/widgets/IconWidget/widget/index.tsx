@@ -1,18 +1,57 @@
+import type { WidgetCallout } from "WidgetProvider/constants";
+import type { DerivedPropertiesMap } from "WidgetProvider/factory";
+import type { ExecutionResult } from "constants/AppsmithActionConstants/ActionConstants";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
+import { buildDeprecationWidgetMessage } from "pages/Editor/utils";
 import React from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "../../BaseWidget";
 import styled from "styled-components";
-import IconComponent, { IconType } from "../component";
-import {
-  EventType,
-  ExecutionResult,
-} from "constants/AppsmithActionConstants/ActionConstants";
-import { DerivedPropertiesMap } from "utils/WidgetFactory";
+import type { WidgetProps, WidgetState } from "../../BaseWidget";
+import BaseWidget from "../../BaseWidget";
+import type { IconType } from "../component";
+import IconComponent from "../component";
+import IconSVG from "../icon.svg";
 
 const IconWrapper = styled.div`
   display: flex;
   justify-content: flex-end;
 `;
+
 class IconWidget extends BaseWidget<IconWidgetProps, WidgetState> {
+  static type = "ICON_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Icon",
+      iconSVG: IconSVG,
+      hideCard: true,
+      isDeprecated: true,
+      replacement: "ICON_BUTTON_WIDGET",
+      tags: [WIDGET_TAGS.BUTTONS],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      widgetName: "Icon",
+      rows: 4,
+      columns: 4,
+      version: 1,
+    };
+  }
+
+  static getMethods() {
+    return {
+      getEditorCallouts(): WidgetCallout[] {
+        return [
+          {
+            message: buildDeprecationWidgetMessage(IconWidget.getConfig().name),
+          },
+        ];
+      },
+    };
+  }
+
   static getPropertyPaneConfig() {
     return [];
   }
@@ -25,6 +64,8 @@ class IconWidget extends BaseWidget<IconWidgetProps, WidgetState> {
     return {};
   }
   // TODO Find a way to enforce this, (dont let it be set)
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {};
   }
@@ -45,7 +86,7 @@ class IconWidget extends BaseWidget<IconWidgetProps, WidgetState> {
     }
   };
 
-  getPageView() {
+  getWidgetView() {
     return (
       <IconWrapper>
         <IconComponent
@@ -58,10 +99,6 @@ class IconWidget extends BaseWidget<IconWidgetProps, WidgetState> {
       </IconWrapper>
     );
   }
-
-  static getWidgetType(): string {
-    return "ICON_WIDGET";
-  }
 }
 
 export const IconSizes: { [key: string]: number } = {
@@ -70,7 +107,7 @@ export const IconSizes: { [key: string]: number } = {
   DEFAULT: 16,
 };
 
-export type IconSize = typeof IconSizes[keyof typeof IconSizes] | undefined;
+export type IconSize = (typeof IconSizes)[keyof typeof IconSizes] | undefined;
 
 export interface IconWidgetProps extends WidgetProps {
   iconName: IconType;

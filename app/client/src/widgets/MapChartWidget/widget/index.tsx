@@ -1,12 +1,13 @@
-import React, { lazy, Suspense } from "react";
-
-import BaseWidget, { WidgetProps, WidgetState } from "widgets/BaseWidget";
-import { WidgetType } from "constants/WidgetConstants";
-import Skeleton from "components/utils/Skeleton";
-import { retryPromise } from "utils/AppsmithUtils";
+import React, { Suspense, lazy } from "react";
 import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
 import { ValidationTypes } from "constants/WidgetValidation";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
+import type { SetterConfig, Stylesheet } from "entities/AppTheming";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
+import { retryPromise } from "utils/AppsmithUtils";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import type { WidgetProps, WidgetState } from "widgets/BaseWidget";
+import BaseWidget from "widgets/BaseWidget";
+import type { MapColorObject } from "../constants";
 import {
   dataSetForAfrica,
   dataSetForAsia,
@@ -17,19 +18,33 @@ import {
   dataSetForUSA,
   dataSetForWorld,
   dataSetForWorldWithAntarctica,
-  MapColorObject,
   MapTypes,
 } from "../constants";
-import { MapType } from "../component";
-import { Stylesheet } from "entities/AppTheming";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
+import { DefaultAutocompleteDefinitions } from "widgets/WidgetUtils";
+import type {
+  AnvilConfig,
+  AutocompletionDefinitions,
+  WidgetCallout,
+} from "WidgetProvider/constants";
+import { FILL_WIDGET_MIN_WIDTH } from "constants/minWidthConstants";
+import {
+  FlexVerticalAlignment,
+  ResponsiveBehavior,
+} from "layoutSystems/common/utils/constants";
+import IconSVG from "../icon.svg";
+import ThumbnailSVG from "../thumbnail.svg";
+import { WIDGET_TAGS } from "constants/WidgetConstants";
+import Skeleton from "components/utils/Skeleton";
+import type { MapType } from "../component/types";
 
-const MapChartComponent = lazy(() =>
-  retryPromise(() =>
-    import(/* webpackChunkName: "mapCharts" */ "../component"),
+const MapChartComponent = lazy(async () =>
+  retryPromise(
+    async () => import(/* webpackChunkName: "mapCharts" */ "../component"),
   ),
 );
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const dataSetMapping: Record<MapType, any> = {
   [MapTypes.WORLD]: dataSetForWorld,
   [MapTypes.WORLD_WITH_ANTARCTICA]: dataSetForWorldWithAntarctica,
@@ -60,6 +75,108 @@ const updateDataSet = (
 };
 
 class MapChartWidget extends BaseWidget<MapChartWidgetProps, WidgetState> {
+  static type = "MAP_CHART_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Map Chart", // The display name which will be made in uppercase and show in the widgets panel ( can have spaces )
+      iconSVG: IconSVG,
+      thumbnailSVG: ThumbnailSVG,
+      tags: [WIDGET_TAGS.DISPLAY],
+      needsMeta: true, // Defines if this widget adds any meta properties
+      isCanvas: false, // Defines if this widget has a canvas within in which we can drop other widgets
+      searchTags: ["graph", "visuals", "visualisations"],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      rows: 32,
+      columns: 24,
+      widgetName: "MapChart",
+      version: 1,
+      mapType: MapTypes.WORLD,
+      mapTitle: "Global Population",
+      showLabels: true,
+      data: dataSetForWorld,
+      colorRange: [
+        {
+          minValue: 0.5,
+          maxValue: 1.0,
+          code: "#FFD74D",
+        },
+        {
+          minValue: 1.0,
+          maxValue: 2.0,
+          code: "#FB8C00",
+        },
+        {
+          minValue: 2.0,
+          maxValue: 3.0,
+          code: "#E65100",
+        },
+      ],
+      responsiveBehavior: ResponsiveBehavior.Fill,
+      flexVerticalAlignment: FlexVerticalAlignment.Top,
+      minWidth: FILL_WIDGET_MIN_WIDTH,
+    };
+  }
+
+  static getAutoLayoutConfig() {
+    return {
+      widgetSize: [
+        {
+          viewportMinWidth: 0,
+          configuration: () => {
+            return {
+              minWidth: "280px",
+              minHeight: "300px",
+            };
+          },
+        },
+      ],
+    };
+  }
+
+  static getAnvilConfig(): AnvilConfig | null {
+    return {
+      isLargeWidget: false,
+      widgetSize: {
+        maxHeight: {},
+        maxWidth: {},
+        minHeight: { base: "300px" },
+        minWidth: { base: "280px" },
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Map Chart widget shows the graphical representation of your data on the map.",
+      "!url": "https://docs.appsmith.com/widget-reference/map-chart",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      selectedDataPoint: {
+        id: "string",
+        label: "string",
+        originalId: "string",
+        shortLabel: "string",
+        value: "number",
+      },
+    };
+  }
+
+  static getSetterConfig(): SetterConfig {
+    return {
+      __setters: {
+        setVisibility: {
+          path: "isVisible",
+          type: "boolean",
+        },
+      },
+    };
+  }
+
   static getPropertyPaneContentConfig() {
     return [
       {
@@ -209,14 +326,22 @@ class MapChartWidget extends BaseWidget<MapChartWidgetProps, WidgetState> {
         sectionName: "Events",
         children: [
           {
-            helpText:
-              "Triggers an action when the map chart data point is clicked",
+            helpText: "when the map chart data point is clicked",
             propertyName: "onDataPointClick",
             label: "onDataPointClick",
             controlType: "ACTION_SELECTOR",
             isJSConvertible: true,
             isBindProperty: true,
             isTriggerProperty: true,
+            additionalAutoComplete: () => ({
+              selectedDataPoint: {
+                value: 1.1,
+                label: "",
+                shortLabel: "",
+                originalId: "",
+                id: "",
+              },
+            }),
           },
         ],
       },
@@ -293,11 +418,11 @@ class MapChartWidget extends BaseWidget<MapChartWidgetProps, WidgetState> {
         ],
       },
       {
-        sectionName: "Border and Shadow",
+        sectionName: "Border and shadow",
         children: [
           {
             propertyName: "borderRadius",
-            label: "Border Radius",
+            label: "Border radius",
             helpText:
               "Rounds the corners of the icon button's outer border edge",
             controlType: "BORDER_RADIUS_OPTIONS",
@@ -308,7 +433,7 @@ class MapChartWidget extends BaseWidget<MapChartWidgetProps, WidgetState> {
           },
           {
             propertyName: "boxShadow",
-            label: "Box Shadow",
+            label: "Box shadow",
             helpText:
               "Enables you to cast a drop shadow from the frame of the widget",
             controlType: "BOX_SHADOW_OPTIONS",
@@ -322,14 +447,12 @@ class MapChartWidget extends BaseWidget<MapChartWidgetProps, WidgetState> {
     ];
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       selectedDataPoint: undefined,
     };
-  }
-
-  static getWidgetType(): WidgetType {
-    return "MAP_CHART_WIDGET";
   }
 
   static getStylesheetConfig(): Stylesheet {
@@ -340,41 +463,55 @@ class MapChartWidget extends BaseWidget<MapChartWidgetProps, WidgetState> {
     };
   }
 
-  handleDataPointClick = (evt: any) => {
+  static getMethods() {
+    return {
+      getEditorCallouts(): WidgetCallout[] {
+        return [
+          {
+            message:
+              "Map chart widget switched from using Fusion chart library to Echarts. Please verify that the chart is displaying properly",
+          },
+        ];
+      },
+    };
+  }
+
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleDataPointClick = (data: any) => {
     const { onDataPointClick } = this.props;
 
-    this.props.updateWidgetMetaProperty("selectedDataPoint", evt.data, {
+    this.props.updateWidgetMetaProperty("selectedDataPoint", data, {
       triggerPropertyName: "onDataPointClick",
       dynamicString: onDataPointClick,
       event: {
         type: EventType.ON_DATA_POINT_CLICK,
       },
+      globalContext: {
+        selectedDataPoint: data,
+      },
     });
   };
 
-  getPageView() {
-    const {
-      colorRange,
-      data,
-      isVisible,
-      mapTitle,
-      mapType,
-      showLabels,
-    } = this.props;
+  getWidgetView() {
+    const { colorRange, data, isVisible, mapTitle, mapType, showLabels } =
+      this.props;
 
     return (
       <Suspense fallback={<Skeleton />}>
         <MapChartComponent
           borderRadius={this.props.borderRadius}
           boxShadow={this.props.boxShadow}
-          caption={mapTitle}
+          caption={mapTitle || ""}
           colorRange={colorRange}
           data={data}
           fontFamily={this.props.fontFamily ?? "Nunito Sans"}
+          height={this.props.componentHeight}
           isVisible={isVisible}
           onDataPointClick={this.handleDataPointClick}
           showLabels={showLabels}
           type={mapType}
+          width={this.props.componentWidth}
         />
       </Suspense>
     );

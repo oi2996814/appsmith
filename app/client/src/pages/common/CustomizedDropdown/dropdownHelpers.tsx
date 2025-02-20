@@ -1,6 +1,7 @@
 import store from "store";
 import { IconNames } from "@blueprintjs/icons";
-import { Direction, Directions } from "utils/helpers";
+import type { Direction } from "utils/helpers";
+import { Directions } from "utils/helpers";
 import { PopoverPosition } from "@blueprintjs/core";
 import history from "utils/history";
 import log from "loglevel";
@@ -10,11 +11,14 @@ export const DropdownOnSelectActions: { [id: string]: string } = {
   DISPATCH: "dispatch",
 };
 
-type DropdownOnSelectActionType = typeof DropdownOnSelectActions[keyof typeof DropdownOnSelectActions];
+type DropdownOnSelectActionType =
+  (typeof DropdownOnSelectActions)[keyof typeof DropdownOnSelectActions];
 
 // TODO(abhinav): Figure out how to enforce payload type.
 export const getOnSelectAction = (
   type: DropdownOnSelectActionType,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload: any,
 ) => {
   switch (type) {
@@ -25,6 +29,7 @@ export const getOnSelectAction = (
       if (history.location.pathname !== payload.path) {
         history.push(payload.path);
       }
+
       break;
     default:
       log.error("No such action registered", type);

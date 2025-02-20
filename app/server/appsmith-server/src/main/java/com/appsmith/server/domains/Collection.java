@@ -20,14 +20,10 @@ public class Collection extends BaseDomain {
 
     String applicationId;
 
-    //Organizations migrated to workspaces, kept the field as depricated to support the old migration
-    @Deprecated
-    String organizationId;
-
     String workspaceId;
 
     Boolean shared;
 
-    //To save space, when creating/updating collection, only add Action's id field instead of the entire action.
+    // To save space, when creating/updating collection, only add Action's id field instead of the entire action.
     List<NewAction> actions;
 }

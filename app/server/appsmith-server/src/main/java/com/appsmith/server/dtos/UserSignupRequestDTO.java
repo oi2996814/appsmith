@@ -19,12 +19,11 @@ public class UserSignupRequestDTO {
 
     private String password;
 
-    private String role;
+    private String proficiency;
 
     private String useCase;
 
     private boolean allowCollectingAnonymousData;
 
     private boolean signupForNewsletter;
-
 }

@@ -63,6 +63,7 @@ export default {
       "__primaryKey__",
       ...nonDataColumnAliases,
     ];
+
     return _.omit(selectedRow, keysToBeOmitted);
   },
   //
@@ -95,6 +96,7 @@ export default {
      */
     if (index > -1) {
       const row = rows.find((row) => row.__originalIndex__ === index);
+
       triggeredRow = { ...row };
     } else {
       /*
@@ -112,6 +114,7 @@ export default {
       "__primaryKey__",
       ...nonDataColumnAliases,
     ];
+
     return _.omit(triggeredRow, keysToBeOmitted);
   },
   //
@@ -147,6 +150,7 @@ export default {
       "__primaryKey__",
       ...nonDataColumnAliases,
     ];
+
     return indices.map((index) => _.omit(rows[index], keysToBeOmitted));
   },
   //
@@ -178,8 +182,7 @@ export default {
       },
     };
     const compactMode = props.compactMode || "DEFAULT";
-    const componentHeight =
-      (props.bottomRow - props.topRow) * props.parentRowSpace - 10;
+    const componentHeight = props.componentHeight - 10;
     const tableSizes = TABLE_SIZES[compactMode];
 
     let pageSize =
@@ -188,7 +191,9 @@ export default {
         tableSizes.COLUMN_HEADER_HEIGHT) /
       tableSizes.ROW_HEIGHT;
 
-    return pageSize % 1 > 0.3 ? Math.ceil(pageSize) : Math.floor(pageSize);
+    return pageSize % 1 > 0.3 && props.tableData.length > pageSize
+      ? Math.ceil(pageSize)
+      : Math.floor(pageSize);
   },
   //
   getProcessedTableData: (props, moment, _) => {
@@ -245,12 +250,15 @@ export default {
 
     const sortByColumn = props.sortOrder && props.sortOrder.column;
     const isAscOrder = props.sortOrder && props.sortOrder.order === "asc";
+
     /* set sorting flags and convert the existing columns into an array */
     Object.values(existingColumns).forEach((column) => {
       /* guard to not allow columns without id */
       if (column.id) {
-        column.isAscOrder = column.id === sortByColumn ? isAscOrder : undefined;
-        columns.push(column);
+        columns.push({
+          ...column,
+          isAscOrder: column.id === sortByColumn ? isAscOrder : undefined,
+        });
       }
     });
 
@@ -272,6 +280,49 @@ export default {
     if (!processedTableData || !processedTableData.length) {
       return [];
     }
+
+    const getTextFromHTML = (html) => {
+      if (!html) return "";
+
+      if (typeof html === "object") {
+        html = JSON.stringify(html);
+      }
+
+      try {
+        const tempDiv = document.createElement("div");
+
+        tempDiv.innerHTML = html;
+
+        return tempDiv.textContent || tempDiv.innerText || "";
+      } catch (e) {
+        return "";
+      }
+    };
+
+    /**
+     * Since getTextFromHTML is an expensive operation, we need to avoid calling it unnecessarily
+     * This optimization ensures that getTextFromHTML is only called when required
+     */
+    const columnsWithHTML = Object.values(props.primaryColumns).filter(
+      (column) => column.columnType === "html",
+    );
+    const htmlColumnAliases = new Set(
+      columnsWithHTML.map((column) => column.alias),
+    );
+
+    const isFilteringByColumnThatHasHTML = props.filters?.some((filter) =>
+      htmlColumnAliases.has(filter.column),
+    );
+    const isSortingByColumnThatHasHTML =
+      props.sortOrder?.column && htmlColumnAliases.has(props.sortOrder.column);
+
+    const shouldExtractHTMLText = !!(
+      props.searchText ||
+      isFilteringByColumnThatHasHTML ||
+      isSortingByColumnThatHasHTML
+    );
+    const getKeyForExtractedTextFromHTML = (columnAlias) =>
+      `__htmlExtractedText_${columnAlias}__`;
 
     /* extend processedTableData with values from
      *  - computedValues, in case of normal column
@@ -307,6 +358,12 @@ export default {
             ...processedTableData[index],
             [column.alias]: computedValue,
           };
+
+          if (shouldExtractHTMLText && column.columnType === "html") {
+            processedTableData[index][
+              getKeyForExtractedTextFromHTML(column.alias)
+            ] = getTextFromHTML(computedValue);
+          }
         });
       });
     }
@@ -315,18 +372,110 @@ export default {
     const sortByColumnId = props.sortOrder.column;
 
     let sortedTableData;
+    /* 
+    Check if there are select columns, 
+    and if the columns are sorting by label instead of default value 
+    */
+    const selectColumnKeysWithSortByLabel = [];
+
+    Object.entries(primaryColumns).forEach(([id, column]) => {
+      const isColumnSortedByLabel =
+        column?.columnType === "select" &&
+        column?.sortBy === "label" &&
+        column?.selectOptions?.length;
+
+      if (isColumnSortedByLabel) {
+        selectColumnKeysWithSortByLabel.push(id);
+      }
+    });
+
+    /* 
+    If there are select columns, 
+    transform the specific columns data to show the label instead of the value for sorting 
+    */
+    let processedTableDataWithLabelInsteadOfValue;
+
+    if (selectColumnKeysWithSortByLabel.length) {
+      const transformedValueToLabelTableData = processedTableData.map((row) => {
+        const newRow = { ...row };
+
+        selectColumnKeysWithSortByLabel.forEach((key) => {
+          const value = row[key];
+          const isSelectOptionsAnArray = _.isArray(
+            primaryColumns[key].selectOptions,
+          );
+
+          let selectOptions;
+
+          /*
+           * If selectOptions is an array, check if it contains nested arrays.
+           * This is to handle situations where selectOptons is a javascript object and computes as a nested array.
+           */
+          if (isSelectOptionsAnArray) {
+            if (_.some(primaryColumns[key].selectOptions, _.isArray)) {
+              /* Handle the case where selectOptions contains nested arrays - selectOptions is javascript */
+              selectOptions =
+                primaryColumns[key].selectOptions[row.__originalIndex__];
+              const option = selectOptions.find((option) => {
+                return option.value === value;
+              });
+
+              if (option) {
+                newRow[key] = option.label;
+              }
+            } else {
+              /* Handle the case where selectOptions is a flat array - selectOptions is plain JSON */
+              selectOptions = primaryColumns[key].selectOptions;
+              const option = selectOptions.find(
+                (option) => option.value === value,
+              );
+
+              if (option) {
+                newRow[key] = option.label;
+              }
+            }
+          } else {
+            /* If selectOptions is not an array, parse it as JSON - not evaluated yet, so returns as string */
+            selectOptions = JSON.parse(primaryColumns[key].selectOptions);
+            const option = selectOptions.find(
+              (option) => option.value === value,
+            );
+
+            if (option) {
+              newRow[key] = option.label;
+            }
+          }
+        });
+
+        return newRow;
+      });
+
+      processedTableDataWithLabelInsteadOfValue =
+        transformedValueToLabelTableData;
+    }
 
     if (sortByColumnId) {
       const sortBycolumn = columns.find(
         (column) => column.id === sortByColumnId,
       );
-      const sortByColumnOriginalId = sortBycolumn.originalId;
+      const sortByColumnOriginalId = sortBycolumn.alias;
 
       const columnType =
         sortBycolumn && sortBycolumn.columnType
           ? sortBycolumn.columnType
           : "text";
-      const inputFormat = sortBycolumn.inputFormat;
+
+      let inputFormat = (() => {
+        switch (sortBycolumn.inputFormat) {
+          case "Epoch":
+            return "X";
+          case "Milliseconds":
+            return "x";
+          default:
+            return sortBycolumn.inputFormat;
+        }
+      })();
+
       const isEmptyOrNil = (value) => {
         return _.isNil(value) || value === "";
       };
@@ -339,35 +488,92 @@ export default {
         }
       };
 
-      sortedTableData = processedTableData.sort((a, b) => {
+      const transformedTableDataForSorting =
+        selectColumnKeysWithSortByLabel.length
+          ? processedTableDataWithLabelInsteadOfValue
+          : processedTableData;
+
+      sortedTableData = transformedTableDataForSorting.sort((a, b) => {
         if (_.isPlainObject(a) && _.isPlainObject(b)) {
+          let [processedA, processedB] = [a, b];
+
+          if (!selectColumnKeysWithSortByLabel.length) {
+            const originalA = (props.tableData ??
+              transformedTableDataForSorting)[a.__originalIndex__];
+            const originalB = (props.tableData ??
+              transformedTableDataForSorting)[b.__originalIndex__];
+
+            [processedA, processedB] = [
+              { ...a, ...originalA },
+              { ...b, ...originalB },
+            ];
+          }
+
           if (
-            isEmptyOrNil(a[sortByColumnOriginalId]) ||
-            isEmptyOrNil(b[sortByColumnOriginalId])
+            isEmptyOrNil(processedA[sortByColumnOriginalId]) ||
+            isEmptyOrNil(processedB[sortByColumnOriginalId])
           ) {
             /* push null, undefined and "" values to the bottom. */
-            return isEmptyOrNil(a[sortByColumnOriginalId]) ? 1 : -1;
+            return isEmptyOrNil(processedA[sortByColumnOriginalId]) ? 1 : -1;
           } else {
             switch (columnType) {
               case "number":
+              case "currency":
                 return sortByOrder(
-                  Number(a[sortByColumnOriginalId]) >
-                    Number(b[sortByColumnOriginalId]),
+                  Number(processedA[sortByColumnOriginalId]) >
+                    Number(processedB[sortByColumnOriginalId]),
                 );
               case "date":
                 try {
                   return sortByOrder(
-                    moment(a[sortByColumnOriginalId], inputFormat).isAfter(
-                      moment(b[sortByColumnOriginalId], inputFormat),
+                    moment(
+                      processedA[sortByColumnOriginalId],
+                      inputFormat,
+                    ).isAfter(
+                      moment(processedB[sortByColumnOriginalId], inputFormat),
                     ),
                   );
                 } catch (e) {
                   return -1;
                 }
+              case "url":
+                const column = primaryColumns[sortByColumnOriginalId];
+
+                if (column && column.displayText) {
+                  if (_.isString(column.displayText)) {
+                    return sortByOrder(false);
+                  } else if (_.isArray(column.displayText)) {
+                    return sortByOrder(
+                      column.displayText[a.__originalIndex__]
+                        .toString()
+                        .toLowerCase() >
+                        column.displayText[b.__originalIndex__]
+                          .toString()
+                          .toLowerCase(),
+                    );
+                  }
+                }
+              case "html": {
+                const htmlExtractedTextA =
+                  processedA[
+                    getKeyForExtractedTextFromHTML(sortByColumnOriginalId)
+                  ];
+                const htmlExtractedTextB =
+                  processedB[
+                    getKeyForExtractedTextFromHTML(sortByColumnOriginalId)
+                  ];
+
+                return sortByOrder(
+                  (htmlExtractedTextA ??
+                    getTextFromHTML(processedA[sortByColumnOriginalId])) >
+                    (htmlExtractedTextB ??
+                      getTextFromHTML(processedB[sortByColumnOriginalId])),
+                );
+              }
               default:
                 return sortByOrder(
-                  a[sortByColumnOriginalId].toString().toLowerCase() >
-                    b[sortByColumnOriginalId].toString().toLowerCase(),
+                  processedA[sortByColumnOriginalId].toString().toLowerCase() >
+                    processedB[sortByColumnOriginalId].toString().toLowerCase(),
                 );
             }
           }
@@ -375,6 +581,68 @@ export default {
           return isAscOrder ? 1 : 0;
         }
       });
+
+      /*
+       * When sorting is done, transform the data back to its original state
+       * where table data shows value instead of label
+       */
+      if (selectColumnKeysWithSortByLabel.length) {
+        const transformedLabelToValueData = sortedTableData.map((row) => {
+          const newRow = { ...row };
+
+          selectColumnKeysWithSortByLabel.forEach((key) => {
+            const label = row[key];
+            const isSelectOptionsAnArray = _.isArray(
+              primaryColumns[key].selectOptions,
+            );
+
+            let selectOptions;
+
+            /*
+             * If selectOptions is an array, check if it contains nested arrays.
+             * This is to handle situations where selectOptons is a javascript object and computes as a nested array.
+             */
+            if (isSelectOptionsAnArray) {
+              if (_.some(primaryColumns[key].selectOptions, _.isArray)) {
+                /* Handle the case where selectOptions contains nested arrays - selectOptions is javascript */
+                selectOptions =
+                  primaryColumns[key].selectOptions[row.__originalIndex__];
+                const option = selectOptions.find((option) => {
+                  return option.label === label;
+                });
+
+                if (option) {
+                  newRow[key] = option.value;
+                }
+              } else {
+                /* Handle the case where selectOptions is a flat array - selectOptions is plain JSON */
+                selectOptions = primaryColumns[key].selectOptions;
+                const option = selectOptions.find(
+                  (option) => option.label === label,
+                );
+
+                if (option) {
+                  newRow[key] = option.value;
+                }
+              }
+            } else {
+              /* If selectOptions is not an array, parse it as JSON - not evaluated yet, so returns as string */
+              selectOptions = JSON.parse(primaryColumns[key].selectOptions);
+              const option = selectOptions.find(
+                (option) => option.label === label,
+              );
+
+              if (option) {
+                newRow[key] = option.value;
+              }
+            }
+          });
+
+          return newRow;
+        });
+
+        sortedTableData = transformedLabelToValueData;
+      }
     } else {
       sortedTableData = [...processedTableData];
     }
@@ -431,10 +699,7 @@ export default {
       startsWith: (a, b) => {
         try {
           return (
-            a
-              .toString()
-              .toLowerCase()
-              .indexOf(b.toString().toLowerCase()) === 0
+            a.toString().toLowerCase().indexOf(b.toString().toLowerCase()) === 0
           );
         } catch (e) {
           return false;
@@ -444,6 +709,7 @@ export default {
         try {
           const _a = a.toString().toLowerCase();
           const _b = b.toString().toLowerCase();
+
           return (
             _a.lastIndexOf(_b) >= 0 &&
             _a.length === _a.lastIndexOf(_b) + _b.length
@@ -493,36 +759,189 @@ export default {
 
     const finalTableData = sortedTableData.filter((row) => {
       let isSearchKeyFound = true;
+      const originalRow = (props.tableData ?? sortedTableData)[
+        row.__originalIndex__
+      ];
+      const columnWithDisplayText = Object.values(props.primaryColumns).filter(
+        (column) => column.columnType === "url" && column.displayText,
+      );
+
+      /*
+       * For select columns with label and values, we need to include the label value
+       * in the search and filter data
+       */
+      let labelValuesForSelectCell = {};
+      /*
+       * Initialize an array to store keys for columns that have the 'select' column type
+       * and contain selectOptions.
+       */
+      const selectColumnKeys = [];
+
+      /*
+       * Iterate over the primary columns to identify which columns are of type 'select'
+       * and have selectOptions. These keys are pushed into the selectColumnKeys array.
+       */
+      Object.entries(props.primaryColumns).forEach(([id, column]) => {
+        const isColumnSelectColumnType =
+          column?.columnType === "select" && column?.selectOptions?.length;
+
+        if (isColumnSelectColumnType) {
+          selectColumnKeys.push(id);
+        }
+      });
+
+      /*
+       * If there are any select columns, iterate over them to find the label value
+       * associated with the selected value in each row.
+       */
+      if (selectColumnKeys.length) {
+        selectColumnKeys.forEach((key) => {
+          const value = row[key];
+
+          const isSelectOptionsAnArray = _.isArray(
+            primaryColumns[key].selectOptions,
+          );
+
+          let selectOptions = {};
+
+          /*
+           * If selectOptions is an array, check if it contains nested arrays.
+           * This is to handle situations where selectOptons is a javascript object and computes as a nested array.
+           */
+          if (isSelectOptionsAnArray) {
+            const selectOptionKey = primaryColumns[key].alias;
+
+            if (_.some(primaryColumns[key].selectOptions, _.isArray)) {
+              /* Handle the case where selectOptions contains nested arrays - selectOptions is javascript */
+              selectOptions =
+                primaryColumns[key].selectOptions[row.__originalIndex__];
+              const option = selectOptions.find((option) => {
+                return option.value === value;
+              });
+
+              if (option) {
+                labelValuesForSelectCell[selectOptionKey] = option.label;
+              }
+            } else {
+              /* Handle the case where selectOptions is a flat array - selectOptions is plain JSON */
+              selectOptions = primaryColumns[key].selectOptions;
+              const option = selectOptions.find(
+                (option) => option.value === value,
+              );
+
+              if (option) {
+                labelValuesForSelectCell[selectOptionKey] = option.label;
+              }
+            }
+          } else {
+            /* If selectOptions is not an array, parse it as JSON - not evaluated yet, so returns as string */
+            selectOptions = JSON.parse(primaryColumns[key].selectOptions);
+            const option = selectOptions.find(
+              (option) => option.value === value,
+            );
+
+            if (option) {
+              labelValuesForSelectCell[selectOptionKey] = option.label;
+            }
+          }
+        });
+      }
+
+      const displayTextValues = columnWithDisplayText.reduce((acc, column) => {
+        let displayText;
+
+        if (_.isArray(column.displayText)) {
+          displayText = column.displayText[row.__originalIndex__];
+        } else {
+          displayText = column.displayText;
+        }
+
+        acc[column.alias] = displayText;
+
+        return acc;
+      }, {});
+
+      let htmlValues = {};
+
+      /*
+       * We don't want html tags and inline styles to match in search
+       */
+      if (shouldExtractHTMLText) {
+        htmlValues = columnsWithHTML.reduce((acc, column) => {
+          const value = row[column.alias];
+
+          acc[column.alias] = _.isNil(value)
+            ? ""
+            : row[getKeyForExtractedTextFromHTML(column.alias)] ??
+              getTextFromHTML(value);
+
+          return acc;
+        }, {});
+      }
+
+      const displayedRow = {
+        ...row,
+        ...labelValuesForSelectCell,
+        ...displayTextValues,
+        ...htmlValues,
+      };
 
       if (searchKey) {
-        isSearchKeyFound = Object.values(_.omit(row, hiddenColumns))
+        const combinedRowContent = [
+          ...Object.values(_.omit(displayedRow, hiddenColumns)),
+          ...Object.values(
+            _.omit(originalRow, [...hiddenColumns, ...htmlColumnAliases]),
+          ),
+        ]
           .join(", ")
-          .toLowerCase()
-          .includes(searchKey);
+          .toLowerCase();
+
+        isSearchKeyFound = combinedRowContent.includes(searchKey);
       }
 
       if (!isSearchKeyFound) {
         return false;
       }
 
-      /* when there is no filter defined */
-      if (!props.filters || props.filters.length === 0) {
+      /* when there is no filter defined or when server side filtering is enabled prevent client-side filtering  */
+      if (
+        !props.filters ||
+        props.filters.length === 0 ||
+        props.enableServerSideFiltering
+      ) {
         return true;
       }
 
       const filterOperator =
         props.filters.length >= 2 ? props.filters[1].operator : "OR";
       let isSatisfyingFilters = filterOperator === "AND";
+
       for (let i = 0; i < props.filters.length; i++) {
         let filterResult = true;
+
         try {
           const conditionFunction =
             ConditionFunctions[props.filters[i].condition];
+
           if (conditionFunction) {
-            filterResult = conditionFunction(
-              row[props.filters[i].column],
-              props.filters[i].value,
-            );
+            /*
+             * We don't want html tags and inline styles to match in filter conditions
+             */
+            const isHTMLColumn = htmlColumnAliases.has(props.filters[i].column);
+            const originalColValue = isHTMLColumn
+              ? originalRow[
+                  getKeyForExtractedTextFromHTML(props.filters[i].column)
+                ] ?? getTextFromHTML(originalRow[props.filters[i].column])
+              : originalRow[props.filters[i].column];
+            const displayedColValue = isHTMLColumn
+              ? displayedRow[
+                  getKeyForExtractedTextFromHTML(props.filters[i].column)
+                ] ?? getTextFromHTML(displayedRow[props.filters[i].column])
+              : displayedRow[props.filters[i].column];
+
+            filterResult =
+              conditionFunction(originalColValue, props.filters[i].value) ||
+              conditionFunction(displayedColValue, props.filters[i].value);
           }
         } catch (e) {
           filterResult = false;
@@ -564,6 +983,7 @@ export default {
 
     if (index > -1) {
       const row = rows.find((row) => row.__originalIndex__ === index);
+
       updatedRow = { ...row };
     } else {
       /*
@@ -571,6 +991,7 @@ export default {
        *  have proper row structure with empty string values
        */
       updatedRow = {};
+
       if (rows && rows[0]) {
         Object.keys(rows[0]).forEach((key) => {
           updatedRow[key] = "";
@@ -595,6 +1016,7 @@ export default {
       "__primaryKey__",
       ...nonDataColumnAliases,
     ];
+
     return _.omit(updatedRow, keysToBeOmitted);
   },
   //
@@ -683,10 +1105,7 @@ export default {
   },
   //
   getPageOffset: (props, moment, _) => {
-    const pageSize =
-      props.serverSidePaginationEnabled && props.tableData
-        ? props.tableData?.length
-        : props.pageSize;
+    const pageSize = props.pageSize;
 
     if (
       Number.isFinite(props.pageNo) &&
@@ -697,12 +1116,13 @@ export default {
       /* Math.max fixes the value of (pageNo - 1) to a minimum of 0 as negative values are not valid */
       return Math.max(props.pageNo - 1, 0) * pageSize;
     }
+
     return 0;
   },
   //
   getEditableCellValidity: (props, moment, _) => {
     if (
-      (!props.editableCell.column && !props.isAddRowInProgress) ||
+      (!props.editableCell?.column && !props.isAddRowInProgress) ||
       !props.primaryColumns
     ) {
       return {};
@@ -743,7 +1163,7 @@ export default {
     };
 
     let editableColumns = [];
-    const validatableColumns = ["text", "number"];
+    const validatableColumns = ["text", "number", "currency", "date", "select"];
 
     if (props.isAddRowInProgress) {
       Object.values(props.primaryColumns)
@@ -756,11 +1176,11 @@ export default {
         });
     } else {
       const editedColumn = Object.values(props.primaryColumns).find(
-        (column) => column.alias === props.editableCell.column,
+        (column) => column.alias === props.editableCell?.column,
       );
 
       if (validatableColumns.includes(editedColumn.columnType)) {
-        editableColumns.push([editedColumn, props.editableCell.value]);
+        editableColumns.push([editedColumn, props.editableCell?.value]);
       }
     }
 
@@ -779,6 +1199,7 @@ export default {
           (value === "" || _.isNil(value))
         ) {
           validationMap[editedColumn.alias] = true;
+
           return;
         } else if (
           (!_.isNil(validation.isColumnEditableCellValid) &&
@@ -788,18 +1209,21 @@ export default {
             (value === "" || _.isNil(value)))
         ) {
           validationMap[editedColumn.alias] = false;
+
           return;
         }
 
         /* Column type related validations */
         switch (editedColumn.columnType) {
           case "number":
+          case "currency":
             if (
               !_.isNil(validation.min) &&
               validation.min !== "" &&
               validation.min > value
             ) {
               validationMap[editedColumn.alias] = false;
+
               return;
             }
 
@@ -809,8 +1233,10 @@ export default {
               validation.max < value
             ) {
               validationMap[editedColumn.alias] = false;
+
               return;
             }
+
             break;
         }
       }
@@ -825,6 +1251,7 @@ export default {
     const columns = props.primaryColumns
       ? Object.values(props.primaryColumns)
       : [];
+
     return columns
       .sort((a, b) => a.index - b.index)
       .map((column) => ({

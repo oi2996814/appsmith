@@ -13,6 +13,7 @@ let locale = "en-US";
 
 jest.mock("utils/helpers", () => {
   const originalModule = jest.requireActual("utils/helpers");
+
   return {
     __esModule: true,
     ...originalModule,
@@ -31,6 +32,8 @@ describe("Utilities - ", () => {
     ].forEach((d) => {
       expect(countryToFlag(d[0])).toBe(d[1]);
     });
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     String.fromCodePoint = undefined as any;
     [
       ["IN", "IN"],
@@ -88,7 +91,6 @@ describe("Utilities - ", () => {
     [
       [0, "123.12", "123"],
       [1, "123.12", "123.1"],
-      [2, "123.12", "123.12"],
       [2, "123456.12", "123456.12"],
       [1, "123456.12", "123456.1"],
       [0, "123456.12", "123456"],
@@ -98,6 +100,18 @@ describe("Utilities - ", () => {
       [2, "0.22123123", "0.22"],
       [1, "0.22123123", "0.2"],
       [0, "0.22123123", "0"],
+      [3, "123.12345", "123.123"],
+      [4, "123.12345", "123.1234"],
+      [5, "123.12345", "123.12345"],
+      [6, "123.12345", "123.12345"],
+      [3, "0.123456", "0.123"],
+      [4, "0.123456", "0.1234"],
+      [5, "0.123456", "0.12345"],
+      [6, "0.123456", "0.123456"],
+      [3, "123456.123456", "123456.123"],
+      [4, "123456.123456", "123456.1234"],
+      [5, "123456.123456", "123456.12345"],
+      [6, "123456.12345678", "123456.123456"],
     ].forEach((d) => {
       expect(limitDecimalValue(d[0] as number, d[1] as string)).toBe(d[2]);
     });

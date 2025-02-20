@@ -26,14 +26,17 @@ describe("sourceDataArrayValidation", () => {
 
     const result = sourceDataArrayValidation(
       mockSourceData,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       undefined as any,
       _,
     );
     const expected = {
       isValid: true,
       parsed: mockSourceData,
-      messages: [""],
+      messages: [{ name: "", message: "" }],
     };
+
     expect(result).toStrictEqual(expected);
   });
 
@@ -49,14 +52,22 @@ describe("sourceDataArrayValidation", () => {
 
     const result = sourceDataArrayValidation(
       mockSourceData,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       undefined as any,
       _,
     );
     const expected = {
       isValid: false,
       parsed: [],
-      messages: ["Source data cannot have more than 10 items"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "Source data cannot have more than 10 items",
+        },
+      ],
     };
+
     expect(result).toStrictEqual(expected);
   });
 
@@ -70,14 +81,22 @@ describe("sourceDataArrayValidation", () => {
 
     const result = sourceDataArrayValidation(
       mockSourceData,
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       undefined as any,
       _,
     );
     const expected = {
       isValid: false,
       parsed: [],
-      messages: ["This value does not evaluate to type Array"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value does not evaluate to type Array",
+        },
+      ],
     };
+
     expect(result).toStrictEqual(expected);
   });
 });

@@ -1,17 +1,20 @@
 import * as Sentry from "@sentry/react";
 import { set } from "lodash";
-import { ControllerProps, useFormContext } from "react-hook-form";
+import type { ControllerProps } from "react-hook-form";
+import { useFormContext } from "react-hook-form";
 import { useContext, useEffect } from "react";
-import { klona } from "klona";
 
 import FormContext from "../FormContext";
-import { FieldType } from "../constants";
+import type { FieldType } from "../constants";
+import { startAndEndSpanForFn } from "instrumentation/generateTraces";
+import { klonaRegularWithTelemetry } from "utils/helpers";
 
-export type UseRegisterFieldValidityProps = {
+export interface UseRegisterFieldValidityProps {
   isValid: boolean;
   fieldName: ControllerProps["name"];
   fieldType: FieldType;
-};
+}
+
 /**
  * This hook is used to register the isValid property of the field
  * the meta property "fieldState".
@@ -21,8 +24,9 @@ function useRegisterFieldValidity({
   fieldType,
   isValid,
 }: UseRegisterFieldValidityProps) {
-  const { clearErrors, setError } = useFormContext();
+  const { clearErrors, getFieldState, setError } = useFormContext();
   const { setMetaInternalFieldState } = useContext(FormContext);
+  const { error } = getFieldState(fieldName);
 
   useEffect(() => {
     /**
@@ -32,19 +36,35 @@ function useRegisterFieldValidity({
      */
     setTimeout(() => {
       try {
-        isValid
-          ? clearErrors(fieldName)
-          : setError(fieldName, {
-              type: fieldType,
-              message: "Invalid field",
+        if (isValid) {
+          if (error) {
+            startAndEndSpanForFn("JSONFormWidget.clearErrors", {}, () => {
+              clearErrors(fieldName);
             });
+          }
+        } else {
+          if (!error) {
+            startAndEndSpanForFn("JSONFormWidget.setError", {}, () => {
+              setError(fieldName, {
+                type: fieldType,
+                message: "Invalid field",
+              });
+            });
+          }
+        }
       } catch (e) {
         Sentry.captureException(e);
       }
     }, 0);
+  }, [isValid, fieldName, fieldType, error, clearErrors, setError]);
 
+  useEffect(() => {
     setMetaInternalFieldState((prevState) => {
-      const metaInternalFieldState = klona(prevState.metaInternalFieldState);
+      const metaInternalFieldState = klonaRegularWithTelemetry(
+        prevState.metaInternalFieldState,
+        "useRegisterFieldValidity.setMetaInternalFieldState",
+      );
+
       set(metaInternalFieldState, `${fieldName}.isValid`, isValid);
 
       return {
@@ -52,7 +72,7 @@ function useRegisterFieldValidity({
         metaInternalFieldState,
       };
     });
-  }, [isValid, fieldName, fieldType]);
+  }, [fieldName, isValid, setMetaInternalFieldState]);
 }
 
 export default useRegisterFieldValidity;

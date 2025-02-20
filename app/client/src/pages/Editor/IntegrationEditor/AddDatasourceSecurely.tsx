@@ -1,61 +1,53 @@
 import React from "react";
 import styled from "styled-components";
-import Secure from "assets/images/secure.svg";
-import AppsmithDatasource from "assets/images/appsmith-datasource.svg";
-import { Colors } from "constants/Colors";
+import { Button, Flex, Text } from "@appsmith/ads";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
+import { ASSETS_CDN_URL } from "constants/ThirdPartyConstants";
+import { CalloutCloseClassName } from "@appsmith/ads/src/Callout/Callout.constants";
+import { createMessage, DATASOURCE_SECURE_TEXT } from "ee/constants/messages";
 
-const Wrapper = styled.div`
-  border: 2px solid #d6d6d6;
-  padding: 23px;
-  flex-direction: row;
-  display: flex;
-  justify-content: space-between;
+const StyledCalloutWrapper = styled(Flex)<{ isClosed: boolean }>`
+  ${(props) => (props.isClosed ? "display: none;" : "")}
+  background-color: var(--ads-v2-colors-response-info-surface-default-bg);
+  padding: var(--ads-spaces-3);
+  gap: var(--ads-spaces-3);
+  flex-grow: 1;
   align-items: center;
-
-  .datasource-img {
-    height: 108px;
+  .ads-v2-text {
+    flex-grow: 1;
   }
 `;
 
-const HeadWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  & > img {
-    margin-right: 10px;
-  }
-`;
-
-const Header = styled.div`
-  font-weight: 600;
-  font-size: 24px;
-  line-height: 32px;
-  color: ${Colors.OXFORD_BLUE};
-`;
-
-const Content = styled.p`
-  margin-top: 8px;
-  color: ${Colors.OXFORD_BLUE};
-  max-width: 360px;
-  font-size: 14px;
-  line-height: 20px;
+const SecureImg = styled.img`
+  height: 28px;
+  padding: var(--ads-v2-spaces-2);
 `;
 
 function AddDatasourceSecurely() {
+  const [isClosed, setClosed] = React.useState(false);
+
   return (
-    <Wrapper>
-      <div>
-        <HeadWrapper>
-          <img src={Secure} />
-          <Header>Secure & fast database connection</Header>
-        </HeadWrapper>
-        <Content>
-          Connect your database to start building read/write workflows. Your
-          Passwords are fully encrypted and we never store any of your data.
-          That’s a promise.
-        </Content>
-      </div>
-      <img className="datasource-img" src={AppsmithDatasource} />
-    </Wrapper>
+    <StyledCalloutWrapper isClosed={isClosed}>
+      <SecureImg
+        alt={"datasource securely"}
+        src={getAssetUrl(`${ASSETS_CDN_URL}/secure-lock.png`)}
+      />
+      <Text color="var(--ads-v2-color-gray-600)" kind="body-m">
+        {createMessage(DATASOURCE_SECURE_TEXT)}
+      </Text>
+      <Button
+        aria-label="Close"
+        aria-labelledby="Close"
+        className={CalloutCloseClassName}
+        isIconButton
+        kind="tertiary"
+        onClick={() => {
+          setClosed(true);
+        }}
+        size="sm"
+        startIcon="close-line"
+      />
+    </StyledCalloutWrapper>
   );
 }
 

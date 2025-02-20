@@ -1,5 +1,5 @@
 import React from "react";
-import { ColumnProperties } from "widgets/TableWidgetV2/component/Constants";
+import type { ColumnProperties } from "widgets/TableWidgetV2/component/Constants";
 import { isDynamicValue } from "utils/DynamicBindingUtils";
 import {
   ORIGINAL_INDEX_KEY,
@@ -7,13 +7,16 @@ import {
 } from "widgets/TableWidgetV2/constants";
 import TableInlineEditValidationControlProperty, {
   CurlyBraces,
+  StyledCode,
   InputText,
+  PromptMessage,
 } from "./TableInlineEditValidationControl";
 import { isString } from "lodash";
+import { JSToString, stringToJS } from "./utils";
 import {
-  JSToString,
-  stringToJS,
-} from "components/editorComponents/ActionCreator/utils";
+  createMessage,
+  TABLE_WIDGET_VALIDATION_ASSIST_PROMPT,
+} from "ee/constants/messages";
 
 const bindingPrefix = `{{
   (
@@ -25,7 +28,7 @@ const getBindingSuffix = (tableId: string, columnName: string) => {
     ))
     (
       (${tableId}.isAddRowInProgress ? ${tableId}.newRow.${columnName} : ${tableId}.columnEditableCellValue.${columnName}) || "",
-      ${tableId}.isAddRowInProgress ? ${tableId}.newRow : (${tableId}.processedTableData[${tableId}.editableCell.index] ||
+      ${tableId}.isAddRowInProgress ? ${tableId}.newRow : (${tableId}.processedTableData[${tableId}.editableCell.${ORIGINAL_INDEX_KEY}] ||
         Object.keys(${tableId}.processedTableData[0])
           .filter(key => ["${ORIGINAL_INDEX_KEY}", "${PRIMARY_COLUMN_KEY_VALUE}"].indexOf(key) === -1)
           .reduce((prev, curr) => {
@@ -38,6 +41,7 @@ const getBindingSuffix = (tableId: string, columnName: string) => {
   }}
   `;
 };
+
 class TableInlineEditValidPropertyControl extends TableInlineEditValidationControlProperty {
   render() {
     const {
@@ -57,10 +61,14 @@ class TableInlineEditValidPropertyControl extends TableInlineEditValidationContr
 
     const columns: Record<string, ColumnProperties> =
       widgetProperties.primaryColumns || {};
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const currentRow: { [key: string]: any } = {};
+
     Object.values(columns).forEach((column) => {
       currentRow[column.alias || column.originalId] = undefined;
     });
+
     // Load default value in evaluated value
     if (value && !propertyValue) {
       this.onTextChange(value);
@@ -81,11 +89,14 @@ class TableInlineEditValidPropertyControl extends TableInlineEditValidationContr
         label={label}
         onChange={this.onTextChange}
         promptMessage={
-          <>
-            Access the current cell using <CurlyBraces>{"{{"}</CurlyBraces>
-            currentRow.columnName
-            <CurlyBraces>{"}}"}</CurlyBraces>
-          </>
+          <PromptMessage>
+            {createMessage(TABLE_WIDGET_VALIDATION_ASSIST_PROMPT)}
+            <span className="code-wrapper">
+              <CurlyBraces>{"{{"}</CurlyBraces>
+              <StyledCode>currentRow.columnName</StyledCode>
+              <CurlyBraces>{"}}"}</CurlyBraces>
+            </span>
+          </PromptMessage>
         }
         theme={theme}
         value={value}

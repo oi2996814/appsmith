@@ -10,7 +10,7 @@ import {
   Classes as BClasses,
 } from "@blueprintjs/core";
 import { Classes, Popover2 } from "@blueprintjs/popover2";
-import { IconName } from "@blueprintjs/icons";
+import type { IconName } from "@blueprintjs/icons";
 import {
   getCustomBackgroundColor,
   getCustomBorderColor,
@@ -19,12 +19,13 @@ import {
   getComplementaryGrayscaleColor,
 } from "widgets/WidgetUtils";
 import { darkenActive, darkenHover } from "constants/DefaultTheme";
-import { ButtonVariant, ButtonVariantTypes } from "components/constants";
-import { MenuItems } from "../Constants";
+import type { ButtonVariant } from "components/constants";
+import { ButtonVariantTypes } from "components/constants";
+import type { MenuItems } from "../Constants";
 import tinycolor from "tinycolor2";
 import { Colors } from "constants/Colors";
 import orderBy from "lodash/orderBy";
-import { ThemeProp } from "widgets/constants";
+import type { ThemeProp } from "WidgetProvider/constants";
 
 const MenuButtonContainer = styled.div`
   width: 100%;
@@ -95,8 +96,8 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
         getCustomBackgroundColor(buttonVariant, buttonColor) !== "none"
           ? getCustomBackgroundColor(buttonVariant, buttonColor)
           : buttonVariant === ButtonVariantTypes.PRIMARY
-          ? theme.colors.button.primary.primary.bgColor
-          : "none"
+            ? theme.colors.button.primary.primary.bgColor
+            : "none"
       } !important;
     }
 
@@ -105,10 +106,10 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
         getCustomHoverColor(theme, buttonVariant, buttonColor) !== "none"
           ? getCustomHoverColor(theme, buttonVariant, buttonColor)
           : buttonVariant === ButtonVariantTypes.SECONDARY
-          ? theme.colors.button.primary.secondary.hoverColor
-          : buttonVariant === ButtonVariantTypes.TERTIARY
-          ? theme.colors.button.primary.tertiary.hoverColor
-          : theme.colors.button.primary.primary.hoverColor
+            ? theme.colors.button.primary.secondary.hoverColor
+            : buttonVariant === ButtonVariantTypes.TERTIARY
+              ? theme.colors.button.primary.tertiary.hoverColor
+              : theme.colors.button.primary.primary.hoverColor
       } !important;
     }
 
@@ -124,8 +125,8 @@ const BaseButton = styled(Button)<ThemeProp & BaseStyleProps>`
       getCustomBorderColor(buttonVariant, buttonColor) !== "none"
         ? `1px solid ${getCustomBorderColor(buttonVariant, buttonColor)}`
         : buttonVariant === ButtonVariantTypes.SECONDARY
-        ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
-        : "none"
+          ? `1px solid ${theme.colors.button.primary.secondary.borderColor}`
+          : "none"
     } !important;
 
     & > span {
@@ -209,6 +210,7 @@ function PopoverContent(props: PopoverContentProps) {
   const { isCompact, menuItems: itemsObj, onItemClicked } = props;
 
   if (!itemsObj) return <StyledMenu />;
+
   const visibleItems = Object.keys(itemsObj)
     .map((itemKey) => itemsObj[itemKey])
     .filter((item) => item.isVisible === true);
@@ -235,18 +237,14 @@ function PopoverContent(props: PopoverContentProps) {
         icon={
           iconAlign !== Alignment.RIGHT ? (
             <Icon color={iconColor} icon={iconName} />
-          ) : (
-            undefined
-          )
+          ) : undefined
         }
         isCompact={isCompact}
         key={id}
         labelElement={
           iconAlign === Alignment.RIGHT ? (
             <Icon color={iconColor} icon={iconName} />
-          ) : (
-            undefined
-          )
+          ) : undefined
         }
         onClick={() => onItemClicked(onClick)}
         text={label}

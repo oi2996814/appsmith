@@ -1,14 +1,14 @@
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { createSelector } from "reselect";
-import {
+import type {
   CrudInfoModalReduxState,
   GenerateCRUDSuccessInfoData,
 } from "reducers/uiReducers/crudInfoModalReducer";
 
-export type CrudInfoModalData = {
+export interface CrudInfoModalData {
   crudInfoModalOpen: boolean;
   generateCRUDSuccessInfo: GenerateCRUDSuccessInfoData | null;
-};
+}
 
 const getCrudInfoModalState = (state: AppState): CrudInfoModalReduxState =>
   state.ui.crudInfoModal;

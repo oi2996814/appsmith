@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Caption, Space, Title } from "../components/StyledComponents";
-import { Dropdown } from "design-system";
+import { Container, Space } from "../components/StyledComponents";
 
 import {
+  BRANCH_PROTECTION_PROTECTED,
   CANNOT_MERGE_DUE_TO_UNCOMMITTED_CHANGES,
   createMessage,
   FETCH_GIT_STATUS,
@@ -11,12 +11,11 @@ import {
   MERGE_CHANGES,
   MERGED_SUCCESSFULLY,
   SELECT_BRANCH_TO_MERGE,
-} from "@appsmith/constants/messages";
-import { ReactComponent as LeftArrow } from "assets/icons/ads/arrow-left-1.svg";
+} from "ee/constants/messages";
 
 import styled, { useTheme } from "styled-components";
 import { useDispatch, useSelector } from "react-redux";
-import { getCurrentAppGitMetaData } from "selectors/applicationSelectors";
+import { getCurrentAppGitMetaData } from "ee/selectors/applicationSelectors";
 import {
   getConflictFoundDocUrlMerge,
   getFetchingBranches,
@@ -27,11 +26,11 @@ import {
   getIsMergeInProgress,
   getMergeError,
   getMergeStatus,
+  getProtectedBranchesSelector,
 } from "selectors/gitSyncSelectors";
-import { DropdownOptions } from "../../GeneratePage/components/constants";
+import type { DropdownOptions } from "../../GeneratePage/components/constants";
 import {
   fetchBranchesInit,
-  fetchGitStatusInit,
   fetchMergeStatusInit,
   mergeBranchInit,
   resetMergeStatus,
@@ -44,18 +43,22 @@ import Statusbar, {
 import { getIsStartingWithRemoteBranches } from "pages/Editor/gitSync/utils";
 import { Classes } from "../constants";
 import SuccessTick from "pages/common/SuccessTick";
-import { Button, Case, Size, Text, TextType } from "design-system";
-import { Colors } from "constants/Colors";
-import AnalyticsUtil from "utils/AnalyticsUtil";
-import { Theme } from "constants/DefaultTheme";
+import {
+  Button,
+  Option,
+  Select,
+  Text,
+  Icon,
+  ModalFooter,
+  ModalBody,
+} from "@appsmith/ads";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import type { Theme } from "constants/DefaultTheme";
 
 const Row = styled.div`
   display: flex;
   align-items: center;
 `;
-
-const DEFAULT_OPTION = "--Select--";
-const DROPDOWNMENU_MAXHEIGHT = "350px";
 
 function MergeSuccessIndicator() {
   const theme = useTheme() as Theme;
@@ -64,11 +67,9 @@ function MergeSuccessIndicator() {
     <div style={{ display: "flex", alignItems: "center" }}>
       <SuccessTick height="36px" style={{ marginBottom: 0 }} width="30px" />
       <Text
-        case={Case.UPPERCASE}
-        color={Colors.GREY_9}
+        color={"var(--ads-v2-color-fg)"}
+        kind="heading-s"
         style={{ marginLeft: theme.spaces[2] }}
-        type={TextType.P1}
-        weight="600"
       >
         {createMessage(MERGED_SUCCESSFULLY)}
       </Text>
@@ -83,24 +84,26 @@ export default function Merge() {
   const isFetchingBranches = useSelector(getFetchingBranches);
   const isFetchingMergeStatus = useSelector(getIsFetchingMergeStatus);
   const mergeStatus = useSelector(getMergeStatus);
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gitStatus: any = useSelector(getGitStatus);
   const mergeError = useSelector(getMergeError);
   const isMergeAble = mergeStatus?.isMergeAble && gitStatus?.isClean;
   const isFetchingGitStatus = useSelector(getIsFetchingGitStatus);
+  const protectedBranches = useSelector(getProtectedBranchesSelector);
   let mergeStatusMessage = !gitStatus?.isClean
     ? createMessage(CANNOT_MERGE_DUE_TO_UNCOMMITTED_CHANGES)
     : mergeStatus?.message;
   // const pullFailed: any = useSelector(getPullFailed);
   const currentBranch = gitMetaData?.branchName;
   const isMerging = useSelector(getIsMergeInProgress);
-  const [showMergeSuccessIndicator, setShowMergeSuccessIndicator] = useState(
-    false,
-  );
+  const [showMergeSuccessIndicator, setShowMergeSuccessIndicator] =
+    useState(false);
 
-  const [selectedBranchOption, setSelectedBranchOption] = useState({
-    label: DEFAULT_OPTION,
-    value: DEFAULT_OPTION,
-  });
+  const [selectedBranchOption, setSelectedBranchOption] = useState<{
+    label: string;
+    value: string;
+  }>();
 
   /**
    * Removes the current branch from the list
@@ -109,8 +112,10 @@ export default function Merge() {
   const branchList = useMemo(() => {
     const branchOptions: DropdownOptions = [];
     let index = 0;
+
     while (true) {
       if (index === gitBranches.length) break;
+
       const branchObj = gitBranches[index];
 
       if (currentBranch !== branchObj.branchName) {
@@ -128,6 +133,7 @@ export default function Merge() {
       }
 
       const nextBranchObj = gitBranches[index + 1];
+
       if (
         getIsStartingWithRemoteBranches(
           branchObj.branchName,
@@ -138,10 +144,12 @@ export default function Merge() {
 
       index++;
     }
-    branchOptions.unshift({
-      label: "Local branches",
-      isSectionHeader: true,
-    });
+
+    // TODO add bellow header if dropdown supports section header
+    // branchOptions.unshift({
+    //   label: "Local branches",
+    //   isSectionHeader: true,
+    // });
     return branchOptions;
   }, [gitBranches]);
 
@@ -158,22 +166,23 @@ export default function Merge() {
     AnalyticsUtil.logEvent("GS_MERGE_CHANGES_BUTTON_CLICK", {
       source: "GIT_MERGE_MODAL",
     });
-    if (currentBranch && selectedBranchOption.value) {
+
+    if (currentBranch && selectedBranchOption?.value) {
       dispatch(
         mergeBranchInit({
           payload: {
             sourceBranch: currentBranch,
-            destinationBranch: selectedBranchOption.value,
+            destinationBranch: selectedBranchOption?.value,
           },
           onSuccessCallback: handleMergeSuccess,
         }),
       );
     }
-  }, [currentBranch, selectedBranchOption.value, dispatch]);
+  }, [currentBranch, selectedBranchOption?.value, dispatch]);
 
   useEffect(() => {
-    dispatch(fetchGitStatusInit());
     dispatch(fetchBranchesInit());
+
     return () => {
       dispatch(resetMergeStatus());
     };
@@ -181,27 +190,21 @@ export default function Merge() {
 
   useEffect(() => {
     // when user selects a branch to merge
-    if (
-      selectedBranchOption.value !== DEFAULT_OPTION &&
-      currentBranch &&
-      selectedBranchOption.value
-    ) {
+    if (currentBranch && selectedBranchOption?.value) {
       dispatch(
         fetchMergeStatusInit({
           sourceBranch: currentBranch,
-          destinationBranch: selectedBranchOption.value,
+          destinationBranch: selectedBranchOption?.value,
         }),
       );
       setShowMergeSuccessIndicator(false);
     }
-  }, [currentBranch, selectedBranchOption.value, dispatch]);
+  }, [currentBranch, selectedBranchOption?.value, dispatch]);
 
-  const mergeBtnDisabled =
-    DEFAULT_OPTION === selectedBranchOption.value ||
-    isFetchingMergeStatus ||
-    !isMergeAble;
+  const mergeBtnDisabled = isFetchingMergeStatus || !isMergeAble;
 
   let status = MERGE_STATUS_STATE.NONE;
+
   if (isFetchingGitStatus) {
     status = MERGE_STATUS_STATE.FETCHING;
     mergeStatusMessage = createMessage(FETCH_GIT_STATUS);
@@ -227,80 +230,102 @@ export default function Merge() {
 
   return (
     <>
-      <Title>{createMessage(MERGE_CHANGES)}</Title>
-      <Caption>{createMessage(SELECT_BRANCH_TO_MERGE)}</Caption>
-      <Space size={4} />
-      <Row>
-        <Dropdown
-          className={Classes.MERGE_DROPDOWN}
-          containerClassName={"t--merge-branch-dropdown-destination"}
-          disabled={isFetchingBranches || isFetchingMergeStatus || isMerging}
-          dropdownMaxHeight={DROPDOWNMENU_MAXHEIGHT}
-          enableSearch
-          fillOptions
-          hasError={status === MERGE_STATUS_STATE.NOT_MERGEABLE}
-          isLoading={isFetchingBranches}
-          onSelect={(value?: string) => {
-            if (value) setSelectedBranchOption({ label: value, value: value });
-          }}
-          options={branchList}
-          selected={selectedBranchOption}
-          showLabelOnly
-          truncateOption
-          width={"220px"}
-        />
+      <ModalBody>
+        <Container
+          style={{ minHeight: 360, overflow: "unset", paddingBottom: "4px" }}
+        >
+          <Text color={"var(--ads-v2-color-fg-emphasis)"} kind="heading-s">
+            {createMessage(SELECT_BRANCH_TO_MERGE)}
+          </Text>
+          <Space size={2} />
+          <Row style={{ overflow: "unset", paddingBottom: "4px" }}>
+            <Select
+              data-testid="t--merge-branch-dropdown-destination"
+              dropdownClassName={Classes.MERGE_DROPDOWN}
+              dropdownMatchSelectWidth
+              getPopupContainer={(triggerNode) => triggerNode.parentNode}
+              isDisabled={
+                isFetchingBranches || isFetchingMergeStatus || isMerging
+              }
+              isValid={status !== MERGE_STATUS_STATE.NOT_MERGEABLE}
+              onSelect={(value?: string) => {
+                if (value)
+                  setSelectedBranchOption({ label: value, value: value });
+              }}
+              showSearch
+              size="md"
+              value={selectedBranchOption}
+            >
+              {branchList.map((branch) => {
+                const isProtected = protectedBranches.includes(
+                  branch?.value ?? "",
+                );
 
-        <Space horizontal size={3} />
-        <LeftArrow />
-        <Space horizontal size={3} />
-        <Dropdown
-          className="textInput"
-          disabled
-          dropdownMaxHeight={DROPDOWNMENU_MAXHEIGHT}
-          onSelect={() => null}
-          options={[currentBranchDropdownOption]}
-          selected={currentBranchDropdownOption}
-          truncateOption
-          width={"220px"}
-        />
-      </Row>
-      <MergeStatus message={mergeStatusMessage} status={status} />
-      <Space size={10} />
-      {isConflicting && (
-        <ConflictInfo
-          browserSupportedRemoteUrl={
-            gitMetaData?.browserSupportedRemoteUrl || ""
-          }
-          learnMoreLink={gitConflictDocumentUrl}
-        />
-      )}
+                return (
+                  <Option disabled={isProtected} key={branch.value}>
+                    {branch.value}
+                    {isProtected
+                      ? ` (${createMessage(BRANCH_PROTECTION_PROTECTED)})`
+                      : ""}
+                  </Option>
+                );
+              })}
+            </Select>
 
-      {showMergeSuccessIndicator ? (
-        <MergeSuccessIndicator />
-      ) : (
-        showMergeButton && (
+            <Space horizontal size={3} />
+            <Icon
+              color={"var(--ads-v2-color-fg-subtle)"}
+              name="arrow-left-s-line"
+              size="lg"
+            />
+            <Space horizontal size={3} />
+            <Select
+              className="textInput"
+              isDisabled
+              options={[currentBranchDropdownOption]}
+              size="md"
+              value={currentBranchDropdownOption}
+            >
+              <Option>{currentBranchDropdownOption.label}</Option>
+            </Select>
+          </Row>
+          <MergeStatus message={mergeStatusMessage} status={status} />
+          <Space size={10} />
+          {isConflicting ? (
+            <ConflictInfo
+              browserSupportedRemoteUrl={
+                gitMetaData?.browserSupportedRemoteUrl || ""
+              }
+              learnMoreLink={gitConflictDocumentUrl}
+            />
+          ) : null}
+
+          {showMergeSuccessIndicator ? <MergeSuccessIndicator /> : null}
+          {isMerging ? (
+            <StatusbarWrapper>
+              <Statusbar
+                completed={!isMerging}
+                message={createMessage(IS_MERGING)}
+                period={6}
+              />
+            </StatusbarWrapper>
+          ) : null}
+        </Container>
+      </ModalBody>
+      <ModalFooter style={{ minHeight: 52 }}>
+        {!showMergeSuccessIndicator && showMergeButton ? (
           <Button
             className="t--git-merge-button"
             data-testid="t--git-merge-button"
-            disabled={mergeBtnDisabled}
+            isDisabled={mergeBtnDisabled}
             isLoading={isMerging}
             onClick={mergeHandler}
-            size={Size.large}
-            tag="button"
-            text={createMessage(MERGE_CHANGES)}
-            width="max-content"
-          />
-        )
-      )}
-      {isMerging && (
-        <StatusbarWrapper>
-          <Statusbar
-            completed={!isMerging}
-            message={createMessage(IS_MERGING)}
-            period={6}
-          />
-        </StatusbarWrapper>
-      )}
+            size="md"
+          >
+            {createMessage(MERGE_CHANGES)}
+          </Button>
+        ) : null}
+      </ModalFooter>
     </>
   );
 }

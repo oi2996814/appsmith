@@ -3,27 +3,39 @@
  * Controls are higher order components that update a widgets property
  */
 import { Component } from "react";
-import _ from "lodash";
-import { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
-import { PropertyPaneControlConfig } from "constants/PropertyControlConstants";
-import { CodeEditorExpected } from "components/editorComponents/CodeEditor";
+import type { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
+import type { PropertyPaneControlConfig } from "constants/PropertyControlConstants";
+import type { CodeEditorExpected } from "components/editorComponents/CodeEditor";
+import type { AdditionalDynamicDataTree } from "utils/autocomplete/customTreeTypeDefCreator";
+
+export type ControlMethods = Record<
+  "canDisplayValueInUI" | "shouldValidateValueOnDynamicPropertyOff",
+  | typeof BaseControl.canDisplayValueInUI
+  | typeof BaseControl.shouldValidateValueOnDynamicPropertyOff
+>;
 
 // eslint-disable-next-line @typescript-eslint/ban-types
 class BaseControl<P extends ControlProps, S = {}> extends Component<P, S> {
+  shouldUpdateProperty(newValue: unknown) {
+    const { defaultValue, propertyValue: oldValue } = this.props;
+
+    if (oldValue === undefined && newValue === defaultValue) return false;
+
+    if (newValue === oldValue) return false;
+
+    return true;
+  }
+
   updateProperty(
     propertyName: string,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     propertyValue: any,
     isUpdatedViaKeyboard?: boolean,
   ) {
     if (
-      this.props.propertyValue === undefined &&
-      propertyValue === this.props.defaultValue
-    ) {
-      return;
-    }
-    if (
-      !_.isNil(this.props.onPropertyChange) &&
-      this.props.propertyValue !== propertyValue
+      this.shouldUpdateProperty(propertyValue) &&
+      this.props.onPropertyChange
     ) {
       this.props.onPropertyChange(
         propertyName,
@@ -32,11 +44,27 @@ class BaseControl<P extends ControlProps, S = {}> extends Component<P, S> {
       );
     }
   }
+
   deleteProperties(propertyPaths: string[]) {
     if (this.props.deleteProperties) {
       this.props.deleteProperties(propertyPaths);
     }
   }
+
+  batchUpdatePropertiesWithAssociatedUpdates = (
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updates: { propertyName: string; propertyValue: any }[],
+  ) => {
+    if (this.props.onBatchUpdateWithAssociatedUpdates) {
+      this.props.onBatchUpdateWithAssociatedUpdates(
+        updates.filter(({ propertyValue }) =>
+          this.shouldUpdateProperty(propertyValue),
+        ),
+      );
+    }
+  };
+
   batchUpdateProperties = (updates: Record<string, unknown>) => {
     if (this.props.onBatchUpdateProperties) {
       this.props.onBatchUpdateProperties(updates);
@@ -47,9 +75,19 @@ class BaseControl<P extends ControlProps, S = {}> extends Component<P, S> {
   }
 
   // Checks whether a particular value can be displayed UI from JS edit mode
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
   static canDisplayValueInUI(config: ControlData, value: any): boolean {
     return false;
+  }
+
+  //checks whether we need to validate the value when swtiching from js mode to non js mode
+  static shouldValidateValueOnDynamicPropertyOff(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    config?: ControlData,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+    value?: any,
+  ): boolean {
+    return true;
   }
 
   // Only applicable for JSONFormComputeControl & ComputeTablePropertyControl
@@ -65,20 +103,29 @@ export interface ControlBuilder<T extends ControlProps> {
 
 export interface ControlProps extends ControlData, ControlFunctions {
   key?: string;
-  additionalAutoComplete?: Record<string, Record<string, unknown>>;
+  additionalAutoComplete?: AdditionalDynamicDataTree;
+  isSearchResult?: boolean;
 }
 export interface ControlData
   extends Omit<PropertyPaneControlConfig, "additionalAutoComplete" | "label"> {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   propertyValue?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   defaultValue?: any;
   errorMessage?: string;
   expected?: CodeEditorExpected;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluatedValue: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   widgetProperties: any;
   useValidationMessage?: boolean;
   parentPropertyName: string;
   parentPropertyValue: unknown;
-  additionalDynamicData: Record<string, Record<string, unknown>>;
+  additionalDynamicData: AdditionalDynamicDataTree;
   label: string;
   additionalControlData?: Record<string, unknown>;
 }
@@ -87,8 +134,19 @@ export interface ControlFunctions {
     propertyName: string,
     propertyValue: string,
     isUpdatedViaKeyboard?: boolean,
+    isDynamicPropertyPath?: boolean,
+  ) => void;
+
+  onBatchUpdateWithAssociatedUpdates?: (
+    updates: {
+      propertyName: string;
+      propertyValue: string;
+    }[],
+    isUpdatedViaKeyboard?: boolean,
   ) => void;
   onBatchUpdateProperties?: (updates: Record<string, unknown>) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   openNextPanel: (props: any) => void;
   deleteProperties: (propertyPaths: string[]) => void;
   theme: EditorTheme;

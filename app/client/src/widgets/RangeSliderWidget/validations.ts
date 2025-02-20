@@ -1,15 +1,22 @@
-import { RangeSliderWidgetProps } from "./widget";
+import type { RangeSliderWidgetProps } from "./widget";
 
 export function minValueValidation(
   min: unknown,
   props: RangeSliderWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ) {
   if (_.isNil(min) || min === "") {
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value is required"],
+      messages: [
+        {
+          name: "ValidationError",
+          message: "This value is required",
+        },
+      ],
     };
   }
 
@@ -20,7 +27,12 @@ export function minValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be a number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value must be a number",
+        },
+      ],
     };
   }
 
@@ -28,27 +40,44 @@ export function minValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be less than max value"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be less than max value",
+        },
+      ],
     };
   }
 
   return {
     isValid: true,
     parsed: minValue,
-    messages: [""],
+    messages: [
+      {
+        name: "",
+        message: "",
+      },
+    ],
   };
 }
 
 export function maxValueValidation(
   max: unknown,
   props: RangeSliderWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ) {
   if (_.isNil(max) || max === "") {
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value is required"],
+      messages: [
+        {
+          name: "ValidationError",
+          message: "This value is required",
+        },
+      ],
     };
   }
 
@@ -59,7 +88,12 @@ export function maxValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be a number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value must be a number",
+        },
+      ],
     };
   }
 
@@ -67,27 +101,44 @@ export function maxValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be greater than min value"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be greater than min value",
+        },
+      ],
     };
   }
 
   return {
     isValid: true,
     parsed: maxValue,
-    messages: [""],
+    messages: [
+      {
+        name: "",
+        message: "",
+      },
+    ],
   };
 }
 
 export function stepSizeValidation(
   step: unknown,
   props: RangeSliderWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ) {
   if (_.isNil(step) || step === "") {
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value is required"],
+      messages: [
+        {
+          name: "ValidationError",
+          message: "This value is required",
+        },
+      ],
     };
   }
 
@@ -97,7 +148,12 @@ export function stepSizeValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be a number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value must be a number",
+        },
+      ],
     };
   }
 
@@ -105,7 +161,12 @@ export function stepSizeValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be greater than 0.1"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be greater than 0.1",
+        },
+      ],
     };
   }
 
@@ -118,7 +179,12 @@ export function stepSizeValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: [`This value must be less than ${sliderRange}`],
+      messages: [
+        {
+          name: "RangeError",
+          message: `This value must be less than ${sliderRange}`,
+        },
+      ],
     };
   }
 
@@ -128,27 +194,44 @@ export function stepSizeValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: [`This value must be less than or equal to minRange`],
+      messages: [
+        {
+          name: "RangeError",
+          message: `This value must be less than or equal to minRange`,
+        },
+      ],
     };
   }
 
   return {
     isValid: true,
     parsed: stepValue,
-    messages: [""],
+    messages: [
+      {
+        name: "",
+        message: "",
+      },
+    ],
   };
 }
 
 export function startValueValidation(
   startValue: unknown,
   props: RangeSliderWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ) {
   if (_.isNil(startValue) || startValue === "") {
     return {
       isValid: true,
       parsed: undefined,
-      messages: [""],
+      messages: [
+        {
+          name: "",
+          message: "",
+        },
+      ],
     };
   }
 
@@ -160,7 +243,12 @@ export function startValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be a number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value must be a number",
+        },
+      ],
     };
   }
 
@@ -168,7 +256,12 @@ export function startValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be greater than or equal to the min value"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be greater than or equal to the min value",
+        },
+      ],
     };
   }
 
@@ -176,27 +269,44 @@ export function startValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be less than defaultEnd value"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be less than defaultEnd value",
+        },
+      ],
     };
   }
 
   return {
     isValid: true,
     parsed: defaultStartValue,
-    messages: [""],
+    messages: [
+      {
+        name: "",
+        message: "",
+      },
+    ],
   };
 }
 
 export function endValueValidation(
   endValue: unknown,
   props: RangeSliderWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ) {
   if (_.isNil(endValue) || endValue === "") {
     return {
       isValid: true,
       parsed: undefined,
-      messages: [""],
+      messages: [
+        {
+          name: "",
+          message: "",
+        },
+      ],
     };
   }
 
@@ -208,7 +318,12 @@ export function endValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be a number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value must be a number",
+        },
+      ],
     };
   }
 
@@ -216,7 +331,12 @@ export function endValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be less than or equal to the max value"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be less than or equal to the max value",
+        },
+      ],
     };
   }
 
@@ -224,27 +344,44 @@ export function endValueValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be greater than defaultStart value"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be greater than defaultStart value",
+        },
+      ],
     };
   }
 
   return {
     isValid: true,
     parsed: defaultEndValue,
-    messages: [""],
+    messages: [
+      {
+        name: "",
+        message: "",
+      },
+    ],
   };
 }
 
 export function minRangeValidation(
   minRange: unknown,
   props: RangeSliderWidgetProps,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   _: any,
 ) {
   if (_.isNil(minRange) || minRange === "") {
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value is required"],
+      messages: [
+        {
+          name: "ValidationError",
+          message: "This value is required",
+        },
+      ],
     };
   }
 
@@ -255,7 +392,12 @@ export function minRangeValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be a number"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value must be a number",
+        },
+      ],
     };
   }
 
@@ -268,7 +410,12 @@ export function minRangeValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: [`This value must be less than ${sliderRange}`],
+      messages: [
+        {
+          name: "RangeError",
+          message: `This value must be less than ${sliderRange}`,
+        },
+      ],
     };
   }
 
@@ -276,7 +423,12 @@ export function minRangeValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be greater than 0.1"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be greater than 0.1",
+        },
+      ],
     };
   }
 
@@ -284,13 +436,23 @@ export function minRangeValidation(
     return {
       isValid: false,
       parsed: undefined,
-      messages: ["This value must be greater than or equal to step size"],
+      messages: [
+        {
+          name: "RangeError",
+          message: "This value must be greater than or equal to step size",
+        },
+      ],
     };
   }
 
   return {
     isValid: true,
     parsed: defaultMinRange,
-    messages: [""],
+    messages: [
+      {
+        name: "",
+        message: "",
+      },
+    ],
   };
 }

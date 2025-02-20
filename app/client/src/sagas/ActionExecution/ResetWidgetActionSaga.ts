@@ -1,26 +1,25 @@
 import { put, select, take } from "redux-saga/effects";
 import { getWidgetByName } from "sagas/selectors";
-import {
-  resetChildrenMetaProperty,
-  resetWidgetMetaProperty,
-} from "actions/metaActions";
-import AppsmithConsole from "utils/AppsmithConsole";
-import { ResetWidgetDescription } from "@appsmith/entities/DataTree/actionTriggers";
+import { resetWidgetMetaUpdates } from "actions/metaActions";
+
 import {
   ActionValidationError,
   TriggerFailureError,
 } from "sagas/ActionExecution/errorUtils";
 import { getType, Types } from "utils/TypeHelpers";
-import { FlattenedWidgetProps } from "widgets/constants";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import { getDataTree } from "selectors/dataTreeSelectors";
-import { DataTree } from "entities/DataTree/dataTreeFactory";
-import { isWidget } from "@appsmith/workers/Evaluation/evaluationUtils";
+import type { FlattenedWidgetProps } from "WidgetProvider/constants";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { TResetWidgetDescription } from "workers/Evaluation/fns/resetWidget";
+import AppsmithConsole from "utils/AppsmithConsole";
+import type { SourceEntity } from "entities/AppsmithConsole";
 
 export default function* resetWidgetActionSaga(
-  payload: ResetWidgetDescription["payload"],
+  action: TResetWidgetDescription,
+  source?: SourceEntity,
 ) {
-  const { widgetName } = payload;
+  const { payload } = action;
+  const { metaUpdates, resetChildren, widgetName } = payload;
+
   if (getType(widgetName) !== Types.STRING) {
     throw new ActionValidationError(
       "RESET_WIDGET_META_RECURSIVE_BY_NAME",
@@ -29,26 +28,25 @@ export default function* resetWidgetActionSaga(
       getType(widgetName),
     );
   }
-  const dataTree: DataTree = yield select(getDataTree);
 
   const widget: FlattenedWidgetProps | undefined = yield select(
     getWidgetByName,
     widgetName,
   );
+
   if (!widget) {
     throw new TriggerFailureError(`Widget ${payload.widgetName} not found`);
   }
-  const evaluatedEntity = dataTree[widget.widgetName];
-  if (isWidget(evaluatedEntity)) {
-    yield put(resetWidgetMetaProperty(widget.widgetId, evaluatedEntity));
-    if (payload.resetChildren) {
-      yield put(resetChildrenMetaProperty(widget.widgetId));
-    }
-  }
+
+  yield put(resetWidgetMetaUpdates(metaUpdates));
 
   yield take(ReduxActionTypes.RESET_WIDGET_META_EVALUATED);
-
   AppsmithConsole.info({
-    text: `resetWidget('${payload.widgetName}', ${payload.resetChildren}) was triggered`,
+    source,
+    text: `resetWidget triggered`,
+    state: {
+      widgetName,
+      resetChildren,
+    },
   });
 }

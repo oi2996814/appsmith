@@ -1,38 +1,32 @@
-import { Datasource } from "entities/Datasource";
-import { isStoredDatasource, PluginType } from "entities/Action";
+import type { Datasource } from "entities/Datasource";
+import { isStoredDatasource } from "entities/Action";
 import React, { memo, useCallback, useEffect, useState } from "react";
-import { isNil } from "lodash";
+import { debounce, isEmpty } from "lodash";
 import { useDispatch, useSelector } from "react-redux";
-import { Colors } from "constants/Colors";
 import CollapseComponent from "components/utils/CollapseComponent";
 import {
   getPluginImages,
-  getActionsForCurrentPage,
-} from "selectors/entitiesSelector";
+  getCurrentActions,
+} from "ee/selectors/entitiesSelector";
 import styled from "styled-components";
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import history from "utils/history";
-import { Position } from "@blueprintjs/core/lib/esm/common/position";
 import RenderDatasourceInformation from "pages/Editor/DataSourceEditor/DatasourceSection";
 import { getQueryParams } from "utils/URLUtils";
-import {
-  Button,
-  Category,
-  Icon,
-  IconSize,
-  Menu,
-  MenuItem,
-} from "design-system";
+import { Button, MenuContent, MenuItem, MenuTrigger } from "@appsmith/ads";
 import { deleteDatasource } from "actions/datasourceActions";
-import { getGenerateCRUDEnabledPluginMap } from "selectors/entitiesSelector";
-import { GenerateCRUDEnabledPluginMap, Plugin } from "api/PluginApi";
-import AnalyticsUtil from "utils/AnalyticsUtil";
+import { getGenerateCRUDEnabledPluginMap } from "ee/selectors/entitiesSelector";
+import {
+  type GenerateCRUDEnabledPluginMap,
+  type Plugin,
+  PluginType,
+} from "entities/Plugin";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import NewActionButton from "../DataSourceEditor/NewActionButton";
 import {
   datasourcesEditorIdURL,
-  generateTemplateFormURL,
   saasEditorDatasourceIdURL,
-} from "RouteBuilder";
+} from "ee/RouteBuilder";
 import {
   CONTEXT_DELETE,
   CONFIRM_CONTEXT_DELETE,
@@ -40,28 +34,44 @@ import {
   CONFIRM_CONTEXT_DELETING,
   GENERATE_NEW_PAGE_BUTTON_TEXT,
   RECONNECT_BUTTON_TEXT,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import { isDatasourceAuthorizedForQueryCreation } from "utils/editorContextUtils";
 import {
-  getCurrentPageId,
+  getCurrentBasePageId,
   getPagePermissions,
 } from "selectors/editorSelectors";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
+import { MenuWrapper, StyledMenu } from "components/utils/formComponents";
+import { DatasourceEditEntryPoints } from "constants/Datasource";
 import {
-  hasCreateDatasourceActionPermission,
-  hasDeleteDatasourcePermission,
-  hasManageDatasourcePermission,
-} from "@appsmith/utils/permissionHelpers";
+  isEnvironmentConfigured,
+  doesAnyDsConfigExist,
+  DB_NOT_SUPPORTED,
+} from "ee/utils/Environments";
+import { getCurrentApplication } from "ee/selectors/applicationSelectors";
+import { getCurrentEnvironmentId } from "ee/selectors/environmentSelectors";
+import { useFeatureFlag } from "utils/hooks/useFeatureFlag";
+import { FEATURE_FLAG } from "ee/entities/FeatureFlag";
+import {
+  getHasCreatePagePermission,
+  getHasDeleteDatasourcePermission,
+  getHasManageDatasourcePermission,
+  hasCreateDSActionPermissionInApp,
+} from "ee/utils/BusinessFeatures/permissionPageHelpers";
+import { getIsAnvilEnabledInCurrentApplication } from "layoutSystems/anvil/integrations/selectors";
+import { openGeneratePageModal } from "../GeneratePage/store/generatePageActions";
+import { getIDETypeByUrl } from "ee/entities/IDE/utils";
 
 const Wrapper = styled.div`
   padding: 15px;
-  /* margin-top: 18px; */
   cursor: pointer;
+  border-radius: var(--ads-v2-border-radius);
 
   &:hover {
-    background-color: ${Colors.GREY_1};
+    background-color: var(--ads-v2-color-bg-subtle);
 
     .bp3-collapse-body {
-      background-color: ${Colors.GREY_1};
+      background-color: var(--ads-v2-color-bg-subtle);
     }
   }
 `;
@@ -73,17 +83,8 @@ const DatasourceCardMainBody = styled.div`
   width: 100%;
 `;
 
-const MenuComponent = styled(Menu)`
-  flex: 0;
-`;
-
-const MenuWrapper = styled.div`
-  display: flex;
-  margin: 8px 0px;
-`;
-
 const DatasourceImage = styled.img`
-  height: 18px;
+  height: 34px;
   width: auto;
   margin: 0 auto;
   max-width: 100%;
@@ -92,26 +93,12 @@ const DatasourceImage = styled.img`
 const DatasourceIconWrapper = styled.div`
   width: 34px;
   height: 34px;
-  border-radius: 50%;
-  background: ${Colors.GREY_2};
   display: flex;
   align-items: center;
 `;
 
-const GenerateTemplateOrReconnect = styled(Button)`
-  padding: 10px 10px;
-  font-size: 12px;
-
-  &&&& {
-    height: 36px;
-    max-width: 200px;
-    border: 1px solid ${Colors.HIT_GRAY};
-    width: auto;
-  }
-`;
-
 const DatasourceName = styled.span`
-  color: ${Colors.BLACK};
+  color: var(--ads-v2-color-fg);
   font-size: 16px;
   font-weight: 400;
   line-height: 24px;
@@ -133,11 +120,11 @@ const DatasourceNameWrapper = styled.div`
 `;
 
 const DatasourceInfo = styled.div`
-  padding: 0 10px;
+  padding: 0 10px 0 0;
 `;
 
 const Queries = styled.div`
-  color: ${Colors.DOVE_GRAY};
+  color: var(--ads-v2-color-fg-muted);
   font-size: 14px;
   display: flex;
   margin: 4px 0;
@@ -149,38 +136,15 @@ const ButtonsWrapper = styled.div`
   align-items: center;
 `;
 
-const MoreOptionsContainer = styled.div`
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
 const CollapseComponentWrapper = styled.div`
   display: flex;
   width: fit-content;
 `;
 
-const RedMenuItem = styled(MenuItem)`
-  &&,
-  && .cs-text {
-    color: ${Colors.DANGER_SOLID};
-  }
-
-  &&,
-  &&:hover {
-    svg,
-    svg path {
-      fill: ${Colors.DANGER_SOLID};
-    }
-  }
-`;
-
-type DatasourceCardProps = {
+interface DatasourceCardProps {
   datasource: Datasource;
   plugin: Plugin;
-};
+}
 
 function DatasourceCard(props: DatasourceCardProps) {
   const dispatch = useDispatch();
@@ -190,16 +154,14 @@ function DatasourceCard(props: DatasourceCardProps) {
     getGenerateCRUDEnabledPluginMap,
   );
   const { datasource, plugin } = props;
-  const supportTemplateGeneration = !!generateCRUDSupportedPlugin[
-    datasource.pluginId
-  ];
+  const envSupportedDs = !DB_NOT_SUPPORTED.includes(plugin.type);
 
-  const pageId = useSelector(getCurrentPageId);
+  const basePageId = useSelector(getCurrentBasePageId);
 
   const datasourceFormConfigs = useSelector(
     (state: AppState) => state.entities.plugins.formConfigs,
   );
-  const queryActions = useSelector(getActionsForCurrentPage);
+  const queryActions = useSelector(getCurrentActions);
   const queriesWithThisDatasource = queryActions.filter(
     (action) =>
       isStoredDatasource(action.config.datasource) &&
@@ -210,16 +172,34 @@ function DatasourceCard(props: DatasourceCardProps) {
 
   const pagePermissions = useSelector(getPagePermissions);
 
-  const canCreateDatasourceActions = hasCreateDatasourceActionPermission([
-    ...datasourcePermissions,
-    ...pagePermissions,
-  ]);
+  const userAppPermissions = useSelector(
+    (state: AppState) => getCurrentApplication(state)?.userPermissions ?? [],
+  );
 
-  const canEditDatasource = hasManageDatasourcePermission(
+  const isFeatureEnabled = useFeatureFlag(FEATURE_FLAG.license_gac_enabled);
+  const isAnvilEnabled = useSelector(getIsAnvilEnabledInCurrentApplication);
+
+  const ideType = getIDETypeByUrl(history.location.pathname);
+
+  const canCreatePages = getHasCreatePagePermission(
+    isFeatureEnabled,
+    userAppPermissions,
+  );
+
+  const canCreateDatasourceActions = hasCreateDSActionPermissionInApp({
+    isEnabled: isFeatureEnabled,
+    dsPermissions: datasourcePermissions,
+    pagePermissions,
+    ideType,
+  });
+
+  const canEditDatasource = getHasManageDatasourcePermission(
+    isFeatureEnabled,
     datasourcePermissions,
   );
 
-  const canDeleteDatasource = hasDeleteDatasourcePermission(
+  const canDeleteDatasource = getHasDeleteDatasourcePermission(
+    isFeatureEnabled,
     datasourcePermissions,
   );
 
@@ -227,27 +207,37 @@ function DatasourceCard(props: DatasourceCardProps) {
 
   const isDeletingDatasource = !!datasource.isDeleting;
 
+  const onCloseMenu = debounce(() => setConfirmDelete(false), 20);
+
+  const supportTemplateGeneration =
+    !!generateCRUDSupportedPlugin[datasource.pluginId];
+  const canGeneratePage = canCreateDatasourceActions && canCreatePages;
+
   useEffect(() => {
     if (confirmDelete && !isDeletingDatasource) {
       setConfirmDelete(false);
     }
   }, [isDeletingDatasource]);
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const currentFormConfig: Array<any> =
     datasourceFormConfigs[datasource?.pluginId ?? ""];
   const QUERY = queriesWithThisDatasource > 1 ? "queries" : "query";
 
+  const currentEnv = useSelector(getCurrentEnvironmentId);
+
   const editDatasource = useCallback(() => {
     AnalyticsUtil.logEvent("DATASOURCE_CARD_EDIT_ACTION");
+
     if (plugin && plugin.type === PluginType.SAAS) {
       history.push(
         saasEditorDatasourceIdURL({
-          pageId,
+          basePageId,
           pluginPackageName: plugin.packageName,
           datasourceId: datasource.id,
           params: {
             from: "datasources",
-            viewMode: "false",
             ...getQueryParams(),
           },
         }),
@@ -255,7 +245,7 @@ function DatasourceCard(props: DatasourceCardProps) {
     } else {
       history.push(
         datasourcesEditorIdURL({
-          pageId,
+          basePageId,
           datasourceId: datasource.id,
           params: {
             from: "datasources",
@@ -265,31 +255,51 @@ function DatasourceCard(props: DatasourceCardProps) {
         }),
       );
     }
+
+    AnalyticsUtil.logEvent("EDIT_DATASOURCE_CLICK", {
+      datasourceId: datasource?.id,
+      pluginName: plugin?.name,
+      entryPoint: DatasourceEditEntryPoints.DATASOURCE_CARD_EDIT,
+    });
   }, [datasource.id, plugin]);
 
-  const routeToGeneratePage = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!supportTemplateGeneration) {
+  const routeToGeneratePage = () => {
+    if (!supportTemplateGeneration || !canGeneratePage) {
       // disable button when it doesn't support page generation
       return;
     }
+
     AnalyticsUtil.logEvent("DATASOURCE_CARD_GEN_CRUD_PAGE_ACTION");
-    history.push(
-      generateTemplateFormURL({
-        pageId,
-        params: {
-          datasourceId: datasource.id,
-          new_page: true,
-        },
+    dispatch(
+      openGeneratePageModal({
+        datasourceId: datasource.id,
+        new_page: true,
       }),
     );
   };
 
-  const deleteAction = () => {
+  const deleteAction = (e: Event) => {
+    e.stopPropagation();
+
     if (isDeletingDatasource) return;
+
     AnalyticsUtil.logEvent("DATASOURCE_CARD_DELETE_ACTION");
     dispatch(deleteDatasource({ id: datasource.id }));
   };
+  const isDSAuthorizedForQueryCreation = isDatasourceAuthorizedForQueryCreation(
+    datasource,
+    plugin,
+    currentEnv,
+  );
+
+  const showReconnectButton = !(
+    isDSAuthorizedForQueryCreation &&
+    (envSupportedDs ? isEnvironmentConfigured(datasource, currentEnv) : true)
+  );
+
+  const showCreateNewActionButton = envSupportedDs
+    ? doesAnyDsConfigExist(datasource)
+    : true;
 
   return (
     <Wrapper
@@ -305,7 +315,7 @@ function DatasourceCard(props: DatasourceCardProps) {
                 <DatasourceImage
                   alt="Datasource"
                   data-testid="active-datasource-image"
-                  src={pluginImages[datasource.pluginId]}
+                  src={getAssetUrl(pluginImages[datasource.pluginId])}
                 />
               </DatasourceIconWrapper>
               <DatasourceName data-testid="active-datasource-name">
@@ -322,36 +332,45 @@ function DatasourceCard(props: DatasourceCardProps) {
             </Queries>
           </div>
           <ButtonsWrapper className="action-wrapper">
-            {(!datasource.isConfigured || supportTemplateGeneration) &&
-              isDatasourceAuthorizedForQueryCreation(datasource, plugin) && (
-                <GenerateTemplateOrReconnect
-                  category={Category.secondary}
-                  className={
-                    datasource.isConfigured
-                      ? "t--generate-template"
-                      : "t--reconnect-btn"
-                  }
-                  onClick={
-                    datasource.isConfigured
-                      ? routeToGeneratePage
-                      : editDatasource
-                  }
-                  text={
-                    datasource.isConfigured
-                      ? createMessage(GENERATE_NEW_PAGE_BUTTON_TEXT)
-                      : createMessage(RECONNECT_BUTTON_TEXT)
-                  }
-                />
+            {supportTemplateGeneration &&
+              !showReconnectButton &&
+              !isAnvilEnabled && (
+                <Button
+                  className={"t--generate-template"}
+                  isDisabled={!canGeneratePage}
+                  kind="secondary"
+                  // TODO: Fix this the next time the file is edited
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  onClick={(e: any) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    routeToGeneratePage();
+                  }}
+                  size="md"
+                >
+                  {createMessage(GENERATE_NEW_PAGE_BUTTON_TEXT)}
+                </Button>
               )}
-            {datasource.isConfigured && (
+            {showReconnectButton && (
+              <Button
+                className={"t--reconnect-btn"}
+                kind="secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  editDatasource();
+                }}
+                size="md"
+              >
+                {createMessage(RECONNECT_BUTTON_TEXT)}
+              </Button>
+            )}
+            {showCreateNewActionButton && (
               <NewActionButton
                 datasource={datasource}
-                disabled={
-                  !canCreateDatasourceActions ||
-                  !isDatasourceAuthorizedForQueryCreation(datasource, plugin)
-                }
+                disabled={!canCreateDatasourceActions || showReconnectButton}
                 eventFrom="active-datasources"
-                plugin={plugin}
+                pluginType={plugin.type}
               />
             )}
             {(canDeleteDatasource || canEditDatasource) && (
@@ -361,67 +380,73 @@ function DatasourceCard(props: DatasourceCardProps) {
                   e.stopPropagation();
                 }}
               >
-                <MenuComponent
-                  menuItemWrapperWidth="160px"
-                  position={Position.BOTTOM_RIGHT}
-                  target={
-                    <MoreOptionsContainer>
-                      <Icon
-                        fillColor={
-                          datasource.isConfigured ? Colors.GREY_8 : Colors.GRAY2
-                        }
-                        name="comment-context-menu"
-                        size={IconSize.XXXL}
-                      />
-                    </MoreOptionsContainer>
-                  }
-                >
-                  {canEditDatasource && (
-                    <MenuItem
-                      className="t--datasource-option-edit"
-                      icon="edit"
-                      onSelect={editDatasource}
-                      text="Edit"
+                <StyledMenu onOpenChange={onCloseMenu}>
+                  <MenuTrigger>
+                    <Button
+                      isIconButton
+                      kind="tertiary"
+                      size="md"
+                      startIcon="context-menu"
                     />
-                  )}
-                  {canDeleteDatasource && (
-                    <RedMenuItem
-                      className="t--datasource-option-delete"
-                      icon="delete"
-                      isLoading={isDeletingDatasource}
-                      onSelect={() => {
-                        if (!isDeletingDatasource) {
-                          confirmDelete
-                            ? deleteAction()
-                            : setConfirmDelete(true);
-                        }
-                      }}
-                      text={
-                        isDeletingDatasource
+                  </MenuTrigger>
+                  <MenuContent align="end" style={{ minWidth: "142px" }}>
+                    {canEditDatasource && (
+                      <MenuItem
+                        className="t--datasource-option-edit"
+                        onSelect={editDatasource}
+                        startIcon="pencil-line"
+                      >
+                        Edit
+                      </MenuItem>
+                    )}
+                    {canDeleteDatasource && (
+                      <MenuItem
+                        className="t--datasource-option-delete error-menuitem"
+                        disabled={isDeletingDatasource}
+                        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                        // @ts-ignore
+                        onSelect={(e: Event) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+
+                          if (!isDeletingDatasource) {
+                            confirmDelete
+                              ? deleteAction(e)
+                              : setConfirmDelete(true);
+                          }
+                        }}
+                        startIcon="delete-bin-line"
+                      >
+                        {isDeletingDatasource
                           ? createMessage(CONFIRM_CONTEXT_DELETING)
                           : confirmDelete
-                          ? createMessage(CONFIRM_CONTEXT_DELETE)
-                          : createMessage(CONTEXT_DELETE)
-                      }
-                    />
-                  )}
-                </MenuComponent>
+                            ? createMessage(CONFIRM_CONTEXT_DELETE)
+                            : createMessage(CONTEXT_DELETE)}
+                      </MenuItem>
+                    )}
+                  </MenuContent>
+                </StyledMenu>
               </MenuWrapper>
             )}
           </ButtonsWrapper>
         </DatasourceCardHeader>
       </DatasourceCardMainBody>
-      {!isNil(currentFormConfig) && (
+      {!isEmpty(currentFormConfig) && (
         <CollapseComponentWrapper
           onClick={(e) => {
             e.stopPropagation();
           }}
         >
-          <CollapseComponent title="Show More" titleStyle={{ maxWidth: 120 }}>
+          <CollapseComponent
+            openTitle="Show less"
+            title="Show more"
+            titleStyle={{ maxWidth: 120 }}
+          >
             <DatasourceInfo>
               <RenderDatasourceInformation
                 config={currentFormConfig[0]}
                 datasource={datasource}
+                showOnlyCurrentEnv
               />
             </DatasourceInfo>
           </CollapseComponent>

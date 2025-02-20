@@ -1,10 +1,11 @@
-import React, { CSSProperties, ReactNode, useMemo } from "react";
-import { BaseStyle } from "widgets/BaseWidget";
+import type { CSSProperties, ReactNode, Ref } from "react";
+import React, { useMemo } from "react";
+import type { BaseStyle } from "widgets/BaseWidget";
+import type { WidgetType } from "constants/WidgetConstants";
 import {
   CONTAINER_GRID_PADDING,
   CSSUnits,
   PositionTypes,
-  WidgetType,
   WIDGET_PADDING,
 } from "constants/WidgetConstants";
 import { generateClassName } from "utils/generators";
@@ -12,15 +13,15 @@ import styled from "styled-components";
 import { useClickToSelectWidget } from "utils/hooks/useClickToSelectWidget";
 import { usePositionedContainerZIndex } from "utils/hooks/usePositionedContainerZIndex";
 import { useSelector } from "react-redux";
-import { snipingModeSelector } from "selectors/editorSelectors";
-import WidgetFactory from "utils/WidgetFactory";
-import { memoize } from "lodash";
 import {
   getIsReflowEffectedSelector,
   getReflowSelector,
 } from "selectors/widgetReflowSelectors";
 import { POSITIONED_WIDGET } from "constants/componentClassNameConstants";
 import equal from "fast-deep-equal";
+import { widgetTypeClassname } from "widgets/WidgetUtils";
+import { checkIsDropTarget } from "WidgetProvider/factory/helpers";
+import { useHoverToFocusWidget } from "utils/hooks/useHoverToFocusWidget";
 
 const PositionedWidget = styled.div<{
   zIndexOnHover: number;
@@ -30,7 +31,8 @@ const PositionedWidget = styled.div<{
     z-index: ${(props) => props.zIndexOnHover} !important;
   }
 `;
-export type PositionedContainerProps = {
+
+export interface PositionedContainerProps {
   componentWidth: number;
   componentHeight: number;
   children: ReactNode;
@@ -47,15 +49,13 @@ export type PositionedContainerProps = {
   parentColumnSpace: number;
   isDisabled?: boolean;
   isVisible?: boolean;
-};
+  widgetName: string;
+}
 
-export const checkIsDropTarget = memoize(function isDropTarget(
-  type: WidgetType,
+export function PositionedContainer(
+  props: PositionedContainerProps,
+  ref: Ref<HTMLDivElement>,
 ) {
-  return !!WidgetFactory.widgetConfigMap.get(type)?.isCanvas;
-});
-
-export function PositionedContainer(props: PositionedContainerProps) {
   const { componentHeight, componentWidth } = props;
 
   // Memoizing the style
@@ -88,22 +88,22 @@ export function PositionedContainer(props: PositionedContainerProps) {
   const y = style.yPosition + (style.yPositionUnit || "px");
   const padding = WIDGET_PADDING;
   const clickToSelectWidget = useClickToSelectWidget(props.widgetId);
-  const isSnipingMode = useSelector(snipingModeSelector);
   // memoized className
   const containerClassName = useMemo(() => {
     return (
       generateClassName(props.widgetId) +
-      ` ${POSITIONED_WIDGET} t--widget-${props.widgetType
-        .split("_")
-        .join("")
-        .toLowerCase()}`
+      ` ${POSITIONED_WIDGET} ${widgetTypeClassname(
+        props.widgetType,
+      )} t--widget-${props.widgetName?.toLowerCase()}`
     );
-  }, [props.widgetType, props.widgetId]);
+  }, [props.widgetType, props.widgetId, props.widgetName]);
   const isDropTarget = checkIsDropTarget(props.widgetType);
 
   const { onHoverZIndex, zIndex } = usePositionedContainerZIndex(
-    props,
     isDropTarget,
+    props.widgetId,
+    props.focused,
+    props.selected,
   );
 
   const reflowedPosition = useSelector(
@@ -131,14 +131,12 @@ export function PositionedContainer(props: PositionedContainerProps) {
       isDropTarget && effectedByReflow ? { pointerEvents: "none" } : {};
     const reflowedPositionStyles: CSSProperties = hasReflowedPosition
       ? {
-          transform: `translate(${reflowX}px,${reflowY}px)`,
-          transition: `transform 100ms linear`,
+          transform: `translate3d(${reflowX}px,${reflowY}px,0)`,
           boxShadow: `0 0 0 1px rgba(104,113,239,0.5)`,
         }
       : {};
     const reflowDimensionsStyles = hasReflowedDimensions
       ? {
-          transition: `width 0.1s, height 0.1s`,
           boxShadow: `0 0 0 1px rgba(104,113,239,0.5)`,
         }
       : {};
@@ -147,6 +145,7 @@ export function PositionedContainer(props: PositionedContainerProps) {
       position: "absolute",
       left: x,
       top: y,
+      transition: `transform 100ms ease, width 100ms ease, height 100ms ease`,
       height:
         reflowHeight || style.componentHeight + (style.heightUnit || "px"),
       width: reflowWidth || style.componentWidth + (style.widthUnit || "px"),
@@ -157,25 +156,29 @@ export function PositionedContainer(props: PositionedContainerProps) {
       ...reflowDimensionsStyles,
       ...dropTargetStyles,
     };
+
     return styles;
   }, [style, isReflowEffected, onHoverZIndex, zIndex, reflowedPosition]);
 
-  // TODO: Experimental fix for sniping mode. This should be handled with a single event
-  const stopEventPropagation = (e: any) => {
-    !isSnipingMode && e.stopPropagation();
-  };
+  const [handleMouseOver, handleMouseLeave] = useHoverToFocusWidget(
+    props.widgetId,
+    props.resizeDisabled,
+  );
 
+  // TODO: Experimental fix for sniping mode. This should be handled with a single event
   return (
     <PositionedWidget
       className={containerClassName}
       data-hidden={!props.isVisible || undefined}
       data-testid="test-widget"
+      data-widgetname-cy={props.widgetName}
       disabled={props.isDisabled}
       id={props.widgetId}
       key={`positioned-container-${props.widgetId}`}
-      // Positioned Widget is the top enclosure for all widgets and clicks on/inside the widget should not be propagated/bubbled out of this Container.
-      onClick={stopEventPropagation}
       onClickCapture={clickToSelectWidget}
+      onMouseLeave={handleMouseLeave}
+      onMouseOver={handleMouseOver}
+      ref={ref}
       //Before you remove: This is used by property pane to reference the element
       style={containerStyle}
       zIndexOnHover={onHoverZIndex}
@@ -185,5 +188,4 @@ export function PositionedContainer(props: PositionedContainerProps) {
   );
 }
 
-PositionedContainer.padding = WIDGET_PADDING;
-export default PositionedContainer;
+export default React.forwardRef(PositionedContainer);

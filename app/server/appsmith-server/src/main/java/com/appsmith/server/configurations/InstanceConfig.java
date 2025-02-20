@@ -1,182 +1,89 @@
 package com.appsmith.server.configurations;
 
 import com.appsmith.server.constants.Appsmith;
-import com.appsmith.server.domains.Config;
-import com.appsmith.server.dtos.ResponseDTO;
-import com.appsmith.server.exceptions.AppsmithError;
-import com.appsmith.server.exceptions.AppsmithException;
+import com.appsmith.server.helpers.InstanceConfigHelper;
 import com.appsmith.server.repositories.CacheableRepositoryHelper;
 import com.appsmith.server.services.ConfigService;
-import com.appsmith.util.WebClientUtils;
+import io.micrometer.observation.annotation.Observed;
 import io.sentry.Sentry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
-import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Mono;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static java.lang.Boolean.TRUE;
 
 @Slf4j
 @RequiredArgsConstructor
 @Component
+@Observed(name = "serverStartup")
 public class InstanceConfig implements ApplicationListener<ApplicationReadyEvent> {
 
     private final ConfigService configService;
 
-    private final CloudServicesConfig cloudServicesConfig;
-
-    private final CommonConfig commonConfig;
-
-    private final ApplicationContext applicationContext;
-
     private final CacheableRepositoryHelper cacheableRepositoryHelper;
 
-    private boolean isRtsAccessible = false;
+    private final InstanceConfigHelper instanceConfigHelper;
 
+    private static final String WWW_PATH = System.getenv("WWW_PATH");
 
     @Override
     public void onApplicationEvent(ApplicationReadyEvent applicationReadyEvent) {
+        if (WWW_PATH != null) {
+            try {
+                // Delete the loading.html file if it exists.
+                Files.deleteIfExists(Path.of(WWW_PATH + "/loading.html"));
+            } catch (IOException e) {
+                log.error("Error deleting loading.html file: {}", e.getMessage());
+            }
+        }
 
-        Mono<Void> registrationAndRtsCheckMono = configService.getByName(Appsmith.APPSMITH_REGISTERED)
-                .filter(config -> Boolean.TRUE.equals(config.getConfig().get("value")))
-                .switchIfEmpty(registerInstance())
+        Mono<Void> registrationAndRtsCheckMono = configService
+                .getByName(Appsmith.APPSMITH_REGISTERED)
+                .filter(config -> TRUE.equals(config.getConfig().get("value")))
+                .switchIfEmpty(Mono.defer(() -> instanceConfigHelper.registerInstance()))
                 .onErrorResume(errorSignal -> {
                     log.debug("Instance registration failed with error: \n{}", errorSignal.getMessage());
                     return Mono.empty();
                 })
-                .then(performRtsHealthCheck())
-                .doFinally(ignored -> this.printReady());
+                .then(instanceConfigHelper.performRtsHealthCheck());
 
-        checkInstanceSchemaVersion()
+        Mono<?> startupProcess = instanceConfigHelper
+                .checkMongoDBVersion()
+                .flatMap(ignored -> instanceConfigHelper.checkInstanceSchemaVersion())
                 .flatMap(signal -> registrationAndRtsCheckMono)
                 // Prefill the server cache with anonymous user permission group ids.
                 .then(cacheableRepositoryHelper.preFillAnonymousUserPermissionGroupIdsCache())
-                .subscribe(null, e -> {
-                    log.debug("Application start up encountered an error: {}", e.getMessage());
-                    Sentry.captureException(e);
-                });
-    }
+                // Add cold publisher as we have dependency on the instance registration
+                // TODO Update implementation to fetch license status for all the organizations once multi-tenancy is
+                //  introduced
+                .then(Mono.defer(instanceConfigHelper::isLicenseValid)
+                        // Ensure that the organization feature flags are refreshed with the latest values after
+                        // completing
+                        // the
+                        // license verification process.
+                        .flatMap(isValid -> {
+                            log.debug(
+                                    "License verification completed with status: {}",
+                                    TRUE.equals(isValid) ? "valid" : "invalid");
+                            return instanceConfigHelper.updateCacheForOrganizationFeatureFlags();
+                        }));
 
-    private Mono<Void> checkInstanceSchemaVersion() {
-        return configService.getByName(Appsmith.INSTANCE_SCHEMA_VERSION)
-                .onErrorMap(AppsmithException.class, e -> new AppsmithException(AppsmithError.SCHEMA_VERSION_NOT_FOUND_ERROR))
-                .flatMap(config -> {
-                    if (CommonConfig.LATEST_INSTANCE_SCHEMA_VERSION == config.getConfig().get("value")) {
-                        return Mono.just(config);
-                    }
-                    return Mono.error(populateSchemaMismatchError((Integer) config.getConfig().get("value")));
-                })
-                .doOnError(errorSignal -> {
-                    log.error("""
-
-                                    ################################################
-                                    Error while trying to start up Appsmith instance:\s
-                                    {}
-                                    ################################################
-                                    """,
-                            errorSignal.getMessage());
-
-                    SpringApplication.exit(applicationContext, () -> 1);
-                    System.exit(1);
-                })
-                .then();
-    }
-
-    private AppsmithException populateSchemaMismatchError(Integer currentInstanceSchemaVersion) {
-
-        List<String> versions = new LinkedList<>();
-        List<String> docs = new LinkedList<>();
-
-        // Keep adding version numbers that brought in breaking instance schema migrations here
-        switch (currentInstanceSchemaVersion) {
-            // Example, we expect that in v1.8.14, all instances will have been migrated to instanceSchemaVer 2
-            case 1:
-                versions.add("v1.9.2");
-                docs.add("https://docs.appsmith.com/help-and-support/troubleshooting-guide/deployment-errors#server-shuts-down-with-schema-mismatch-error");
-            default:
+        try {
+            startupProcess.block();
+        } catch (Exception e) {
+            log.debug("Application start up encountered an error: {}", e.getMessage());
+            Sentry.captureException(e);
         }
-
-        return new AppsmithException(AppsmithError.SCHEMA_MISMATCH_ERROR, versions, docs);
-    }
-
-    private Mono<? extends Config> registerInstance() {
-
-        log.debug("Triggering registration of this instance...");
-
-        final String baseUrl = cloudServicesConfig.getBaseUrl();
-        if (baseUrl == null || StringUtils.isEmpty(baseUrl)) {
-            return Mono.error(new AppsmithException(
-                    AppsmithError.INSTANCE_REGISTRATION_FAILURE, "Unable to find cloud services base URL")
-            );
-        }
-
-        return configService
-                .getInstanceId()
-                .flatMap(instanceId -> WebClientUtils
-                        .create(baseUrl + "/api/v1/installations")
-                        .post()
-                        .body(BodyInserters.fromValue(Map.of("key", instanceId)))
-                        .exchange())
-                .flatMap(clientResponse -> clientResponse.toEntity(new ParameterizedTypeReference<ResponseDTO<String>>() {
-                }))
-                .flatMap(responseEntity -> {
-                    if (responseEntity.getStatusCode().is2xxSuccessful()) {
-                        return Mono.justOrEmpty(Objects.requireNonNull(responseEntity.getBody()).getData());
-                    }
-                    return Mono.error(new AppsmithException(
-                            AppsmithError.INSTANCE_REGISTRATION_FAILURE,
-                            Objects.requireNonNull(responseEntity.getBody()).getResponseMeta().getError().getMessage()));
-                })
-                .flatMap(instanceId -> {
-                    log.debug("Registration successful, updating state ...");
-                    return configService.save(Appsmith.APPSMITH_REGISTERED, Map.of("value", true));
-                });
-    }
-
-    private Mono<Void> performRtsHealthCheck() {
-        log.debug("Performing RTS health check of this instance...");
-
-        return WebClientUtils
-                .create(commonConfig.getRtsBaseDomain() + "/rts-api/v1/health-check")
-                .get()
-                .retrieve()
-                .toBodilessEntity()
-                .doOnNext(nextSignal -> {
-                    log.debug("RTS health check succeeded");
-                    this.isRtsAccessible = true;
-                })
-                .doOnError(errorSignal -> log.debug("RTS health check failed with error: \n{}", errorSignal.getMessage()))
-                .then();
-    }
-
-    private void printReady() {
-        System.out.println(
-                """
-
-                         █████╗ ██████╗ ██████╗ ███████╗███╗   ███╗██╗████████╗██╗  ██╗    ██╗███████╗    ██████╗ ██╗   ██╗███╗   ██╗███╗   ██╗██╗███╗   ██╗ ██████╗ ██╗
-                        ██╔══██╗██╔══██╗██╔══██╗██╔════╝████╗ ████║██║╚══██╔══╝██║  ██║    ██║██╔════╝    ██╔══██╗██║   ██║████╗  ██║████╗  ██║██║████╗  ██║██╔════╝ ██║
-                        ███████║██████╔╝██████╔╝███████╗██╔████╔██║██║   ██║   ███████║    ██║███████╗    ██████╔╝██║   ██║██╔██╗ ██║██╔██╗ ██║██║██╔██╗ ██║██║  ███╗██║
-                        ██╔══██║██╔═══╝ ██╔═══╝ ╚════██║██║╚██╔╝██║██║   ██║   ██╔══██║    ██║╚════██║    ██╔══██╗██║   ██║██║╚██╗██║██║╚██╗██║██║██║╚██╗██║██║   ██║╚═╝
-                        ██║  ██║██║     ██║     ███████║██║ ╚═╝ ██║██║   ██║   ██║  ██║    ██║███████║    ██║  ██║╚██████╔╝██║ ╚████║██║ ╚████║██║██║ ╚████║╚██████╔╝██╗
-                        ╚═╝  ╚═╝╚═╝     ╚═╝     ╚══════╝╚═╝     ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝    ╚═╝╚══════╝    ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝
-
-                        Please open http://localhost:<port> in your browser to experience Appsmith!
-                        """
-        );
     }
 
     public boolean getIsRtsAccessible() {
-        return this.isRtsAccessible;
+        return instanceConfigHelper.getIsRtsAccessible();
     }
-
 }

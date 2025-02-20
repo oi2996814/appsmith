@@ -1,6 +1,7 @@
-import { Action, PluginType } from "entities/Action/index";
+import type { Action } from "entities/Action";
+import { PluginType } from "entities/Plugin";
 import { getBindingAndReactivePathsOfAction } from "entities/Action/actionProperties";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
 
 const DEFAULT_ACTION: Action = {
   actionConfiguration: {},
@@ -11,11 +12,13 @@ const DEFAULT_ACTION: Action = {
   dynamicBindingPathList: [],
   executeOnLoad: false,
   id: "",
+  baseId: "",
   invalids: [],
   isValid: false,
   jsonPathKeys: [],
   name: "",
   workspaceId: "",
+  applicationId: "",
   pageId: "",
   pluginId: "",
   messages: [],
@@ -28,6 +31,7 @@ describe("getReactivePathsOfAction", () => {
       DEFAULT_ACTION,
       undefined,
     ).reactivePaths;
+
     expect(response).toStrictEqual({
       data: EvaluationSubstitutionType.TEMPLATE,
       isLoading: EvaluationSubstitutionType.TEMPLATE,
@@ -77,8 +81,11 @@ describe("getReactivePathsOfAction", () => {
       },
     };
 
-    const response = getBindingAndReactivePathsOfAction(basicAction, config)
-      .reactivePaths;
+    const response = getBindingAndReactivePathsOfAction(
+      basicAction,
+      config,
+    ).reactivePaths;
+
     expect(response).toStrictEqual({
       data: EvaluationSubstitutionType.TEMPLATE,
       isLoading: EvaluationSubstitutionType.TEMPLATE,
@@ -142,9 +149,12 @@ describe("getReactivePathsOfAction", () => {
       },
     };
 
-    // @ts-expect-error: Types are not available
-    const response = getBindingAndReactivePathsOfAction(basicAction, config)
-      .reactivePaths;
+    const response = getBindingAndReactivePathsOfAction(
+      // @ts-expect-error: Types are not available
+      basicAction,
+      config,
+    ).reactivePaths;
+
     expect(response).toStrictEqual({
       data: EvaluationSubstitutionType.TEMPLATE,
       isLoading: EvaluationSubstitutionType.TEMPLATE,
@@ -198,9 +208,12 @@ describe("getReactivePathsOfAction", () => {
       },
     };
 
-    // @ts-expect-error: Types are not available
-    const response = getBindingAndReactivePathsOfAction(basicAction, config)
-      .reactivePaths;
+    const response = getBindingAndReactivePathsOfAction(
+      // @ts-expect-error: Types are not available
+      basicAction,
+      config,
+    ).reactivePaths;
+
     expect(response).toStrictEqual({
       data: EvaluationSubstitutionType.TEMPLATE,
       isLoading: EvaluationSubstitutionType.TEMPLATE,
@@ -257,8 +270,11 @@ describe("getReactivePathsOfAction", () => {
       },
     };
 
-    const response = getBindingAndReactivePathsOfAction(basicAction, config)
-      .reactivePaths;
+    const response = getBindingAndReactivePathsOfAction(
+      basicAction,
+      config,
+    ).reactivePaths;
+
     expect(response).toStrictEqual({
       data: EvaluationSubstitutionType.TEMPLATE,
       isLoading: EvaluationSubstitutionType.TEMPLATE,
@@ -269,8 +285,11 @@ describe("getReactivePathsOfAction", () => {
 
     basicAction.actionConfiguration.template.setting = true;
 
-    const response2 = getBindingAndReactivePathsOfAction(basicAction, config)
-      .reactivePaths;
+    const response2 = getBindingAndReactivePathsOfAction(
+      basicAction,
+      config,
+    ).reactivePaths;
+
     expect(response2).toStrictEqual({
       data: EvaluationSubstitutionType.TEMPLATE,
       isLoading: EvaluationSubstitutionType.TEMPLATE,
@@ -285,6 +304,7 @@ describe("getReactivePathsOfAction", () => {
       DEFAULT_ACTION,
       undefined,
     ).bindingPaths;
+
     expect(response).toStrictEqual({});
   });
 
@@ -329,8 +349,11 @@ describe("getReactivePathsOfAction", () => {
       },
     };
 
-    const response = getBindingAndReactivePathsOfAction(basicAction, config)
-      .bindingPaths;
+    const response = getBindingAndReactivePathsOfAction(
+      basicAction,
+      config,
+    ).bindingPaths;
+
     expect(response).toStrictEqual({
       "config.body": EvaluationSubstitutionType.TEMPLATE,
       "config.body2": EvaluationSubstitutionType.TEMPLATE,

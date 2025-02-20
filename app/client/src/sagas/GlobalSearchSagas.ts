@@ -1,7 +1,5 @@
-import {
-  ReduxActionTypes,
-  ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import {
   all,
   call,
@@ -16,24 +14,27 @@ import {
   restoreRecentEntitiesSuccess,
   setRecentEntities,
 } from "actions/globalSearchActions";
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import {
   getCurrentApplicationId,
   getIsEditorInitialized,
 } from "selectors/editorSelectors";
-import { RecentEntity } from "components/editorComponents/GlobalSearch/utils";
+import type { RecentEntity } from "components/editorComponents/GlobalSearch/utils";
 import log from "loglevel";
-import { getCurrentGitBranch } from "selectors/gitSyncSelectors";
-import { FocusEntity, FocusEntityInfo } from "navigation/FocusEntity";
+import type { FocusEntity, FocusEntityInfo } from "navigation/FocusEntity";
+import { convertToPageIdSelector } from "selectors/pageListSelectors";
+import { selectGitApplicationCurrentBranch } from "selectors/gitModSelectors";
 
 const getRecentEntitiesKey = (applicationId: string, branch?: string) =>
   branch ? `${applicationId}-${branch}` : applicationId;
 
 export function* updateRecentEntitySaga(entityInfo: FocusEntityInfo) {
   try {
-    const branch: string | undefined = yield select(getCurrentGitBranch);
-
     const applicationId: string = yield select(getCurrentApplicationId);
+
+    const branch: string | undefined = yield select(
+      selectGitApplicationCurrentBranch,
+    );
 
     const recentEntitiesRestored: boolean = yield select(
       (state: AppState) => state.ui.globalSearch.recentEntitiesRestored,
@@ -54,7 +55,15 @@ export function* updateRecentEntitySaga(entityInfo: FocusEntityInfo) {
 
     yield all(waitForEffects);
 
-    const { entity, id, pageId } = entityInfo;
+    const {
+      entity,
+      id,
+      params: { basePageId },
+    } = entityInfo;
+    const pageId: string = yield select(
+      convertToPageIdSelector,
+      basePageId ?? "",
+    );
     let recentEntities: RecentEntity[] = yield select(
       (state: AppState) => state.ui.globalSearch.recentEntities,
     );
@@ -65,10 +74,16 @@ export function* updateRecentEntitySaga(entityInfo: FocusEntityInfo) {
       (recentEntity: { type: FocusEntity; id: string }) =>
         recentEntity.id !== id,
     );
-    recentEntities.unshift(<RecentEntity>{ type: entity, id, pageId });
+
+    recentEntities.unshift(<RecentEntity>{
+      type: entity,
+      id,
+      pageId,
+    });
     recentEntities = recentEntities.slice(0, 6);
 
     yield put(setRecentEntities(recentEntities));
+
     if (applicationId) {
       yield call(
         setRecentAppEntities,
@@ -91,6 +106,7 @@ export function* restoreRecentEntities(
     fetchRecentAppEntities,
     getRecentEntitiesKey(applicationId, branch),
   );
+
   yield putResolve(setRecentEntities(recentAppEntities));
   yield put(restoreRecentEntitiesSuccess());
 }

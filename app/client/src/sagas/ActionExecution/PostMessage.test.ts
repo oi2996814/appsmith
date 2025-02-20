@@ -4,26 +4,22 @@ import { runSaga } from "redux-saga";
 
 describe("PostMessageSaga", () => {
   describe("postMessageSaga function", () => {
-    const generator = postMessageSaga(
-      {
+    const generator = postMessageSaga({
+      type: "POST_MESSAGE",
+      payload: {
         message: "hello world",
         source: "window",
         targetOrigin: "https://dev.appsmith.com",
       },
-      {},
-    );
+    });
 
     it("executes postMessageSaga with the payload and trigger meta", () => {
       expect(generator.next().value).toStrictEqual(
-        spawn(
-          executePostMessage,
-          {
-            message: "hello world",
-            source: "window",
-            targetOrigin: "https://dev.appsmith.com",
-          },
-          {},
-        ),
+        spawn(executePostMessage, {
+          message: "hello world",
+          source: "window",
+          targetOrigin: "https://dev.appsmith.com",
+        }),
       );
     });
 
@@ -34,6 +30,8 @@ describe("PostMessageSaga", () => {
 
   describe("executePostMessage function", () => {
     it("calls window.parent with message and target origin", () => {
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dispatched: any[] = [];
 
       const postMessage = jest.spyOn(window.parent, "postMessage");
@@ -48,7 +46,6 @@ describe("PostMessageSaga", () => {
           source: "window",
           targetOrigin: "https://dev.appsmith.com",
         },
-        {},
       );
 
       expect(postMessage).toHaveBeenCalledWith(

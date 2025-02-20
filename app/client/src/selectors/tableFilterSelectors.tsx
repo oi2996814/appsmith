@@ -1,7 +1,7 @@
-import { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import { createSelector } from "reselect";
 
-import { TableFilterPaneReduxState } from "reducers/uiReducers/tableFilterPaneReducer";
+import type { TableFilterPaneReduxState } from "reducers/uiReducers/tableFilterPaneReducer";
 import { getLastSelectedWidget, getSelectedWidgets } from "./ui";
 
 export const getTableFilterState = (
@@ -26,6 +26,7 @@ export const getIsTableFilterPaneVisible = createSelector(
       ? lastSelectedWidget === pane.widgetId || widgets.includes(pane.widgetId)
       : false;
     const multipleWidgetsSelected = !!(widgets && widgets.length >= 2);
+
     return !!(
       isWidgetSelected &&
       !multipleWidgetsSelected &&

@@ -1,19 +1,18 @@
 import CodeMirror from "codemirror";
-import { isMacOrIOS } from "utils/helpers";
+import { getPlatformOS } from "utils/helpers";
+import type { TEditorModes } from "../EditorConfig";
 import { EditorModes } from "../EditorConfig";
+import { isSqlMode } from "../sql/config";
+import { KEYBOARD_SHORTCUTS_BY_PLATFORM } from "./keyboardShortcutConstants";
 
 export const getCodeCommentKeyMap = () => {
-  return isMacOrIOS() ? "Cmd-/" : "Ctrl-/";
+  const platformOS = getPlatformOS() || "default";
+
+  return KEYBOARD_SHORTCUTS_BY_PLATFORM[platformOS].codeComment;
 };
 
-export function getLineCommentString(mode: EditorModes) {
-  switch (mode) {
-    case EditorModes.SQL:
-    case EditorModes.SQL_WITH_BINDING:
-      return "--";
-    default:
-      return "//";
-  }
+export function getLineCommentString(editorMode: TEditorModes) {
+  return isSqlMode(editorMode) ? "--" : "//";
 }
 
 // Most of the code below is copied from https://github.com/codemirror/codemirror5/blob/master/addon/comment/comment.js
@@ -54,13 +53,15 @@ const noOptions: CodeMirror.CommentOptions = {};
 /**
  * Gives index of the first non whitespace character in the line
  **/
-function firstNonWhitespace(str: string, mode: EditorModes) {
+function firstNonWhitespace(str: string, mode: TEditorModes) {
   const found = str.search(
-    [EditorModes.JAVASCRIPT, EditorModes.TEXT_WITH_BINDING].includes(mode) &&
-      str.includes(JS_FIELD_BEGIN)
+    (
+      [EditorModes.JAVASCRIPT, EditorModes.TEXT_WITH_BINDING] as TEditorModes[]
+    ).includes(mode) && str.includes(JS_FIELD_BEGIN)
       ? JS_FIELD_BEGIN
       : nonWhitespace,
   );
+
   return found === -1 ? 0 : found;
 }
 
@@ -84,10 +85,11 @@ function performLineCommenting(
   to: CodeMirror.Position,
   options = noOptions,
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-this-alias
+  // eslint-disable-next-line @typescript-eslint/no-this-alias, @typescript-eslint/no-explicit-any
   const self: CodeMirror.Editor = this as any;
   const mode = self.getMode();
   const firstLine = self.getLine(from.line);
+
   if (firstLine === null || probablyInsideString(self, from, firstLine)) return;
 
   // When mode is TEXT, the name is null string, we skip commenting
@@ -102,6 +104,7 @@ function performLineCommenting(
       options.fullLines = true;
       self.blockComment(from, to, options);
     }
+
     return;
   }
 
@@ -109,7 +112,7 @@ function performLineCommenting(
   const padding = options.padding || " ";
   const blankLines = options.commentBlankLines || from.line === to.line;
 
-  self.operation(function() {
+  self.operation(function () {
     if (options.indent) {
       for (let i = from.line; i < end; ++i) {
         const line = self.getLine(i);
@@ -125,7 +128,7 @@ function performLineCommenting(
                   // we need to explicitly check if the SQL comment string is passed, make the mode SQL
                   commentString === getLineCommentString(EditorModes.SQL)
                     ? EditorModes.SQL
-                    : (mode.name as EditorModes),
+                    : (mode.name as TEditorModes),
                 ),
               );
 
@@ -152,6 +155,7 @@ function performLineCommenting(
     } else {
       for (let i = from.line; i < end; ++i) {
         const line = self.getLine(i);
+
         if (blankLines || nonWhitespace.test(line)) {
           // Handle JS field lines starting with {{
           if (line.startsWith(JS_FIELD_BEGIN)) {
@@ -188,13 +192,16 @@ function performLineUncommenting(
   const lines: string[] = [];
   const padding = options.padding || " ";
   let didCommentCode;
+
   lineComment: {
     if (!lineString) break lineComment;
+
     for (let i = start; i <= end; ++i) {
       const line = self.getLine(i);
       const found = line.indexOf(lineString);
 
       if (found == -1 && nonWhitespace.test(line)) break lineComment;
+
       if (
         found > -1 &&
         // Handle JS fields with {{}}
@@ -202,16 +209,21 @@ function performLineUncommenting(
         nonWhitespace.test(line.slice(0, found))
       )
         break lineComment;
+
       lines.push(line);
     }
-    self.operation(function() {
+
+    self.operation(function () {
       for (let i = start; i <= end; ++i) {
         const line = lines[i - start];
         const pos = line.indexOf(lineString);
         let endPos = pos + lineString.length;
+
         if (pos < 0) continue;
+
         if (line.slice(endPos, endPos + padding.length) == padding)
           endPos += padding.length;
+
         didCommentCode = true;
         self.replaceRange(
           "",
@@ -220,17 +232,22 @@ function performLineUncommenting(
         );
       }
     });
+
     if (didCommentCode) return true;
   }
 
   // Try block comments
   const startString = options.blockCommentStart || mode.blockCommentStart;
   const endString = options.blockCommentEnd || mode.blockCommentEnd;
+
   if (!startString || !endString) return false;
+
   const blockCommentLead = options.blockCommentLead || mode.blockCommentLead;
   const startLine = self.getLine(start);
   const open = startLine.indexOf(startString);
+
   if (open == -1) return false;
+
   const endLine = end === start ? startLine : self.getLine(end);
   const close = endLine.indexOf(
     endString,
@@ -238,6 +255,7 @@ function performLineUncommenting(
   );
   const insideStart = CodeMirror.Pos(start, open + 1),
     insideEnd = CodeMirror.Pos(end, close + 1);
+
   if (
     close === -1 ||
     !/comment/.test(self.getTokenTypeAt(insideStart)) ||
@@ -255,22 +273,26 @@ function performLineUncommenting(
       : startLine
           .slice(0, from.ch)
           .indexOf(endString, lastStart + startString.length);
+
   if (
     lastStart !== -1 &&
     firstEnd !== -1 &&
     firstEnd + endString.length != from.ch
   )
     return false;
+
   // Positions of the first endString after the end of the selection, and the last startString before it.
   firstEnd = endLine.indexOf(endString, to.ch);
   const almostLastStart = endLine
     .slice(to.ch)
     .lastIndexOf(startString, firstEnd - to.ch);
+
   lastStart =
     firstEnd === -1 || almostLastStart === -1 ? -1 : to.ch + almostLastStart;
+
   if (firstEnd !== -1 && lastStart != -1 && lastStart !== to.ch) return false;
 
-  self.operation(function() {
+  self.operation(function () {
     self.replaceRange(
       "",
       CodeMirror.Pos(
@@ -283,27 +305,34 @@ function performLineUncommenting(
       CodeMirror.Pos(end, close + endString.length),
     );
     let openEnd = open + startString.length;
+
     if (
       padding &&
       startLine.slice(openEnd, openEnd + padding.length) == padding
     )
       openEnd += padding.length;
+
     self.replaceRange(
       "",
       CodeMirror.Pos(start, open),
       CodeMirror.Pos(start, openEnd),
     );
+
     if (blockCommentLead) {
       for (let i = start + 1; i <= end; ++i) {
         const line = self.getLine(i);
         const found = line.indexOf(blockCommentLead);
+
         if (found == -1 || nonWhitespace.test(line.slice(0, found))) continue;
+
         let foundEnd = found + blockCommentLead.length;
+
         if (
           padding &&
           line.slice(foundEnd, foundEnd + padding.length) == padding
         )
           foundEnd += padding.length;
+
         self.replaceRange(
           "",
           CodeMirror.Pos(i, found),
@@ -312,23 +341,23 @@ function performLineUncommenting(
       }
     }
   });
+
   return true;
 }
 
 /** This function handles commenting which includes functions copied from comment add on with modifications */
-export const handleCodeComment = (lineCommentingString: string) => (
-  cm: CodeMirror.Editor,
-) => {
-  cm.lineComment = performLineCommenting;
+export const handleCodeComment =
+  (lineCommentingString: string) => (cm: CodeMirror.Editor) => {
+    cm.lineComment = performLineCommenting;
 
-  cm.uncomment = performLineUncommenting;
+    cm.uncomment = performLineUncommenting;
 
-  // This is the actual command that does the comment toggling
-  cm.toggleComment({
-    commentBlankLines: true,
-    // Always provide the line comment, otherwise it'll not work for JS fields when
-    // the mode is set to text/plain (when whole text wrapped in {{}} is selected)
-    lineComment: lineCommentingString,
-    indent: true,
-  });
-};
+    // This is the actual command that does the comment toggling
+    cm.toggleComment({
+      commentBlankLines: true,
+      // Always provide the line comment, otherwise it'll not work for JS fields when
+      // the mode is set to text/plain (when whole text wrapped in {{}} is selected)
+      lineComment: lineCommentingString,
+      indent: true,
+    });
+  };

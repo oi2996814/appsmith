@@ -2,43 +2,48 @@ package com.appsmith.server.repositories.ce;
 
 import com.appsmith.external.models.BaseDomain;
 import com.appsmith.external.models.Policy;
-import com.appsmith.external.models.QBaseDomain;
 import com.appsmith.server.acl.AclPermission;
 import com.appsmith.server.constants.FieldName;
-import com.appsmith.server.domains.QUser;
 import com.appsmith.server.domains.User;
 import com.appsmith.server.exceptions.AppsmithError;
 import com.appsmith.server.exceptions.AppsmithException;
+import com.appsmith.server.helpers.ce.bridge.Bridge;
+import com.appsmith.server.helpers.ce.bridge.BridgeQuery;
+import com.appsmith.server.helpers.ce.bridge.BridgeUpdate;
 import com.appsmith.server.repositories.CacheableRepositoryHelper;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBObject;
-import com.mongodb.client.result.UpdateResult;
-import com.querydsl.core.types.Path;
-
+import com.appsmith.server.repositories.ce.params.QueryAllParams;
+import com.mongodb.client.model.UpdateOneModel;
+import com.mongodb.client.model.WriteModel;
+import lombok.NonNull;
+import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.GenericTypeResolver;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.ReactiveMongoOperations;
-import org.springframework.data.mongodb.core.convert.MongoConverter;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.data.mongodb.core.query.UpdateDefinition;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.ReflectionUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-import static java.lang.Boolean.FALSE;
-import static java.lang.Boolean.TRUE;
-import static org.springframework.data.mongodb.core.query.Criteria.where;
+import static com.appsmith.external.helpers.StringUtils.dotted;
 import static org.apache.commons.collections.CollectionUtils.isEmpty;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 
@@ -59,447 +64,347 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
  * the understanding of these interfaces.
  * ```
  * Ref: https://theappsmith.slack.com/archives/CPQNLFHTN/p1669100205502599?thread_ts=1668753437.497369&cid=CPQNLFHTN
+ * <p>
+ * Note, we use the {@code @Autowired} annotation for bean injection here, instead of using constructor injection. This
+ * is an intentional exception to the usual recommendation. The reason is that this class is a base class for all other
+ * repository classes, and using constructor params would require all repository classes to have the same constructor
+ * params, and corresponding {@code super} calls. This was causing a lot of conflicts between CE and EE, and other
+ * additional overhead, with very little value to speak for. Hence, we are using {@code @Autowired} here.
+ * <p>
+ * <a href="https://theappsmith.slack.com/archives/CPQNLFHTN/p1711966160274399">Ref Slack thread</a>.
  */
 public abstract class BaseAppsmithRepositoryCEImpl<T extends BaseDomain> {
 
-    protected final ReactiveMongoOperations mongoOperations;
+    @Autowired
+    private ReactiveMongoOperations mongoOperations;
 
     protected final Class<T> genericDomain;
 
-    protected final MongoConverter mongoConverter;
-
-    protected final CacheableRepositoryHelper cacheableRepositoryHelper;
-
-    protected final static int NO_RECORD_LIMIT = -1;
-
     @Autowired
+    private CacheableRepositoryHelper cacheableRepositoryHelper;
+
+    public static final int NO_RECORD_LIMIT = -1;
+
+    public static final int NO_SKIP = 0;
+
     @SuppressWarnings("unchecked")
-    public BaseAppsmithRepositoryCEImpl(ReactiveMongoOperations mongoOperations,
-                                        MongoConverter mongoConverter, CacheableRepositoryHelper cacheableRepositoryHelper) {
-        this.mongoOperations = mongoOperations;
-        this.mongoConverter = mongoConverter;
-        this.cacheableRepositoryHelper = cacheableRepositoryHelper;
-        this.genericDomain = (Class<T>) GenericTypeResolver.resolveTypeArgument(getClass(), BaseAppsmithRepositoryCEImpl.class);
+    public BaseAppsmithRepositoryCEImpl() {
+        this.genericDomain =
+                (Class<T>) GenericTypeResolver.resolveTypeArgument(getClass(), BaseAppsmithRepositoryCEImpl.class);
     }
 
-    public Mono<Boolean> isPermissionPresentForUser(Set<Policy> policies, String permission, String username) {
-
-        Query query = new Query(where(fieldName(QUser.user.email)).is(username));
-
-        return mongoOperations.findOne(query, User.class)
-                .flatMap(user -> getAllPermissionGroupsForUser(user))
-                .map(userPermissionGroupIds -> {
-                    Optional<Policy> interestingPolicyOptional = policies.stream()
-                            .filter(policy -> policy.getPermission().equals(permission))
-                            .findFirst();
-                    if (!interestingPolicyOptional.isPresent()) {
-                        return FALSE;
-                    }
-
-                    Policy interestingPolicy = interestingPolicyOptional.get();
-                    Set<String> permissionGroupsIds = interestingPolicy.getPermissionGroups();
-                    if (permissionGroupsIds == null || permissionGroupsIds.isEmpty()) {
-                        return FALSE;
-                    }
-
-                    return userPermissionGroupIds.stream()
-                            .filter(userPermissionGroupId -> permissionGroupsIds.contains(userPermissionGroupId))
-                            .findFirst()
-                            .map(permissionGroup -> TRUE)
-                            .orElse(FALSE);
-                });
+    public static <T extends BaseDomain> BridgeQuery<T> notDeleted() {
+        return Bridge.and(
+                // Older check for deleted
+                Bridge.or(Bridge.notExists(FieldName.DELETED), Bridge.isFalse(FieldName.DELETED)),
+                // New check for deleted
+                Bridge.isNull(FieldName.DELETED_AT));
     }
 
-    public static final String fieldName(Path<?> path) {
-        return Optional.ofNullable(path).map(p -> p.getMetadata().getName()).orElse("");
-    }
-
-    public static final Criteria notDeleted() {
-        return new Criteria().andOperator(
-                //Older check for deleted
-                new Criteria().orOperator(
-                        where(FieldName.DELETED).exists(false),
-                        where(FieldName.DELETED).is(false)
-                ),
-                //New check for deleted
-                new Criteria().orOperator(
-                        where(FieldName.DELETED_AT).exists(false),
-                        where(FieldName.DELETED_AT).is(null)
-                )
-        );
-    }
-
-    @Deprecated
-    public static final Criteria userAcl(Set<String> permissionGroups, AclPermission permission) {
-        Optional<Criteria> criteria = userAcl(permissionGroups, Optional.ofNullable(permission));
-        return criteria.orElse(null);
-    }
-
-
-    public static final Optional<Criteria> userAcl(Set<String> permissionGroups, Optional<AclPermission> permission) {
-        if (permission.isEmpty()) {
-            return Optional.empty();
+    public static Criteria userAcl(Set<String> permissionGroups, AclPermission permission) {
+        if (permission == null) {
+            return null;
         }
         // Check if the permission is being provided by any of the permission groups
-        Criteria permissionGroupCriteria = Criteria.where(fieldName(QBaseDomain.baseDomain.policies))
-                .elemMatch(Criteria.where("permissionGroups").in(permissionGroups)
-                        .and("permission").is(permission.get().getValue()));
-
-        return Optional.of(permissionGroupCriteria);
+        return Criteria.where(dotted(BaseDomain.Fields.policyMap, permission.getValue(), "permissionGroups"))
+                .in(permissionGroups);
     }
 
-    protected Criteria getIdCriteria(Object id) {
-        return where("id").is(id);
-    }
-
-    protected DBObject getDbObject(Object o) {
-        BasicDBObject basicDBObject = new BasicDBObject();
-        mongoConverter.write(o, basicDBObject);
-        return basicDBObject;
-    }
-
-    @Deprecated
     public Mono<T> findById(String id, AclPermission permission) {
-        return findById(id, null, permission);
+        return queryBuilder().byId(id).permission(permission).one();
     }
 
-    public Mono<T> findById(String id, List<String> projectionFieldNames, AclPermission permission) {
-        if (id == null) {
-            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, FieldName.ID));
-        }
-        return findById(id, projectionFieldNames, Optional.ofNullable(permission));
-    }
-
-    public Mono<T> findById(String id, List<String> projectionFieldNames, Optional<AclPermission> permission) {
-        if (id == null) {
-            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, FieldName.ID));
-        }
-
-        return getCurrentUserPermissionGroupsIfRequired(permission)
-                .flatMap(permissionGroups -> {
-                    Query query = new Query(getIdCriteria(id));
-                    query.addCriteria(notDeleted());
-                    Optional<Criteria> userAcl = userAcl(permissionGroups, permission);
-                    if (userAcl.isPresent()) {
-                        query.addCriteria(userAcl.get());
-                    }
-
-                    if (!isEmpty(projectionFieldNames)) {
-                        projectionFieldNames.stream()
-                                .forEach(projectionFieldName -> {
-                                    query.fields().include(projectionFieldName);
-                                });
-                    }
-
-                    return mongoOperations.query(this.genericDomain)
-                            .matching(query)
-                            .one()
-                            .flatMap(obj -> setUserPermissionsInObject(obj, permissionGroups));
-                });
-    }
-
-    public Mono<T> findById(String id, Optional<AclPermission> permission) {
-        return findById(id, null, permission);
-    }
-
-    @Deprecated
-    public Mono<T> updateById(String id, T resource, AclPermission permission) {
-        if (id == null) {
-            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, FieldName.ID));
-        }
-        if (resource == null) {
-            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, FieldName.ID));
-        }
-        return updateById(id, resource, Optional.ofNullable(permission));
-    }
-
-    public Mono<T> updateById(String id, T resource, Optional<AclPermission> permission) {
-        Query query = new Query(Criteria.where("id").is(id));
-
+    public Mono<T> updateById(@NonNull String id, @NonNull T resource, AclPermission permission) {
         // Set policies to null in the update object
         resource.setPolicies(null);
-        resource.setUpdatedAt(Instant.now());
 
-        DBObject update = getDbObject(resource);
-        Update updateObj = new Update();
-        update.keySet().stream().forEach(entry -> updateObj.set(entry, update.get(entry)));
+        final QueryAllParams<T> q = queryBuilder().byId(id).permission(permission);
 
+        return q.updateFirst(buildUpdateFromSparseResource(resource)).then(Mono.defer(q::one));
+    }
+
+    public Mono<Integer> updateByIdWithoutPermissionCheck(@NonNull String id, BridgeUpdate update) {
+        return queryBuilder().byId(id).updateFirst(update);
+    }
+
+    public Mono<Integer> updateFieldByBaseIdAndBranchName(
+            String baseId,
+            String baseIdPath,
+            Map<String, Object> fieldNameValueMap,
+            String branchName,
+            String branchNamePath,
+            AclPermission permission) {
+        final QueryAllParams<T> builder = queryBuilder();
+
+        builder.criteria(Criteria.where(baseIdPath).is(baseId));
+
+        if (!isBlank(branchName)) {
+            builder.criteria(Criteria.where(branchNamePath).is(branchName));
+        }
+
+        Update update = new Update();
+        fieldNameValueMap.forEach(update::set);
+
+        return builder.permission(permission).updateFirst(update);
+    }
+
+    public Mono<Integer> updateFieldById(
+            String id, String idPath, Map<String, Object> fieldNameValueMap, AclPermission permission) {
+        final QueryAllParams<T> builder = queryBuilder();
+
+        builder.criteria(Criteria.where(idPath).is(id));
+
+        Update update = new Update();
+        fieldNameValueMap.forEach(update::set);
+
+        return builder.permission(permission).updateFirst(update);
+    }
+
+    protected Mono<Set<String>> getCurrentUserPermissionGroupsIfRequired(AclPermission permission) {
+        return getCurrentUserPermissionGroupsIfRequired(permission, true);
+    }
+
+    protected Mono<Set<String>> getCurrentUserPermissionGroupsIfRequired(
+            AclPermission permission, boolean includeAnonymousUserPermissions) {
+        return permission == null
+                ? Mono.just(Set.of())
+                : getCurrentUserPermissionGroups(includeAnonymousUserPermissions);
+    }
+
+    public Mono<Set<String>> getCurrentUserPermissionGroups() {
+        return getCurrentUserPermissionGroups(true);
+    }
+
+    protected Mono<Set<String>> getCurrentUserPermissionGroups(boolean includeAnonymousUserPermissions) {
         return ReactiveSecurityContextHolder.getContext()
-                .map(ctx -> ctx.getAuthentication())
-                .map(auth -> (User) auth.getPrincipal())
-                .flatMap(user -> {
-                    resource.setModifiedBy(user.getUsername());
-                    return (permission.isPresent() ? getAllPermissionGroupsForUser(user) : Mono.just(Set.<String>of()))
-                            .flatMap(permissionGroups -> {
-                                Optional<Criteria> userAcl = userAcl(permissionGroups, permission);
-                                query.addCriteria(notDeleted());
-                                if (userAcl.isPresent()) {
-                                    query.addCriteria(userAcl.get());
-                                }
-                                return mongoOperations.updateFirst(query, updateObj, resource.getClass())
-                                        .flatMap(obj -> {
-                                            if (obj.getMatchedCount() == 0) {
-                                                return Mono.error(new AppsmithException(AppsmithError.NO_RESOURCE_FOUND, resource.getClass().getSimpleName().toLowerCase(), id));
-                                            }
-                                            return findById(id, permission);
-                                        })
-                                        .flatMap(obj -> {
-                                            return setUserPermissionsInObject(obj, permissionGroups);
-                                        });
-                            });
-                });
+                .map(ctx -> (User) ctx.getAuthentication().getPrincipal())
+                .flatMap(user -> includeAnonymousUserPermissions
+                        ? getAllPermissionGroupsForUser(user)
+                        : getStrictPermissionGroupsForUser(user));
     }
 
-    public Mono<UpdateResult> updateFieldByDefaultIdAndBranchName(String defaultId, String defaultIdPath, Map<String, Object> fieldNameValueMap, String branchName,
-                                                                  String branchNamePath, AclPermission permission) {
-        return ReactiveSecurityContextHolder.getContext()
-                .map(ctx -> ctx.getAuthentication())
-                .map(auth -> auth.getPrincipal())
-                .flatMap(principal -> getAllPermissionGroupsForUser((User) principal))
-                .flatMap(permissionGroups -> {
-                    Query query = new Query(new Criteria().andOperator(notDeleted(), userAcl(permissionGroups,
-                            permission)));
-                    query.addCriteria(Criteria.where(defaultIdPath).is(defaultId));
-
-                    if (!isBlank(branchName)) {
-                        query.addCriteria(Criteria.where(branchNamePath).is(branchName));
-                    }
-
-                    Update update = new Update();
-                    fieldNameValueMap.forEach((fieldName, fieldValue) -> {
-                        update.set(fieldName, fieldValue);
-                    });
-
-                    return mongoOperations.updateFirst(query, update, this.genericDomain);
-                });
-    }
-
-    public Mono<UpdateResult> updateById(String id, Update updateObj, AclPermission permission) {
-        if (id == null) {
-            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, FieldName.ID));
-        }
-        if (updateObj == null) {
-            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, FieldName.ID));
-        }
-        return updateById(id, updateObj, Optional.ofNullable(permission));
-    }
-
-    public Mono<UpdateResult> updateById(String id, Update updateObj, Optional<AclPermission> permission) {
-        Query query = new Query(Criteria.where("id").is(id));
-
-        if (permission.isEmpty()) {
-            return mongoOperations.updateFirst(query, updateObj, this.genericDomain);
-        }
-
-        return getCurrentUserPermissionGroupsIfRequired(permission)
-                .flatMap(permissionGroups -> {
-                    query.addCriteria(new Criteria().andOperator(notDeleted(), userAcl(permissionGroups, permission.get())));
-                    return mongoOperations.updateFirst(query, updateObj, this.genericDomain);
-                });
-    }
-
-    public Mono<UpdateResult> updateByCriteria(List<Criteria> criteriaList, Update updateObj) {
-        if (criteriaList == null) {
-            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, "criteriaList"));
-        }
-        if (updateObj == null) {
-            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, "updateObj"));
-        }
-        List<Criteria> allCriterias = new ArrayList<>(criteriaList);
-        allCriterias.add(notDeleted());
-        Query query = new Query(new Criteria().andOperator(allCriterias));
-        return mongoOperations.updateMulti(query, updateObj, this.genericDomain);
-    }
-
-    @Deprecated
-    protected Mono<T> queryOne(List<Criteria> criterias, AclPermission aclPermission) {
-        return queryOne(criterias, null, Optional.ofNullable(aclPermission));
-    }
-
-    protected Mono<Set<String>> getCurrentUserPermissionGroupsIfRequired(Optional<AclPermission> permission) {
-        if (permission.isEmpty()) {
-            return Mono.just(Set.of());
-        }
-        return getCurrentUserPermissionGroups();
-    }
-
-    protected Mono<Set<String>> getCurrentUserPermissionGroups() {
-        return ReactiveSecurityContextHolder.getContext()
-                .map(ctx -> ctx.getAuthentication())
-                .map(auth -> auth.getPrincipal())
-                .flatMap(principal -> getAllPermissionGroupsForUser((User) principal));
-    }
-
-    protected Mono<T> queryOne(List<Criteria> criterias, List<String> projectionFieldNames, AclPermission permission) {
-        Mono<Set<String>> permissionGroupsMono = getCurrentUserPermissionGroupsIfRequired(Optional.ofNullable(permission));
-
-        return permissionGroupsMono
-                .flatMap(permissionGroups -> {
-                    return mongoOperations.query(this.genericDomain)
-                            .matching(createQueryWithPermission(criterias, projectionFieldNames, permissionGroups, permission))
-                            .one()
-                            .flatMap(obj -> setUserPermissionsInObject(obj, permissionGroups));
-                });
-    }
-
-    protected Mono<T> queryOne(List<Criteria> criterias, List<String> projectionFieldNames, Optional<AclPermission> permission) {
-        Mono<Set<String>> permissionGroupsMono = getCurrentUserPermissionGroupsIfRequired(permission);
-
-        return permissionGroupsMono
-                .flatMap(permissionGroups -> {
-                    return mongoOperations.query(this.genericDomain)
-                            .matching(createQueryWithPermission(criterias, projectionFieldNames, permissionGroups, permission))
-                            .one()
-                            .flatMap(obj -> setUserPermissionsInObject(obj, permissionGroups));
-                });
-    }
-
-    @Deprecated
-    protected Mono<T> queryFirst(List<Criteria> criterias, AclPermission aclPermission) {
-        return queryFirst(criterias, Optional.ofNullable(aclPermission));
-    }
-
-    protected Mono<T> queryFirst(List<Criteria> criterias, Optional<AclPermission> permission) {
-        Mono<Set<String>> permissionGroupsMono = getCurrentUserPermissionGroupsIfRequired(permission);
-
-        return permissionGroupsMono
-                .flatMap(permissionGroups -> {
-                    return mongoOperations.query(this.genericDomain)
-                            .matching(createQueryWithPermission(criterias, null, permissionGroups, permission))
-                            .first()
-                            .flatMap(obj -> setUserPermissionsInObject(obj, permissionGroups));
-                });
-    }
-
-    @Deprecated
-    protected Query createQueryWithPermission(List<Criteria> criterias, Set<String> permissionGroups, AclPermission aclPermission) {
+    protected Query createQueryWithPermission(
+            List<Criteria> criterias, Set<String> permissionGroups, AclPermission aclPermission) {
         return createQueryWithPermission(criterias, null, permissionGroups, aclPermission);
     }
 
-    protected Query createQueryWithPermission(List<Criteria> criterias, Set<String> permissionGroups, Optional<AclPermission> permission) {
-        return createQueryWithPermission(criterias, null, permissionGroups, permission.orElse(null));
-    }
+    protected Query createQueryWithPermission(
+            List<Criteria> criterias,
+            List<String> projectionFieldNames,
+            Set<String> permissionGroups,
+            AclPermission aclPermission) {
+        final ArrayList<Criteria> criteriaList = new ArrayList<>(criterias);
+        criteriaList.add(notDeleted());
 
-    protected Query createQueryWithPermission(List<Criteria> criterias,
-                                              List<String> projectionFieldNames,
-                                              Set<String> permissionGroups,
-                                              Optional<AclPermission> permission) {
-
-        return createQueryWithPermission(criterias, projectionFieldNames, permissionGroups, permission.orElse(null));
-    }
-
-    protected Query createQueryWithPermission(List<Criteria> criterias,
-                                              List<String> projectionFieldNames,
-                                              Set<String> permissionGroups,
-                                              AclPermission aclPermission) {
-        Query query = new Query();
-        criterias.stream()
-                .forEach(criteria -> query.addCriteria(criteria));
-        if (aclPermission == null) {
-            query.addCriteria(new Criteria().andOperator(notDeleted()));
-        } else {
-            query.addCriteria(new Criteria().andOperator(notDeleted(), userAcl(permissionGroups, aclPermission)));
+        final Criteria permissionCriteria = userAcl(permissionGroups, aclPermission);
+        if (permissionCriteria != null) {
+            criteriaList.add(permissionCriteria);
         }
 
+        final Query query = new Query(new Criteria().andOperator(criteriaList.toArray(new Criteria[0])));
+
         if (!isEmpty(projectionFieldNames)) {
-            projectionFieldNames.stream()
-                    .forEach(fieldName -> query.fields().include(fieldName));
+            query.fields().include(projectionFieldNames.toArray(new String[0]));
         }
 
         return query;
     }
 
-    @Deprecated
-    protected Mono<Long> count(List<Criteria> criterias, AclPermission aclPermission) {
-        return count(criterias, Optional.ofNullable(aclPermission));
+    public QueryAllParams<T> queryBuilder() {
+        return new QueryAllParams<>(this);
     }
 
-    protected Mono<Long> count(List<Criteria> criterias, Optional<AclPermission> permission) {
-        Mono<Set<String>> permissionGroupsMono = getCurrentUserPermissionGroupsIfRequired(permission);
-
-        return permissionGroupsMono
-                .flatMap(permissionGroups ->
-                        mongoOperations.count(createQueryWithPermission(criterias, permissionGroups, permission), this.genericDomain)
-                );
+    public Flux<T> queryAllExecute(QueryAllParams<T> params) {
+        return queryAllExecute(params, this.genericDomain)
+                .flatMap(obj -> setUserPermissionsInObject(obj, params.getPermissionGroups()));
     }
 
-    protected Mono<Long> count(List<Criteria> criteriaList) {
-        return count(criteriaList, Optional.empty());
+    public <P> Flux<P> queryAllExecute(QueryAllParams<T> params, Class<P> projectionClass) {
+        return ensurePermissionGroupsInParams(params).thenMany(Flux.defer(() -> {
+            final AclPermission permission = params.getPermission();
+            final Set<String> permissionGroups = params.getPermissionGroups();
+
+            if (permission != null && CollectionUtils.isEmpty(permissionGroups)) {
+                // There's a permission we want to check, but there's zero permission groups to check against. The
+                // resulting query will _always_ be `false`. So returning an early response, without hitting the DB.
+                return Flux.empty();
+            }
+
+            final Query query =
+                    createQueryWithPermission(params.getCriteria(), params.getFields(), permissionGroups, permission);
+
+            if (params.getSkip() > NO_SKIP) {
+                query.skip(params.getSkip());
+            }
+
+            if (params.getLimit() != NO_RECORD_LIMIT) {
+                query.limit(params.getLimit());
+            }
+
+            if (params.getSort() != null) {
+                query.with(params.getSort());
+            }
+
+            return mongoOperations
+                    .query(this.genericDomain)
+                    .as(projectionClass)
+                    .matching(query.cursorBatchSize(10_000))
+                    .all();
+        }));
     }
 
-    @Deprecated
-    public Flux<T> queryAll(List<Criteria> criterias, AclPermission aclPermission) {
-        return queryAll(criterias, Optional.empty(), Optional.ofNullable(aclPermission), Optional.empty(), NO_RECORD_LIMIT);
+    public Mono<T> queryOneExecute(QueryAllParams<T> params) {
+        return queryOneExecute(params, this.genericDomain)
+                .flatMap(obj -> setUserPermissionsInObject(obj, params.getPermissionGroups()));
     }
 
-    public Flux<T> queryAll(List<Criteria> criterias, Optional<AclPermission> permission) {
-        return queryAll(criterias, permission, Optional.empty());
+    public <P> Mono<P> queryOneExecute(QueryAllParams<T> params, Class<P> projectionClass) {
+        return ensurePermissionGroupsInParams(params).then(Mono.defer(() -> {
+            final AclPermission permission = params.getPermission();
+            final Set<String> permissionGroups = params.getPermissionGroups();
+
+            if (permission != null && CollectionUtils.isEmpty(permissionGroups)) {
+                // There's a permission we want to check, but there's zero permission groups to check against. The
+                // resulting query will _always_ be `false`. So returning an early response, without hitting the DB.
+                return Mono.empty();
+            }
+
+            final Query query =
+                    createQueryWithPermission(params.getCriteria(), params.getFields(), permissionGroups, permission);
+
+            return mongoOperations
+                    .query(genericDomain)
+                    .as(projectionClass)
+                    .matching(query.cursorBatchSize(10_000))
+                    .one();
+        }));
     }
 
-    @Deprecated
-    public Flux<T> queryAll(List<Criteria> criterias, AclPermission aclPermission, Sort sort) {
-        return queryAll(criterias, Optional.empty(), Optional.ofNullable(aclPermission), Optional.ofNullable(sort), NO_RECORD_LIMIT);
+    public Mono<T> queryFirstExecute(QueryAllParams<T> params) {
+        return ensurePermissionGroupsInParams(params).then(Mono.defer(() -> {
+            final AclPermission permission = params.getPermission();
+            final Set<String> permissionGroups = params.getPermissionGroups();
+
+            if (permission != null && CollectionUtils.isEmpty(permissionGroups)) {
+                // There's a permission we want to check, but there's zero permission groups to check against. The
+                // resulting query will _always_ be `false`. So returning an early response, without hitting the DB.
+                return Mono.empty();
+            }
+
+            final Query query =
+                    createQueryWithPermission(params.getCriteria(), params.getFields(), permissionGroups, permission);
+
+            return mongoOperations
+                    .query(this.genericDomain)
+                    .matching(query)
+                    .first()
+                    .flatMap(obj -> setUserPermissionsInObject(obj, permissionGroups));
+        }));
     }
 
-    public Flux<T> queryAll(List<Criteria> criterias, Optional<AclPermission> permission, Optional<Sort> sort) {
-        return queryAll(criterias, Optional.empty(), permission, sort, NO_RECORD_LIMIT);
+    public Mono<Long> countExecute(QueryAllParams<T> params) {
+        return ensurePermissionGroupsInParams(params).then(Mono.defer(() -> {
+            final AclPermission permission = params.getPermission();
+            final Set<String> permissionGroups = params.getPermissionGroups();
+
+            if (permission != null && CollectionUtils.isEmpty(permissionGroups)) {
+                // There's a permission we want to check, but there's zero permission groups to check against. The
+                // resulting query will _always_ be `false`. So returning an early response, without hitting the DB.
+                return Mono.just(0L);
+            }
+
+            final Query query = createQueryWithPermission(params.getCriteria(), permissionGroups, permission);
+
+            return mongoOperations.count(query, this.genericDomain);
+        }));
     }
 
-    @Deprecated
-    public Flux<T> queryAll(List<Criteria> criterias, List<String> includeFields, AclPermission aclPermission, Sort sort) {
-        return queryAll(criterias, Optional.ofNullable(includeFields), Optional.ofNullable(aclPermission), Optional.ofNullable(sort), NO_RECORD_LIMIT);
+    public Mono<Integer> updateExecute(@NonNull QueryAllParams<T> params, @NonNull T resource) {
+        return updateExecute(params, buildUpdateFromSparseResource(resource));
     }
 
-    public Flux<T> queryAll(List<Criteria> criterias, Optional<List<String>> includeFields, Optional<AclPermission> aclPermission, Optional<Sort> sort) {
-        return queryAll(criterias, includeFields, aclPermission, sort, NO_RECORD_LIMIT);
-    }
+    public Mono<Integer> updateExecute(@NonNull QueryAllParams<T> params, @NonNull UpdateDefinition update) {
+        Objects.requireNonNull(params.getCriteria());
 
-    @Deprecated
-    public Flux<T> queryAll(List<Criteria> criterias, List<String> includeFields, AclPermission aclPermission, Sort sort, int limit) {
-        return queryAll(criterias, Optional.ofNullable(includeFields), Optional.ofNullable(aclPermission), Optional.ofNullable(sort), limit);
-    }
-
-    public Flux<T> queryAll(List<Criteria> criterias, Optional<List<String>> includeFields, Optional<AclPermission> permission, Optional<Sort> sort, int limit) {
-        Mono<Set<String>> permissionGroupsMono = getCurrentUserPermissionGroupsIfRequired(permission);
-        return permissionGroupsMono
-                .flatMapMany(permissionGroups -> queryAllWithPermissionGroups(criterias, includeFields, permission, sort, permissionGroups, limit));
-    }
-
-    @Deprecated
-    public Flux<T> queryAllWithPermissionGroups(List<Criteria> criterias,
-                                                List<String> includeFields,
-                                                AclPermission aclPermission,
-                                                Sort sort,
-                                                Set<String> permissionGroups,
-                                                int limit) {
-        return queryAllWithPermissionGroups(criterias, Optional.ofNullable(includeFields),
-                Optional.ofNullable(aclPermission), Optional.ofNullable(sort), permissionGroups, limit);
-    }
-
-    public Flux<T> queryAllWithPermissionGroups(List<Criteria> criterias,
-                                                Optional<List<String>> includeFields,
-                                                Optional<AclPermission> aclPermission,
-                                                Optional<Sort> sortOptional,
-                                                Set<String> permissionGroups,
-                                                int limit) {
-        final ArrayList<Criteria> criteriaList = new ArrayList<>(criterias);
-        Query query = new Query();
-        includeFields.ifPresent(fields -> {
-            fields.forEach(field -> query.fields().include(field));
-        });
-        if (limit != NO_RECORD_LIMIT) {
-            query.limit(limit);
+        if (!isEmpty(params.getFields())) {
+            // Specifying fields to update doesn't make any sense, so explicitly disallow it.
+            return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, "fields"));
         }
-        Criteria andCriteria = new Criteria();
-        criteriaList.add(notDeleted());
-        userAcl(permissionGroups, aclPermission).ifPresent(criteria -> criteriaList.add(criteria));
-        andCriteria.andOperator(criteriaList.toArray(new Criteria[0]));
-        query.addCriteria(andCriteria);
-        sortOptional.ifPresent(sort -> query.with(sort));
-        return mongoOperations.query(this.genericDomain)
-                .matching(query)
-                .all()
-                .flatMap(obj -> setUserPermissionsInObject(obj, permissionGroups));
+
+        return ensurePermissionGroupsInParams(params).then(Mono.defer(() -> {
+            final AclPermission permission = params.getPermission();
+            final Set<String> permissionGroups = params.getPermissionGroups();
+
+            if (permission != null && CollectionUtils.isEmpty(permissionGroups)) {
+                // There's a permission we want to check, but there's zero permission groups to check against. The
+                // resulting query will _always_ be `false`. So returning an early response, without hitting the DB.
+                return Mono.just(0);
+            }
+
+            final Query query = createQueryWithPermission(params.getCriteria(), null, permissionGroups, permission);
+            if (QueryAllParams.Scope.ALL.equals(params.getScope())) {
+                return mongoOperations
+                        .updateMulti(query, update, genericDomain)
+                        .map(updateResult -> Math.toIntExact(updateResult.getMatchedCount()));
+            } else if (QueryAllParams.Scope.FIRST.equals(params.getScope())) {
+                return mongoOperations
+                        .updateFirst(query, update, genericDomain)
+                        .map(updateResult -> Math.toIntExact(updateResult.getMatchedCount()));
+            } else {
+                return Mono.error(new AppsmithException(AppsmithError.INVALID_PARAMETER, "scope"));
+            }
+        }));
+    }
+
+    public BridgeUpdate buildUpdateFromSparseResource(T resource) {
+        // In case the update is not used to update the policies, then set the policies to null to ensure that the
+        // existing policies are not overwritten.
+        if (CollectionUtils.isEmpty(resource.getPolicies())) {
+            resource.setPolicies(null);
+        }
+
+        final BridgeUpdate update = Bridge.update();
+
+        ReflectionUtils.doWithFields(
+                resource.getClass(),
+                field -> {
+                    if (field.isAnnotationPresent(Transient.class) || BaseDomain.Fields.id.equals(field.getName())) {
+                        return;
+                    }
+
+                    final int modifiers = field.getModifiers();
+                    if (Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) {
+                        return;
+                    }
+
+                    field.setAccessible(true);
+                    final Object value = field.get(resource);
+                    if (value != null) {
+                        update.set(field.getName(), value);
+                    }
+                },
+                null);
+
+        return update.set(BaseDomain.Fields.updatedAt, Instant.now());
+    }
+
+    /**
+     * This method will try to ensure that permission groups are present in the params. If they're already there, don't
+     * do anything. If not, and if a `permission` is available, then get the permission groups for the current user and
+     * permission and fill that into the `params` object.
+     * @param params that may have permission groups already, and a permission that can be used to get permission groups otherwise.
+     * @return the same `params` object, but with permission groups filled in.
+     */
+    private Mono<Void> ensurePermissionGroupsInParams(QueryAllParams<T> params) {
+        if (params.getPermissionGroups() != null) {
+            return Mono.empty();
+        }
+
+        return getCurrentUserPermissionGroupsIfRequired(
+                        params.getPermission(), params.isIncludeAnonymousUserPermissions())
+                .defaultIfEmpty(Collections.emptySet())
+                .map(params::permissionGroups)
+                .then();
     }
 
     public Mono<T> setUserPermissionsInObject(T obj) {
@@ -511,11 +416,13 @@ public abstract class BaseAppsmithRepositoryCEImpl<T extends BaseDomain> {
         Set<String> permissions = new HashSet<>();
         obj.setUserPermissions(permissions);
 
-        if (CollectionUtils.isEmpty(obj.getPolicies()) || permissionGroups.isEmpty()) {
+        Set<Policy> existingPolicies = obj.getPolicies();
+        final Set<Policy> policies = new HashSet<>(existingPolicies == null ? Set.of() : existingPolicies);
+        if (CollectionUtils.isEmpty(policies) || permissionGroups.isEmpty()) {
             return Mono.just(obj);
         }
 
-        for (Policy policy : obj.getPolicies()) {
+        for (Policy policy : policies) {
             Set<String> policyPermissionGroups = policy.getPermissionGroups();
             if (CollectionUtils.isEmpty(policyPermissionGroups)) {
                 continue;
@@ -527,48 +434,28 @@ public abstract class BaseAppsmithRepositoryCEImpl<T extends BaseDomain> {
                 }
             }
         }
-
+        obj.setPolicies(policies);
         return Mono.just(obj);
-    }
-
-    @Deprecated
-    public Mono<T> findByGitSyncIdAndDefaultApplicationId(String defaultApplicationId, String gitSyncId, AclPermission permission) {
-        return findByGitSyncIdAndDefaultApplicationId(defaultApplicationId, gitSyncId, Optional.ofNullable(permission));
-    }
-
-    public Mono<T> findByGitSyncIdAndDefaultApplicationId(String defaultApplicationId, String gitSyncId, Optional<AclPermission> permission) {
-        final String defaultResources = fieldName(QBaseDomain.baseDomain.defaultResources);
-        Criteria defaultAppIdCriteria = where(defaultResources + "." + FieldName.APPLICATION_ID).is(defaultApplicationId);
-        Criteria gitSyncIdCriteria = where(FieldName.GIT_SYNC_ID).is(gitSyncId);
-        return queryFirst(List.of(defaultAppIdCriteria, gitSyncIdCriteria), permission);
     }
 
     /**
      * 1. Get all the user groups associated with the user
      * 2. Get all the permission groups associated with anonymous user
      * 3. Return the set of all the permission groups.
-     *
-     * @param user
-     * @return
      */
-
     protected Mono<Set<String>> getAllPermissionGroupsForUser(User user) {
 
         Mono<User> userMono = Mono.just(user);
-        if (user.getTenantId() == null) {
-            userMono = cacheableRepositoryHelper.getDefaultTenantId()
-                    .map(tenantId -> {
-                        user.setTenantId(tenantId);
-                        return user;
-                    });
+        if (user.getOrganizationId() == null) {
+            userMono = cacheableRepositoryHelper.getDefaultOrganizationId().map(organizationId -> {
+                user.setOrganizationId(organizationId);
+                return user;
+            });
         }
 
-
-        return userMono
-                .flatMap(userWithTenant -> Mono.zip(
-                        cacheableRepositoryHelper.getPermissionGroupsOfUser(userWithTenant),
-                        getAnonymousUserPermissionGroups()
-                ))
+        return userMono.flatMap(userWithOrganization -> Mono.zip(
+                        cacheableRepositoryHelper.getPermissionGroupsOfUser(userWithOrganization),
+                        getAnonymousUserPermissionGroups()))
                 .map(tuple -> {
                     Set<String> permissionGroups = new HashSet<>(tuple.getT1());
 
@@ -582,28 +469,102 @@ public abstract class BaseAppsmithRepositoryCEImpl<T extends BaseDomain> {
                 });
     }
 
+    /**
+     * 1. Get all the user groups associated with the user
+     * 2. Get all the permission groups associated with anonymous user
+     * 3. Return the set of all the permission groups.
+     */
+    protected Mono<Set<String>> getStrictPermissionGroupsForUser(User user) {
+
+        Mono<User> userMono = Mono.just(user);
+        if (user.getOrganizationId() == null) {
+            userMono = cacheableRepositoryHelper.getDefaultOrganizationId().map(organizationId -> {
+                user.setOrganizationId(organizationId);
+                return user;
+            });
+        }
+
+        return userMono.flatMap(cacheableRepositoryHelper::getPermissionGroupsOfUser)
+                .map(HashSet::new);
+    }
+
     protected Mono<Set<String>> getAnonymousUserPermissionGroups() {
         return cacheableRepositoryHelper.getPermissionGroupsOfAnonymousUser();
     }
 
-    public Mono<T> queryOne(List<Criteria> criterias, List<String> projectionFieldNames) {
-        return ReactiveSecurityContextHolder.getContext()
-                .map(ctx -> ctx.getAuthentication())
-                .map(auth -> auth.getPrincipal())
-                .flatMap(principal -> {
-                    criterias.add(notDeleted());
-                    Query query = new Query(new Criteria().andOperator(criterias));
+    /**
+     * Updates a document in the database that matches the provided query and returns the modified document.
+     * This method performs a find-and-modify operation internally to atomically update a document in the database.
+     *
+     * @param id The unique identifier of the document to be updated.
+     * @param updateObj The update object specifying the modifications to be applied to the document.
+     * @param permission An optional permission parameter for access control.
+     * @return A Mono emitting the updated document after modification.
+     *
+     * @implNote
+     * The `findAndModify` method operates at the database level and does not automatically handle encryption or decryption of fields. If the document contains encrypted fields, it is the responsibility of the caller to handle encryption and decryption both before and after using this method.
+     *
+     * @see FindAndModifyOptions
+     */
+    public Mono<T> updateAndReturn(String id, BridgeUpdate updateObj, AclPermission permission) {
+        Query query = new Query(Criteria.where("id").is(id));
 
-                    if (!isEmpty(projectionFieldNames)) {
-                        projectionFieldNames.stream()
-                                .forEach(projectionFieldName -> {
-                                    query.fields().include(projectionFieldName);
-                                });
-                    }
+        FindAndModifyOptions findAndModifyOptions =
+                FindAndModifyOptions.options().returnNew(Boolean.TRUE);
 
-                    return mongoOperations.query(this.genericDomain)
-                            .matching(query)
-                            .one();
-                });
+        if (permission == null) {
+            return mongoOperations.findAndModify(query, updateObj, findAndModifyOptions, this.genericDomain);
+        }
+
+        return getCurrentUserPermissionGroupsIfRequired(permission, true).flatMap(permissionGroups -> {
+            query.addCriteria(new Criteria().andOperator(notDeleted(), userAcl(permissionGroups, permission)));
+            return mongoOperations.findAndModify(query, updateObj, findAndModifyOptions, this.genericDomain);
+        });
+    }
+
+    public Mono<Void> bulkInsert(List<T> domainList) {
+        if (CollectionUtils.isEmpty(domainList)) {
+            return Mono.empty();
+        }
+
+        // convert the list of domains to a list of DBObjects
+        List<Document> dbObjects = domainList.stream()
+                .map(domain -> {
+                    Document document = new Document();
+                    mongoOperations.getConverter().write(domain, document);
+                    return document;
+                })
+                .collect(Collectors.toList());
+
+        return mongoOperations
+                .getCollection(mongoOperations.getCollectionName(genericDomain))
+                .flatMapMany(documentMongoCollection -> documentMongoCollection.insertMany(dbObjects))
+                .collectList()
+                .then();
+    }
+
+    public Mono<Void> bulkUpdate(List<T> domainObjects) {
+        if (CollectionUtils.isEmpty(domainObjects)) {
+            return Mono.empty();
+        }
+
+        // convert the list of new actions to a list of DBObjects
+        List<WriteModel<Document>> dbObjects = domainObjects.stream()
+                .map(actionCollection -> {
+                    assert actionCollection.getId() != null;
+                    Document document = new Document();
+                    mongoOperations.getConverter().write(actionCollection, document);
+                    document.remove("_id");
+                    return (WriteModel<Document>) new UpdateOneModel<Document>(
+                            new Document("_id", new ObjectId(actionCollection.getId())),
+                            new Document("$set", document));
+                })
+                .collect(Collectors.toList());
+
+        return mongoOperations
+                .getCollection(mongoOperations.getCollectionName(genericDomain))
+                .flatMapMany(documentMongoCollection -> documentMongoCollection.bulkWrite(dbObjects))
+                .collectList()
+                .then();
     }
 }

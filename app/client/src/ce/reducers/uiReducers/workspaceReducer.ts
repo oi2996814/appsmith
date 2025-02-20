@@ -1,64 +1,47 @@
 import { createImmerReducer } from "utils/ReducerUtils";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
-  ReduxAction,
   ReduxActionTypes,
   ReduxActionErrorTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import {
-  WorkspaceRole,
-  Workspace,
-  WorkspaceUser,
-} from "@appsmith/constants/workspaceConstants";
+} from "ee/constants/ReduxActionConstants";
+import type { WorkspaceRole, Workspace } from "ee/constants/workspaceConstants";
+
+export interface WorkspaceReduxState {
+  list: Workspace[];
+  roles?: WorkspaceRole[];
+  loadingStates: {
+    isFetchAllRoles: boolean;
+    isSavingWorkspaceInfo: boolean;
+    isFetchingWorkspaces: boolean;
+    isFetchingEntities: boolean;
+    isDeletingWorkspace: boolean;
+  };
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  workspaceRoles: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  searchEntities: any;
+}
 
 export const initialState: WorkspaceReduxState = {
   loadingStates: {
-    fetchingRoles: false,
     isFetchAllRoles: false,
-    isFetchAllUsers: false,
-    isFetchingWorkspace: false,
+    isSavingWorkspaceInfo: false,
+    isFetchingWorkspaces: false,
+    isFetchingEntities: false,
+    isDeletingWorkspace: false,
   },
-  workspaceUsers: [],
+  list: [],
   workspaceRoles: [],
-  currentWorkspace: {
-    id: "",
-    name: "",
-  },
+  searchEntities: {},
 };
 
 export const handlers = {
-  [ReduxActionTypes.FETCH_WORKSPACE_ROLES_INIT]: (
-    draftState: WorkspaceReduxState,
-  ) => {
-    draftState.loadingStates.isFetchAllRoles = true;
-  },
   [ReduxActionTypes.FETCH_ALL_ROLES_INIT]: (
     draftState: WorkspaceReduxState,
   ) => {
     draftState.loadingStates.isFetchAllRoles = true;
-  },
-  [ReduxActionTypes.FETCH_ALL_USERS_INIT]: (
-    draftState: WorkspaceReduxState,
-  ) => {
-    draftState.loadingStates.isFetchAllUsers = true;
-  },
-  [ReduxActionTypes.FETCH_WORKSPACE_ROLES_SUCCESS]: (
-    draftState: WorkspaceReduxState,
-    action: ReduxAction<WorkspaceRole[]>,
-  ) => {
-    draftState.workspaceRoles = action.payload;
-    draftState.loadingStates.fetchingRoles = false;
-  },
-  [ReduxActionErrorTypes.FETCH_WORKSPACE_ROLES_ERROR]: (
-    draftState: WorkspaceReduxState,
-  ) => {
-    draftState.loadingStates.fetchingRoles = false;
-  },
-  [ReduxActionTypes.FETCH_ALL_USERS_SUCCESS]: (
-    draftState: WorkspaceReduxState,
-    action: ReduxAction<WorkspaceUser[]>,
-  ) => {
-    draftState.workspaceUsers = action.payload;
-    draftState.loadingStates.isFetchAllUsers = false;
   },
   [ReduxActionTypes.FETCH_ALL_ROLES_SUCCESS]: (
     draftState: WorkspaceReduxState,
@@ -67,113 +50,121 @@ export const handlers = {
     draftState.workspaceRoles = action.payload;
     draftState.loadingStates.isFetchAllRoles = false;
   },
-  [ReduxActionTypes.CHANGE_WORKSPACE_USER_ROLE_SUCCESS]: (
+  [ReduxActionTypes.FETCH_ALL_WORKSPACES_INIT]: (
+    draftState: WorkspaceReduxState,
+  ) => {
+    draftState.loadingStates.isFetchingWorkspaces = true;
+  },
+  [ReduxActionTypes.FETCH_ALL_WORKSPACES_SUCCESS]: (
+    draftState: WorkspaceReduxState,
+    action: ReduxAction<Workspace[]>,
+  ) => {
+    draftState.loadingStates.isFetchingWorkspaces = false;
+    draftState.list = action.payload;
+  },
+  [ReduxActionTypes.DELETE_WORKSPACE_INIT]: (
+    draftState: WorkspaceReduxState,
+  ) => {
+    draftState.loadingStates.isDeletingWorkspace = true;
+  },
+  [ReduxActionTypes.DELETE_WORKSPACE_SUCCESS]: (
+    draftState: WorkspaceReduxState,
+    action: ReduxAction<string>,
+  ) => {
+    draftState.list = draftState.list.filter(
+      (workspace: Workspace) => workspace.id !== action.payload,
+    );
+    draftState.loadingStates.isDeletingWorkspace = false;
+  },
+  [ReduxActionErrorTypes.DELETE_WORKSPACE_ERROR]: (
+    draftState: WorkspaceReduxState,
+  ) => {
+    draftState.loadingStates.isDeletingWorkspace = false;
+  },
+  [ReduxActionTypes.SAVE_WORKSPACE_INIT]: (draftState: WorkspaceReduxState) => {
+    draftState.loadingStates.isSavingWorkspaceInfo = true;
+  },
+  [ReduxActionTypes.SAVE_WORKSPACE_SUCCESS]: (
     draftState: WorkspaceReduxState,
     action: ReduxAction<{
-      userId: string;
-      username: string;
-      name: string;
-      permissionGroupId: string;
-      permissionGroupName: string;
+      id: string;
+      name?: string;
+      website?: string;
+      email?: string;
+      logoUrl?: string;
     }>,
   ) => {
-    draftState.workspaceUsers.forEach((user: WorkspaceUser) => {
-      if (user.username === action.payload.username) {
-        user.permissionGroupId = action.payload.permissionGroupId;
-        user.permissionGroupName = action.payload.permissionGroupName;
-        user.isChangingRole = false;
-      }
-    });
-  },
-  [ReduxActionTypes.CHANGE_WORKSPACE_USER_ROLE_INIT]: (
-    draftState: WorkspaceReduxState,
-    action: ReduxAction<{ username: string }>,
-  ) => {
-    draftState.workspaceUsers.forEach((user: WorkspaceUser) => {
-      if (user.username === action.payload.username) {
-        user.isChangingRole = true;
-      }
-    });
-  },
-  [ReduxActionErrorTypes.CHANGE_WORKSPACE_USER_ROLE_ERROR]: (
-    draftState: WorkspaceReduxState,
-  ) => {
-    draftState.workspaceUsers.forEach((user: WorkspaceUser) => {
-      //TODO: This will change the status to false even if one role change api fails.
-      user.isChangingRole = false;
-    });
-  },
-  [ReduxActionTypes.DELETE_WORKSPACE_USER_INIT]: (
-    draftState: WorkspaceReduxState,
-    action: ReduxAction<{ username: string }>,
-  ) => {
-    draftState.workspaceUsers.forEach((user: WorkspaceUser) => {
-      if (user.username === action.payload.username) {
-        user.isDeleting = true;
-      }
-    });
-  },
-  [ReduxActionTypes.DELETE_WORKSPACE_USER_SUCCESS]: (
-    draftState: WorkspaceReduxState,
-    action: ReduxAction<{ username: string }>,
-  ) => {
-    draftState.workspaceUsers = draftState.workspaceUsers.filter(
-      (user: WorkspaceUser) => user.username !== action.payload.username,
+    const workspaces = draftState.list;
+    const workspaceIndex = draftState.list.findIndex(
+      (workspace: Workspace) => workspace.id === action.payload.id,
     );
+
+    if (workspaceIndex !== -1) {
+      workspaces[workspaceIndex] = {
+        ...workspaces[workspaceIndex],
+        ...action.payload,
+      };
+    }
+
+    draftState.loadingStates.isSavingWorkspaceInfo = false;
+    draftState.list = [...workspaces];
   },
-  [ReduxActionErrorTypes.DELETE_WORKSPACE_USER_ERROR]: (
+  [ReduxActionErrorTypes.SAVE_WORKSPACE_ERROR]: (
     draftState: WorkspaceReduxState,
   ) => {
-    draftState.workspaceUsers.forEach((user: WorkspaceUser) => {
-      //TODO: This will change the status to false even if one delete fails.
-      user.isDeleting = false;
-    });
+    draftState.loadingStates.isSavingWorkspaceInfo = false;
   },
-  [ReduxActionTypes.SET_CURRENT_WORKSPACE_ID]: (
-    draftState: WorkspaceReduxState,
-    action: ReduxAction<{ workspaceId: string }>,
+  [ReduxActionTypes.SEARCH_WORKSPACE_ENTITIES_INIT]: (
+    state: WorkspaceReduxState,
   ) => {
-    draftState.currentWorkspace.id = action.payload.workspaceId;
+    return {
+      ...state,
+      loadingStates: {
+        ...state.loadingStates,
+        isFetchingEntities: true,
+      },
+    };
   },
-  [ReduxActionTypes.SET_CURRENT_WORKSPACE]: (
-    draftState: WorkspaceReduxState,
-    action: ReduxAction<Workspace>,
+  [ReduxActionTypes.SEARCH_WORKSPACE_ENTITIES_SUCCESS]: (
+    state: WorkspaceReduxState,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    action: ReduxAction<any>,
   ) => {
-    draftState.currentWorkspace = action.payload;
+    return {
+      ...state,
+      loadingStates: {
+        ...state.loadingStates,
+        isFetchingEntities: false,
+      },
+      searchEntities: action.payload,
+    };
   },
-  [ReduxActionTypes.FETCH_CURRENT_WORKSPACE]: (
-    draftState: WorkspaceReduxState,
+  [ReduxActionErrorTypes.SEARCH_WORKSPACE_ENTITIES_ERROR]: (
+    state: WorkspaceReduxState,
   ) => {
-    draftState.loadingStates.isFetchingWorkspace = true;
+    return {
+      ...state,
+      loadingStates: {
+        ...state.loadingStates,
+        isFetchingEntities: false,
+      },
+    };
   },
-  [ReduxActionTypes.FETCH_WORKSPACE_SUCCESS]: (
-    draftState: WorkspaceReduxState,
-    action: ReduxAction<Workspace>,
+  [ReduxActionTypes.SEARCH_WORKSPACE_ENTITIES_RESET]: (
+    state: WorkspaceReduxState,
   ) => {
-    draftState.currentWorkspace = action.payload;
-    draftState.loadingStates.isFetchingWorkspace = false;
-  },
-  [ReduxActionErrorTypes.FETCH_WORKSPACE_ERROR]: (
-    draftState: WorkspaceReduxState,
-  ) => {
-    draftState.loadingStates.isFetchingWorkspace = false;
+    return {
+      ...state,
+      loadingStates: {
+        ...state.loadingStates,
+        isFetchingEntities: false,
+      },
+      searchEntities: {},
+    };
   },
 };
 
 const workspaceReducer = createImmerReducer(initialState, handlers);
-
-export interface WorkspaceReduxState {
-  list?: Workspace[];
-  roles?: WorkspaceRole[];
-  loadingStates: {
-    fetchingRoles: boolean;
-    isFetchAllRoles: boolean;
-    isFetchAllUsers: boolean;
-    isFetchingWorkspace: boolean;
-  };
-  workspaceUsers: WorkspaceUser[];
-  workspaceRoles: any;
-  currentWorkspace: Workspace;
-}
 
 export default workspaceReducer;

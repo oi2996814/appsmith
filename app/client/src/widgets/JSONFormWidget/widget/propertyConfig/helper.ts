@@ -1,21 +1,23 @@
-import { klona } from "klona";
 import { get, set } from "lodash";
 
 import SchemaParser from "widgets/JSONFormWidget/schemaParser";
-import {
-  FieldType,
+import type {
   SchemaItem,
-  ARRAY_ITEM_KEY,
   Schema,
   HookResponse,
   FieldThemeStylesheet,
-  ROOT_SCHEMA_KEY,
 } from "../../constants";
+import { FieldType, ARRAY_ITEM_KEY, ROOT_SCHEMA_KEY } from "../../constants";
 import { getGrandParentPropertyPath, getParentPropertyPath } from "../helper";
-import { JSONFormWidgetProps } from "..";
+import type { JSONFormWidgetProps } from "..";
 import { getFieldStylesheet } from "widgets/JSONFormWidget/helper";
-import { ButtonStyles, ChildStylesheet, Stylesheet } from "entities/AppTheming";
+import type {
+  ButtonStyles,
+  ChildStylesheet,
+  Stylesheet,
+} from "entities/AppTheming";
 import { processSchemaItemAutocomplete } from "components/propertyControls/JSONFormComputeControl";
+import { klonaRegularWithTelemetry } from "utils/helpers";
 
 export type HiddenFnParams = [JSONFormWidgetProps, string];
 
@@ -35,15 +37,29 @@ export const fieldTypeUpdateHook = (
     widgetName,
     fieldThemeStylesheets: childStylesheet,
   });
+  const isInputOrEmailSelected = [
+    FieldType.EMAIL_INPUT,
+    FieldType.PASSWORD_INPUT,
+  ].includes(fieldType);
 
+  const schemaItemWithAutoFillState = isInputOrEmailSelected
+    ? {
+        ...newSchemaItem,
+        shouldAllowAutofill: true,
+      }
+    : newSchemaItem;
   /**
    * TODO(Ashit): Not suppose to update the whole schema but just
    * the path within the schema. This is just a hack to make sure
    * the new added paths gets into the dynamicBindingPathList until
    * the updateProperty function is fixed.
    */
-  const updatedSchema = { schema: klona(schema) };
-  set(updatedSchema, schemaItemPath, newSchemaItem);
+
+  const updatedSchema = {
+    schema: klonaRegularWithTelemetry(schema, "helper.fieldTypeUpdateHook"),
+  };
+
+  set(updatedSchema, schemaItemPath, schemaItemWithAutoFillState);
 
   return [{ propertyPath: "schema", propertyValue: updatedSchema.schema }];
 };
@@ -142,6 +158,8 @@ export const getAutocompleteProperties = (props: JSONFormWidgetProps) => {
 const getUpdatedSchemaFor = (
   schema: Schema,
   propertyName: string,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   propertyValue: any,
 ) => {
   const keys = Object.keys(schema);
@@ -200,6 +218,7 @@ export const isFieldTypeArrayOrObject = (
   propertyPath: string,
 ) => {
   const schemaItem: SchemaItem = get(props, propertyPath, {});
+
   return (
     schemaItem.fieldType === FieldType.ARRAY ||
     schemaItem.fieldType === FieldType.OBJECT

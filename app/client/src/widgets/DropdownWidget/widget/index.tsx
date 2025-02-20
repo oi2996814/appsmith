@@ -1,33 +1,141 @@
-import React from "react";
-import BaseWidget, { WidgetProps, WidgetState } from "../../BaseWidget";
-import { WidgetType } from "constants/WidgetConstants";
-import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
-import DropDownComponent from "../component";
-import _ from "lodash";
-import { DropdownOption } from "../constants";
-import {
-  ValidationResponse,
-  ValidationTypes,
-} from "constants/WidgetValidation";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
-import { MinimumPopupRows, GRID_DENSITY_MIGRATION_V1 } from "widgets/constants";
-import { LabelPosition } from "components/constants";
 import { Alignment } from "@blueprintjs/core";
-import { Stylesheet } from "entities/AppTheming";
+import type {
+  AutocompletionDefinitions,
+  PropertyUpdates,
+  SnipingModeProperty,
+  WidgetCallout,
+} from "WidgetProvider/constants";
+import { MinimumPopupWidthInPercentage } from "WidgetProvider/constants";
+import { LabelPosition } from "components/constants";
+import { EventType } from "constants/AppsmithActionConstants/ActionConstants";
+import { WIDGET_TAGS, layoutConfigurations } from "constants/WidgetConstants";
+import type { ValidationResponse } from "constants/WidgetValidation";
+import { ValidationTypes } from "constants/WidgetValidation";
+import type { Stylesheet } from "entities/AppTheming";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
+import _ from "lodash";
+import { buildDeprecationWidgetMessage } from "pages/Editor/utils";
+import React from "react";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
+import {
+  DefaultAutocompleteDefinitions,
+  isCompactMode,
+} from "widgets/WidgetUtils";
+import type { WidgetProps, WidgetState } from "../../BaseWidget";
+import BaseWidget from "../../BaseWidget";
+import DropDownComponent from "../component";
+import type { DropdownOption } from "../constants";
+import IconSVG from "../icon.svg";
 
 function defaultOptionValueValidation(value: unknown): ValidationResponse {
   if (typeof value === "string") return { isValid: true, parsed: value.trim() };
+
   if (value === undefined || value === null)
     return {
       isValid: false,
       parsed: "",
-      messages: ["This value does not evaluate to type: string"],
+      messages: [
+        {
+          name: "TypeError",
+          message: "This value does not evaluate to type: string",
+        },
+      ],
     };
+
   return { isValid: true, parsed: value };
 }
 
 class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
+  static type = "DROP_DOWN_WIDGET";
+
+  static getConfig() {
+    return {
+      name: "Select",
+      iconSVG: IconSVG,
+      needsMeta: true,
+      hideCard: true,
+      isDeprecated: true,
+      replacement: "SELECT_WIDGET",
+      tags: [WIDGET_TAGS.SELECT],
+    };
+  }
+
+  static getDefaults() {
+    return {
+      rows: 7,
+      columns: 20,
+      placeholderText: "Select option",
+      labelText: "Label",
+      labelPosition: LabelPosition.Left,
+      labelAlignment: Alignment.LEFT,
+      labelWidth: 5,
+      selectionType: "SINGLE_SELECT",
+      options: [
+        { label: "Blue", value: "BLUE" },
+        { label: "Green", value: "GREEN" },
+        { label: "Red", value: "RED" },
+      ],
+      serverSideFiltering: false,
+      widgetName: "Select",
+      defaultOptionValue: "GREEN",
+      version: 1,
+      isFilterable: false,
+      isRequired: false,
+      isDisabled: false,
+      animateLoading: true,
+    };
+  }
+
+  static getMethods() {
+    return {
+      getSnipingModeUpdates: (
+        propValueMap: SnipingModeProperty,
+      ): PropertyUpdates[] => {
+        return [
+          {
+            propertyPath: "options",
+            propertyValue: propValueMap.data,
+            isDynamicPropertyPath: true,
+          },
+        ];
+      },
+      getEditorCallouts(): WidgetCallout[] {
+        return [
+          {
+            message: buildDeprecationWidgetMessage(
+              DropdownWidget.getConfig().name,
+            ),
+          },
+        ];
+      },
+    };
+  }
+
+  static getAutocompleteDefinitions(): AutocompletionDefinitions {
+    return {
+      "!doc":
+        "Select is used to capture user input/s from a specified list of permitted inputs. A Select can capture a single choice",
+      "!url": "https://docs.appsmith.com/widget-reference/dropdown",
+      isVisible: DefaultAutocompleteDefinitions.isVisible,
+      filterText: {
+        "!type": "string",
+        "!doc": "The filter text for Server side filtering",
+      },
+      selectedOptionValue: {
+        "!type": "string",
+        "!doc": "The value selected in a single select dropdown",
+        "!url": "https://docs.appsmith.com/widget-reference/dropdown",
+      },
+      selectedOptionLabel: {
+        "!type": "string",
+        "!doc": "The selected option label in a single select dropdown",
+        "!url": "https://docs.appsmith.com/widget-reference/dropdown",
+      },
+      isDisabled: "bool",
+      options: "[$__dropdownOption__$]",
+    };
+  }
+
   static getPropertyPaneConfig() {
     return [
       {
@@ -137,7 +245,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
           },
           {
             propertyName: "animateLoading",
-            label: "Animate Loading",
+            label: "Animate loading",
             controlType: "SWITCH",
             helpText: "Controls the loading of the widget",
             defaultValue: true,
@@ -159,7 +267,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
           {
             helpText: "Enables server side filtering of the data",
             propertyName: "serverSideFiltering",
-            label: "Server Side Filtering",
+            label: "Server side filtering",
             controlType: "SWITCH",
             isJSConvertible: true,
             isBindProperty: true,
@@ -201,13 +309,14 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
             propertyName: "labelAlignment",
             label: "Alignment",
             controlType: "LABEL_ALIGNMENT_OPTIONS",
+            fullWidth: false,
             options: [
               {
-                icon: "LEFT_ALIGN",
+                startIcon: "align-left",
                 value: Alignment.LEFT,
               },
               {
-                icon: "RIGHT_ALIGN",
+                startIcon: "align-right",
                 value: Alignment.RIGHT,
               },
             ],
@@ -245,7 +354,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
         children: [
           {
             propertyName: "labelTextColor",
-            label: "Label Text Color",
+            label: "Label text color",
             controlType: "COLOR_PICKER",
             isJSConvertible: true,
             isBindProperty: true,
@@ -254,7 +363,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
           },
           {
             propertyName: "labelTextSize",
-            label: "Label Text Size",
+            label: "Label text size",
             controlType: "DROP_DOWN",
             defaultValue: "0.875rem",
             options: [
@@ -300,11 +409,11 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
             controlType: "BUTTON_GROUP",
             options: [
               {
-                icon: "BOLD_FONT",
+                startIcon: "text-bold",
                 value: "BOLD",
               },
               {
-                icon: "ITALICS_FONT",
+                startIcon: "text-italic",
                 value: "ITALIC",
               },
             ],
@@ -319,7 +428,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
         sectionName: "Actions",
         children: [
           {
-            helpText: "Triggers an action when a user selects an option",
+            helpText: "when a user selects an option",
             propertyName: "onOptionChange",
             label: "onOptionChange",
             controlType: "ACTION_SELECTOR",
@@ -358,6 +467,8 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       defaultValue: undefined,
@@ -376,6 +487,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
   componentDidMount() {
     this.changeSelectedOption();
   }
+
   componentDidUpdate(prevProps: DropdownWidgetProps): void {
     // removing selectedOptionValue if defaultValueChanges
     if (
@@ -386,30 +498,27 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
     }
   }
 
-  getPageView() {
+  getWidgetView() {
     const options = _.isArray(this.props.options) ? this.props.options : [];
     const isInvalid =
       "isValid" in this.props && !this.props.isValid && !!this.props.isDirty;
-    const dropDownWidth = MinimumPopupRows * this.props.parentColumnSpace;
+    const dropDownWidth =
+      (MinimumPopupWidthInPercentage / 100) *
+      (this.props.mainCanvasWidth ?? layoutConfigurations.MOBILE.maxWidth);
 
     const selectedIndex = _.findIndex(this.props.options, {
       value: this.props.selectedOptionValue,
     });
 
-    const { componentHeight, componentWidth } = this.getComponentDimensions();
+    const { componentHeight, componentWidth } = this.props;
+
     return (
       <DropDownComponent
         accentColor={this.props.accentColor}
         backgroundColor={this.props.backgroundColor}
         borderRadius={this.props.borderRadius}
         boxShadow={this.props.boxShadow}
-        compactMode={
-          !(
-            (this.props.bottomRow - this.props.topRow) /
-              GRID_DENSITY_MIGRATION_V1 >
-            1
-          )
-        }
+        compactMode={isCompactMode(componentHeight)}
         disabled={this.props.isDisabled}
         dropDownWidth={dropDownWidth}
         hasError={isInvalid}
@@ -423,7 +532,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
         labelText={this.props.labelText}
         labelTextColor={this.props.labelTextColor}
         labelTextSize={this.props.labelTextSize}
-        labelWidth={this.getLabelWidth()}
+        labelWidth={this.props.labelComponentWidth}
         onFilterChange={this.onFilterChange}
         onOptionSelected={this.onOptionSelected}
         options={options}
@@ -448,6 +557,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
     if (this.props.selectedOptionValue) {
       isChanged = !(this.props.selectedOptionValue === selectedOption.value);
     }
+
     if (isChanged) {
       this.props.updateWidgetMetaProperty("value", selectedOption.value, {
         triggerPropertyName: "onOptionChange",
@@ -463,6 +573,7 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
       value: this.props.selectedOptionValue ?? this.props.defaultOptionValue,
     });
     const value = this.props.options?.[index]?.value;
+
     this.props.updateWidgetMetaProperty("value", value);
   };
 
@@ -477,10 +588,6 @@ class DropdownWidget extends BaseWidget<DropdownWidgetProps, WidgetState> {
       },
     });
   };
-
-  static getWidgetType(): WidgetType {
-    return "DROP_DOWN_WIDGET";
-  }
 }
 
 export interface DropdownWidgetProps extends WidgetProps {
@@ -507,6 +614,7 @@ export interface DropdownWidgetProps extends WidgetProps {
   accentColor: string;
   fontFamily?: string;
   isDirty?: boolean;
+  labelComponentWidth?: number;
 }
 
 export default DropdownWidget;

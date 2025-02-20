@@ -1,22 +1,18 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { getUserApplicationsWorkspaces } from "selectors/applicationSelectors";
-import { hasCreateNewAppPermission } from "@appsmith/utils/permissionHelpers";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
-import { AppState } from "@appsmith/reducers";
+import { hasCreateNewAppPermission } from "ee/utils/permissionHelpers";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
+import type { AppState } from "ee/reducers";
 import {
   Button,
-  Category,
-  Dropdown,
-  IconSize,
-  Size,
+  Modal,
+  ModalContent,
+  ModalHeader,
   Spinner,
-} from "design-system";
-import { StyledDialog, ButtonWrapper, SpinnerWrapper } from "./ForkModalStyles";
-import { getIsFetchingApplications } from "selectors/applicationSelectors";
-import { useLocation } from "react-router";
-import { matchViewerForkPath } from "constants/routes";
-import { Colors } from "constants/Colors";
+  Select,
+  Option,
+} from "@appsmith/ads";
+import { ButtonWrapper, SpinnerWrapper } from "./ForkModalStyles";
 import {
   CANCEL,
   createMessage,
@@ -24,40 +20,60 @@ import {
   FORK_APP_MODAL_EMPTY_TITLE,
   FORK_APP_MODAL_LOADING_TITLE,
   FORK_APP_MODAL_SUCCESS_TITLE,
-} from "@appsmith/constants/messages";
-import { getAllApplications } from "actions/applicationActions";
+} from "ee/constants/messages";
+import { getFetchedWorkspaces } from "ee/selectors/workspaceSelectors";
+import { getIsFetchingApplications } from "ee/selectors/selectedWorkspaceSelectors";
+import { fetchAllWorkspaces } from "ee/actions/workspaceActions";
 
-type ForkApplicationModalProps = {
+interface ForkApplicationModalProps {
   applicationId: string;
   // if a trigger is passed
   // it renders that component
   trigger?: React.ReactNode;
   isModalOpen?: boolean;
-  setModalClose?: (isOpen: boolean) => void;
-};
+  handleOpen?: () => void;
+  handleClose?: () => void;
+  isInEditMode?: boolean;
+}
 
 function ForkApplicationModal(props: ForkApplicationModalProps) {
-  const { isModalOpen, setModalClose } = props;
+  const { handleClose, handleOpen, isModalOpen } = props;
   const [workspace, selectWorkspace] = useState<{
     label: string;
     value: string;
   }>({ label: "", value: "" });
   const dispatch = useDispatch();
-  const userWorkspaces = useSelector(getUserApplicationsWorkspaces);
+  const workspaces = useSelector(getFetchedWorkspaces);
   const forkingApplication = useSelector(
     (state: AppState) => state.ui.applications.forkingApplication,
   );
 
-  useEffect(() => {
-    if (!userWorkspaces.length) {
-      dispatch(getAllApplications());
-    }
-  }, [userWorkspaces.length]);
-
   const isFetchingApplications = useSelector(getIsFetchingApplications);
-  const { pathname } = useLocation();
 
-  const showBasedOnURL = matchViewerForkPath(pathname);
+  useEffect(() => {
+    // This effect makes sure that no if <ForkApplicationModel />
+    // is getting controlled from outside, then we always load workspaces
+    if (isModalOpen) {
+      getApplicationsListAndOpenModal();
+
+      return;
+    }
+  }, [isModalOpen]);
+
+  useEffect(() => {
+    // when we fork from within the appeditor, fork modal remains open
+    // even on the landing page of "Forked" app, this closes it
+    const url = new URL(window.location.href);
+    const shouldCloseForcibly =
+      !forkingApplication &&
+      isModalOpen &&
+      handleClose &&
+      !url.searchParams.has("fork");
+
+    if (shouldCloseForcibly) {
+      handleClose();
+    }
+  }, [forkingApplication]);
 
   const forkApplication = () => {
     dispatch({
@@ -65,95 +81,107 @@ function ForkApplicationModal(props: ForkApplicationModalProps) {
       payload: {
         applicationId: props.applicationId,
         workspaceId: workspace?.value,
+        editMode: props.isInEditMode,
       },
     });
   };
 
   const workspaceList = useMemo(() => {
-    const filteredUserWorkspaces = userWorkspaces.filter((item) => {
-      const permitted = hasCreateNewAppPermission(
-        item.workspace.userPermissions ?? [],
-      );
+    const filteredUserWorkspaces = workspaces.filter((item) => {
+      const permitted = hasCreateNewAppPermission(item.userPermissions ?? []);
+
       return permitted;
     });
 
     if (filteredUserWorkspaces.length) {
       selectWorkspace({
-        label: filteredUserWorkspaces[0].workspace.name,
-        value: filteredUserWorkspaces[0].workspace.id,
+        label: filteredUserWorkspaces[0].name,
+        value: filteredUserWorkspaces[0].id,
       });
     }
 
     return filteredUserWorkspaces.map((workspace) => {
       return {
-        label: workspace.workspace.name,
-        value: workspace.workspace.id,
+        label: workspace.name,
+        value: workspace.id,
       };
     });
-  }, [userWorkspaces]);
+  }, [workspaces]);
 
   const modalHeading = isFetchingApplications
     ? createMessage(FORK_APP_MODAL_LOADING_TITLE)
     : !workspaceList.length
-    ? createMessage(FORK_APP_MODAL_EMPTY_TITLE)
-    : createMessage(FORK_APP_MODAL_SUCCESS_TITLE);
+      ? createMessage(FORK_APP_MODAL_EMPTY_TITLE)
+      : createMessage(FORK_APP_MODAL_SUCCESS_TITLE);
+
+  const getApplicationsListAndOpenModal = () => {
+    !workspaceList.length &&
+      dispatch(fetchAllWorkspaces({ fetchEntities: true }));
+    handleOpen && handleOpen();
+  };
+
+  const handleOnOpenChange = (isOpen: boolean) => {
+    if (isOpen) {
+      getApplicationsListAndOpenModal();
+    } else {
+      handleClose && handleClose();
+    }
+  };
 
   return (
-    <StyledDialog
-      canOutsideClickClose
-      className={"fork-modal"}
-      headerIcon={{ name: "fork-2", bgColor: Colors.GEYSER_LIGHT }}
-      isOpen={isModalOpen || showBasedOnURL}
-      setModalClose={setModalClose}
-      title={modalHeading}
-      trigger={props.trigger}
-    >
-      {isFetchingApplications ? (
-        <SpinnerWrapper>
-          <Spinner size={IconSize.XXXL} />
-        </SpinnerWrapper>
-      ) : (
-        !!workspaceList.length && (
-          <>
-            <Dropdown
-              boundary="viewport"
-              dropdownMaxHeight={"200px"}
-              fillOptions
-              onSelect={(
-                _: string,
-                dropdownOption: React.SetStateAction<{
-                  label: string;
-                  value: string;
-                }>,
-              ) => selectWorkspace(dropdownOption)}
-              options={workspaceList}
-              selected={workspace}
-              showLabelOnly
-              width={"100%"}
-            />
+    <Modal onOpenChange={handleOnOpenChange} open={isModalOpen}>
+      <ModalContent className={"fork-modal"} style={{ width: "640px" }}>
+        <ModalHeader>{modalHeading}</ModalHeader>
+        {isFetchingApplications ? (
+          <SpinnerWrapper>
+            <Spinner size="lg" />
+          </SpinnerWrapper>
+        ) : (
+          !!workspaceList.length && (
+            <>
+              <Select
+                dropdownMatchSelectWidth
+                getPopupContainer={(triggerNode) => triggerNode.parentNode}
+                onSelect={(_, dropdownOption) =>
+                  // ignoring this because rc-select label and value types are not compatible
+                  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                  // @ts-ignore
+                  selectWorkspace(dropdownOption)
+                }
+                value={workspace.value}
+              >
+                {workspaceList.map((option) => (
+                  <Option key={option.value} value={option.value}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
 
-            <ButtonWrapper>
-              <Button
-                category={Category.secondary}
-                disabled={forkingApplication}
-                onClick={() => setModalClose && setModalClose(false)}
-                size={Size.large}
-                tag="button"
-                text={createMessage(CANCEL)}
-              />
-              <Button
-                className="t--fork-app-to-workspace-button"
-                isLoading={forkingApplication}
-                onClick={forkApplication}
-                size={Size.large}
-                tag="button"
-                text={createMessage(FORK)}
-              />
-            </ButtonWrapper>
-          </>
-        )
-      )}
-    </StyledDialog>
+              <ButtonWrapper>
+                <Button
+                  isDisabled={forkingApplication}
+                  kind="secondary"
+                  onClick={() => {
+                    handleClose && handleClose();
+                  }}
+                  size="md"
+                >
+                  {createMessage(CANCEL)}
+                </Button>
+                <Button
+                  className="t--fork-app-to-workspace-button"
+                  isLoading={forkingApplication}
+                  onClick={forkApplication}
+                  size="md"
+                >
+                  {createMessage(FORK)}
+                </Button>
+              </ButtonWrapper>
+            </>
+          )
+        )}
+      </ModalContent>
+    </Modal>
   );
 }
 

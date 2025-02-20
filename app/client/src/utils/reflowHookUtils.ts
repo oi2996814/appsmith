@@ -1,7 +1,11 @@
-import { OccupiedSpace } from "constants/CanvasEditorConstants";
+import type { OccupiedSpace } from "constants/CanvasEditorConstants";
 import { GridDefaults } from "constants/WidgetConstants";
-import { FlattenedWidgetProps } from "reducers/entityReducers/canvasWidgetsReducer";
-import { GridProps, ReflowedSpace, ReflowedSpaceMap } from "reflow/reflowTypes";
+import type { FlattenedWidgetProps } from "ee/reducers/entityReducers/canvasWidgetsReducer";
+import type {
+  GridProps,
+  ReflowedSpace,
+  ReflowedSpaceMap,
+} from "reflow/reflowTypes";
 
 export function collisionCheckPostReflow(
   widgets: {
@@ -75,14 +79,17 @@ export function getBottomRowAfterReflow(
     (bottomMostRow, each) => {
       const [id, reflowedParams] = each;
       const widget = occupiedSpaces.find((eachSpace) => eachSpace.id === id);
+
       if (widget) {
         const bottomMovement =
           (reflowedParams.Y || 0) / gridProps.parentRowSpace;
         const bottomRow = widget.bottom + bottomMovement;
+
         if (bottomRow > bottomMostRow) {
           return bottomRow;
         }
       }
+
       return bottomMostRow;
     },
     0,

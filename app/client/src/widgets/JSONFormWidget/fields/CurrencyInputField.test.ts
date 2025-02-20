@@ -1,4 +1,5 @@
-import { CurrencyInputFieldProps, isValid } from "./CurrencyInputField";
+import type { CurrencyInputFieldProps } from "./CurrencyInputField";
+import { isValid } from "./CurrencyInputField";
 
 describe("Currency Input Field", () => {
   it("return validity when not required", () => {
@@ -20,6 +21,7 @@ describe("Currency Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });
@@ -43,6 +45,7 @@ describe("Currency Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });
@@ -66,6 +69,7 @@ describe("Currency Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });
@@ -89,6 +93,7 @@ describe("Currency Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });
@@ -113,6 +118,7 @@ describe("Currency Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });

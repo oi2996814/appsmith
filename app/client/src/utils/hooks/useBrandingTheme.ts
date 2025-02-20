@@ -1,36 +1,60 @@
-import tinycolor from "tinycolor2";
 import { useSelector } from "react-redux";
 
-import { getTenantConfig } from "@appsmith/selectors/tenantSelectors";
-import { useEffect } from "react";
+import { getOrganizationConfig } from "ee/selectors/organizationSelectors";
+import { useLayoutEffect } from "react";
+import { getAssetUrl } from "ee/utils/airgapHelpers";
+import { APPSMITH_BRAND_PRIMARY_COLOR } from "utils/BrandingUtils";
+import { LightModeTheme } from "@appsmith/wds-theming";
 
 const useBrandingTheme = () => {
-  const config = useSelector(getTenantConfig);
+  const config = useSelector(getOrganizationConfig);
+  let activeColor: string | undefined = undefined;
 
-  useEffect(() => {
-    const hsl = tinycolor(config.brandColors.primary).toHsl();
-    const hue = hsl.h;
-    const saturation = hsl.s;
+  if (
+    config.brandColors.primary !== undefined &&
+    (config.brandColors.active === undefined ||
+      config.brandColors.active === "")
+  ) {
+    const lightTheme = new LightModeTheme(config.brandColors.primary);
 
+    activeColor =
+      config.brandColors.primary === APPSMITH_BRAND_PRIMARY_COLOR
+        ? getComputedStyle(document.documentElement).getPropertyValue(
+            "--ads-v2-color-bg-brand-emphasis-plus",
+          )
+        : lightTheme.bgAccentActive.toString({ format: "hex" });
+  }
+
+  useLayoutEffect(() => {
     const cssVariables: Record<string, string> = {
-      brand: config.brandColors.primary,
+      "bg-brand": config.brandColors.primary,
+      "fg-brand": config.brandColors.primary,
+      "border-brand": config.brandColors.primary,
+      // TODO:(Albin) Remove this once branding and new DS is fully integrated
       "background-secondary": config.brandColors.background,
-      "brand-hover": config.brandColors.hover,
-      "brand-text": config.brandColors.font,
-      "brand-disabled": config.brandColors.disabled,
-      "brand-light": `#${tinycolor(`hsl ${hue} ${saturation} ${90}}`).toHex()}`,
+      "bg-brand-emphasis": config.brandColors.hover,
+      "bg-brand-emphasis-plus": activeColor || config.brandColors.active,
+      "fg-brand-emphasis": config.brandColors.hover,
+      "border-brand-emphasis": config.brandColors.hover,
+      "border-brand-emphasis-plus": activeColor || config.brandColors.active,
+      "fg-on-brand": config.brandColors.font,
     };
 
     // Create a CSS variable for each color
     for (let i = 0; i < Object.keys(cssVariables).length; i++) {
       const key = Object.keys(cssVariables)[i];
       const value = Object.values(cssVariables)[i];
+      const prefix =
+        key === "background-secondary" ? "--ads-color-" : "--ads-v2-color-";
 
-      document.documentElement.style.setProperty(`--ads-color-${key}`, value);
+      document.documentElement.style.setProperty(`${prefix}${key}`, value);
     }
 
     // Set the favicon
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let favicon: any = document.querySelector("link[rel='shortcut icon']");
+
     if (!favicon) {
       favicon = document.createElement("link");
       favicon.rel = "shortcut icon";
@@ -38,7 +62,7 @@ const useBrandingTheme = () => {
       document.getElementsByTagName("head")[0].appendChild(favicon);
     }
 
-    favicon.href = config.brandFaviconUrl;
+    favicon.href = getAssetUrl(config.brandFaviconUrl);
   }, [
     config.brandColors.primary,
     config.brandColors.background,

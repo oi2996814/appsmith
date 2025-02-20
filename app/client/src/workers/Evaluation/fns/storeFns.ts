@@ -1,54 +1,97 @@
-import {
-  RemoveValueActionDescription,
-  StoreValueActionDescription,
-} from "ce/entities/DataTree/actionTriggers";
 import set from "lodash/set";
-import { MAIN_THREAD_ACTION } from "@appsmith/workers/Evaluation/evalWorkerActions";
-import { addFn } from "./utils/fnGuard";
-import { TriggerCollector } from "./utils/TriggerCollector";
+import TriggerEmitter, { BatchKey } from "./utils/TriggerEmitter";
+import { dataTreeEvaluator } from "../handlers/evalTree";
+import unset from "lodash/unset";
 
-export function initStoreFns(ctx: typeof globalThis) {
-  const triggerCollector = new TriggerCollector(
-    MAIN_THREAD_ACTION.PROCESS_STORE_UPDATES,
+function storeFnDescriptor(key: string, value: string, persist = true) {
+  return {
+    type: "STORE_VALUE" as const,
+    payload: {
+      key,
+      value,
+      persist,
+    },
+  };
+}
+
+export type TStoreValueArgs = Parameters<typeof storeFnDescriptor>;
+export type TStoreValueDescription = ReturnType<typeof storeFnDescriptor>;
+export type TStoreValueActionType = TStoreValueDescription["type"];
+
+export async function storeValue(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  this: any,
+  key: string,
+  value: string,
+  persist = true,
+) {
+  const evalTree = dataTreeEvaluator?.getEvalTree();
+  const path = ["appsmith", "store", key];
+
+  if (evalTree) set(evalTree, path, value);
+
+  set(this, path, value);
+  TriggerEmitter.emit(
+    BatchKey.process_store_updates,
+    storeFnDescriptor(key, value, persist),
   );
-  function storeValue(key: string, value: string, persist = true) {
-    const requestPayload: StoreValueActionDescription = {
-      type: "STORE_VALUE",
-      payload: {
-        key,
-        value,
-        persist,
-      },
-    };
-    set(self, ["appsmith", "store", key], value);
-    triggerCollector.collect(requestPayload);
-    return Promise.resolve({});
-  }
 
-  function removeValue(key: string) {
-    const requestPayload: RemoveValueActionDescription = {
-      type: "REMOVE_VALUE",
-      payload: {
-        key,
-      },
-    };
-    //@ts-expect-error no types for store
-    delete self.appsmith.store[key];
-    triggerCollector.collect(requestPayload);
-    return Promise.resolve({});
-  }
+  return {};
+}
 
-  function clearStore() {
-    //@ts-expect-error no types for store
-    self.appsmith.store = {};
-    triggerCollector.collect({
-      type: "CLEAR_STORE",
-      payload: null,
-    });
-    return Promise.resolve({});
-  }
+function removeValueFnDescriptor(key: string) {
+  return {
+    type: "REMOVE_VALUE" as const,
+    payload: {
+      key,
+    },
+  };
+}
 
-  addFn(ctx, "storeValue", storeValue);
-  addFn(ctx, "removeValue", removeValue);
-  addFn(ctx, "clearStore", clearStore);
+export type TRemoveValueArgs = Parameters<typeof removeValueFnDescriptor>;
+export type TRemoveValueDescription = ReturnType<
+  typeof removeValueFnDescriptor
+>;
+export type TRemoveValueActionType = TRemoveValueDescription["type"];
+
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function removeValue(this: any, key: string) {
+  const evalTree = dataTreeEvaluator?.getEvalTree();
+  const path = ["appsmith", "store", key];
+
+  if (evalTree) unset(evalTree, path);
+
+  unset(this, path);
+  TriggerEmitter.emit(
+    BatchKey.process_store_updates,
+    removeValueFnDescriptor(key),
+  );
+
+  return {};
+}
+
+function clearStoreFnDescriptor() {
+  return {
+    type: "CLEAR_STORE" as const,
+    payload: null,
+  };
+}
+
+export type TClearStoreArgs = Parameters<typeof clearStoreFnDescriptor>;
+export type TClearStoreDescription = ReturnType<typeof clearStoreFnDescriptor>;
+export type TClearStoreActionType = TClearStoreDescription["type"];
+
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function clearStore(this: any) {
+  const evalTree = dataTreeEvaluator?.getEvalTree();
+
+  if (evalTree) set(evalTree, ["appsmith", "store"], {});
+
+  this.appsmith.store = {};
+  TriggerEmitter.emit(BatchKey.process_store_updates, clearStoreFnDescriptor());
+
+  return {};
 }

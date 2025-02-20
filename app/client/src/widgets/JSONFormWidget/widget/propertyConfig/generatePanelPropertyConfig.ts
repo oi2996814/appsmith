@@ -1,12 +1,10 @@
 import { get, isEmpty } from "lodash";
 
-import { PanelConfig } from "constants/PropertyControlConstants";
-import { FieldType, SchemaItem } from "widgets/JSONFormWidget/constants";
-import {
-  getSchemaItem,
-  HiddenFnParams,
-  isFieldTypeArrayOrObject,
-} from "./helper";
+import type { PanelConfig } from "constants/PropertyControlConstants";
+import type { SchemaItem } from "widgets/JSONFormWidget/constants";
+import { FieldType } from "widgets/JSONFormWidget/constants";
+import type { HiddenFnParams } from "./helper";
+import { getSchemaItem, isFieldTypeArrayOrObject } from "./helper";
 import {
   ARRAY_PROPERTIES,
   CHECKBOX_PROPERTIES,
@@ -19,7 +17,7 @@ import {
   SELECT_PROPERTIES,
   SWITCH_PROPERTIES,
 } from "./properties";
-import { JSONFormWidgetProps } from "..";
+import type { JSONFormWidgetProps } from "..";
 
 function generatePanelPropertyConfig(
   nestingLevel: number,
@@ -45,8 +43,8 @@ function generatePanelPropertyConfig(
           ...ARRAY_PROPERTIES.content.data,
           {
             propertyName: "children",
-            label: "Field Configuration",
-            helpText: "Field Configuration",
+            label: "Field configuration",
+            helpText: "Field configuration",
             controlType: "FIELD_CONFIGURATION",
             isBindProperty: false,
             isTriggerProperty: false,
@@ -79,6 +77,7 @@ function generatePanelPropertyConfig(
         ],
         hidden: (props: JSONFormWidgetProps, propertyPath: string) => {
           const schemaItem: SchemaItem = get(props, propertyPath, {});
+
           return !(
             schemaItem.fieldType === FieldType.SELECT ||
             schemaItem.fieldType === FieldType.MULTISELECT
@@ -123,7 +122,7 @@ function generatePanelPropertyConfig(
     ],
     styleChildren: [
       {
-        sectionName: "Label Styles",
+        sectionName: "Label styles",
         children: [...COMMON_PROPERTIES.style.label],
       },
       {
@@ -131,6 +130,7 @@ function generatePanelPropertyConfig(
         children: [...INPUT_PROPERTIES.style.icon],
         hidden: (props: JSONFormWidgetProps, propertyPath: string) => {
           const schemaItem: SchemaItem = get(props, propertyPath, {});
+
           return !(
             schemaItem.fieldType === FieldType.TEXT_INPUT ||
             schemaItem.fieldType === FieldType.EMAIL_INPUT ||
@@ -145,10 +145,11 @@ function generatePanelPropertyConfig(
         hidden: isFieldTypeArrayOrObject,
       },
       {
-        sectionName: "Border and Shadow",
+        sectionName: "Border and shadow",
         children: [...COMMON_PROPERTIES.style.borderShadow],
         hidden: (props: JSONFormWidgetProps, propertyPath: string) => {
           const schemaItem: SchemaItem = get(props, propertyPath, {});
+
           return (
             schemaItem.fieldType === FieldType.ARRAY ||
             schemaItem.fieldType === FieldType.OBJECT ||

@@ -1,0 +1,4 @@
+import * as React from "react";
+import type { SVGProps } from "react";
+const InlineButtonsIcon = (props: SVGProps<SVGSVGElement>) => <svg xmlns="http://www.w3.org/2000/svg" width={16} height={16} fill="none" {...props}><path stroke="#000" strokeLinecap="round" strokeLinejoin="round" d="m11.5 7.5 1 1 1-2" /><path stroke="#000" strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.75} d="m3.5 8.5 2-2m0 2-2-2" /><path stroke="#000" strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5h-2a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2" /><path stroke="#000" strokeLinecap="round" strokeLinejoin="round" strokeOpacity={0.75} d="M5.5 4.5h-2a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2" /></svg>;
+export { InlineButtonsIcon };

@@ -1,17 +1,15 @@
-import { ReactComponent as DragHandleIcon } from "assets/icons/ads/app-icons/draghandler.svg";
-import { Colors } from "constants/Colors";
-import PopperJS, { Placement, PopperOptions } from "popper.js";
+import type { AppState } from "ee/reducers";
+import { Icon } from "@appsmith/ads";
+import type { Placement, PopperOptions } from "popper.js";
+import PopperJS from "popper.js";
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { AppState } from "@appsmith/reducers";
 import { getThemeDetails, ThemeMode } from "selectors/themeSelectors";
 import styled, { ThemeProvider } from "styled-components";
-import { noop } from "utils/AppsmithUtils";
 import { generateReactKey } from "utils/generators";
-// import { PopperDragHandle } from "./PropertyPane/PropertyPaneConnections";
 import { draggableElement } from "./utils";
 
-export type PopperProps = {
+export interface PopperProps {
   boundaryParent?: Element | PopperJS.Boundary;
   parentElement?: Element | null;
   zIndex: number;
@@ -27,6 +25,7 @@ export type PopperProps = {
     zIndex?: string;
     position?: string;
   };
+  style?: React.CSSProperties;
   placement: Placement;
   modifiers?: Partial<PopperOptions["modifiers"]>;
   isDraggable?: boolean;
@@ -38,15 +37,27 @@ export type PopperProps = {
     left: number;
   };
   onPositionChange?: (position: { top: number; left: number }) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setPosition?: (e: any) => void;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setIsDragging?: (e: any) => void;
+  isDragging?: boolean;
+  customParent?: Element | undefined;
+  editorRef?: React.RefObject<HTMLDivElement>;
   // DraggableNode?: any;
-};
+}
 
 const PopperWrapper = styled.div<{ zIndex: number; borderRadius?: string }>`
   z-index: ${(props) => props.zIndex};
   position: absolute;
   border-radius: ${(props) => props.borderRadius || "0"};
   box-shadow: 0 6px 20px 0px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
+
+  &&&:hover .drag-handle-block {
+    display: flex;
+  }
 `;
 
 const DragHandleBlock = styled.div`
@@ -57,38 +68,64 @@ const DragHandleBlock = styled.div`
   width: 43px;
   height: 28px;
   z-index: 3;
-  background-color: ${Colors.GREY_1};
+  background-color: var(--ads-v2-color-bg);
+  border-radius: var(--ads-v2-border-radius);
+  position: relative;
+  top: -15px;
+  pointer-events: auto;
 
-  svg {
-    transform: rotate(90deg);
+  :hover {
+    background-color: var(--ads-v2-color-bg-subtle);
   }
 `;
 
-export function PopperDragHandle() {
-  return (
-    <DragHandleBlock>
-      <DragHandleIcon />
-    </DragHandleBlock>
-  );
+interface PopperDragHandleProps {
+  dragFn?: (val: boolean) => void;
 }
 
 /* eslint-disable react/display-name */
 export default (props: PopperProps) => {
-  const contentRef = useRef(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const popperIdRef = useRef(generateReactKey());
   const popperId = popperIdRef.current;
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onPositionChangeFn = (e: any) => {
+    if (contentRef.current && !!props.setPosition) {
+      contentRef.current.style.transform = "unset";
+      contentRef.current.style.top = e.top + "px";
+      contentRef.current.style.left = e.left + "px";
+
+      props.setPosition(e);
+
+      // add focus back to codemirror component.
+      if (
+        props?.editorRef &&
+        props?.editorRef?.current &&
+        props?.editorRef?.current?.children[1] &&
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        !!(props?.editorRef?.current?.children[1] as any)?.CodeMirror
+      )
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (props?.editorRef?.current?.children[1] as any)?.CodeMirror.focus();
+    }
+  };
+
   const {
     boundaryParent = "viewport",
-    isDraggable = false,
+    cypressSelectorDragHandle,
     disablePopperEvents = false,
+    isDraggable = false,
+    onPositionChange = onPositionChangeFn,
     position,
     renderDragBlock,
-    onPositionChange = noop,
-    themeMode = props.themeMode || ThemeMode.LIGHT,
     renderDragBlockPositions,
-    cypressSelectorDragHandle,
+    themeMode = props.themeMode || ThemeMode.LIGHT,
   } = props;
+
   // Memoizing to avoid rerender of draggable icon.
   // What is the cost of memoizing?
   const popperTheme = useMemo(
@@ -96,8 +133,34 @@ export default (props: PopperProps) => {
     [themeMode],
   );
 
+  const PopperDragHandle = (props: PopperDragHandleProps) => {
+    return (
+      <DragHandleBlock
+        className="drag-handle-block"
+        onMouseEnter={(e) => {
+          e.stopPropagation();
+
+          if (props?.dragFn) {
+            props.dragFn(true);
+          }
+        }}
+        onMouseLeave={(e) => {
+          e.stopPropagation();
+
+          if (props?.dragFn) {
+            props.dragFn(false);
+          }
+        }}
+      >
+        <Icon name="drag-handle" size="lg" />
+      </DragHandleBlock>
+    );
+  };
+
   useEffect(() => {
-    const parentElement = props.targetNode && props.targetNode.parentElement;
+    const parentElement =
+      props?.customParent ||
+      (props?.targetNode && props.targetNode?.parentElement);
 
     if (
       parentElement &&
@@ -112,25 +175,26 @@ export default (props: PopperProps) => {
       // remains to be discovered.
       const _popper = new PopperJS(
         props.targetNode,
-        (contentRef.current as unknown) as Element,
+        contentRef.current as unknown as Element,
         {
           ...(isDraggable && disablePopperEvents
             ? {}
             : { placement: props.placement }),
           onCreate: (popperData) => {
+            // TODO: Fix this the next time the file is edited
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const elementRef: any = popperData.instance.popper;
+
             if (isDraggable && position) {
               const initPositon =
                 position || elementRef.getBoundingClientRect();
+
               elementRef.style.transform = "unset";
               elementRef.style.top = initPositon.top + "px";
               elementRef.style.left = initPositon.left + "px";
             }
           },
           modifiers: {
-            flip: {
-              behavior: ["right", "left", "bottom", "top"],
-            },
             keepTogether: {
               enabled: false,
             },
@@ -149,6 +213,7 @@ export default (props: PopperProps) => {
           },
         },
       );
+
       if (isDraggable) {
         disablePopperEvents && _popper.disableEventListeners();
         draggableElement(
@@ -163,7 +228,7 @@ export default (props: PopperProps) => {
               renderDragBlock
             ) : (
               <ThemeProvider theme={popperTheme}>
-                <PopperDragHandle />
+                <PopperDragHandle dragFn={props.setIsDragging} />
               </ThemeProvider>
             ),
           cypressSelectorDragHandle,
@@ -181,11 +246,13 @@ export default (props: PopperProps) => {
     props.placement,
     disablePopperEvents,
   ]);
+
   return createPortal(
     props.isOpen && (
       <PopperWrapper
         borderRadius={props.borderRadius}
         ref={contentRef}
+        style={props.style || {}}
         zIndex={props.zIndex}
       >
         {props.children}

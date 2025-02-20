@@ -1,18 +1,12 @@
-import { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
-import LOG_TYPE from "./logtype";
-import { PropertyEvaluationErrorType } from "utils/DynamicBindingUtils";
-
-export enum ENTITY_TYPE {
-  ACTION = "ACTION",
-  DATASOURCE = "DATASOURCE",
-  WIDGET = "WIDGET",
-  JSACTION = "JSACTION",
-}
-
-export enum PLATFORM_ERROR {
-  PLUGIN_EXECUTION = "PLUGIN_EXECUTION",
-  JS_FUNCTION_EXECUTION = "JS_FUNCTION_EXECUTION",
-}
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import type LOG_TYPE from "./logtype";
+import type { PropertyEvaluationErrorType } from "utils/DynamicBindingUtils";
+import type { PluginType } from "entities/Plugin";
+import type { HTTP_METHOD } from "PluginActionEditor/constants/CommonApiConstants";
+import type {
+  ENTITY_TYPE,
+  PLATFORM_ERROR,
+} from "ee/entities/AppsmithConsole/utils";
 
 export type Methods =
   | "log"
@@ -27,16 +21,16 @@ export type Methods =
   | "count"
   | "assert";
 
-export type UserLogObject = { logObject: LogObject[]; source: SourceEntity };
-
-// Type of the log object
-export type LogObject = {
+export interface LogObject {
   method: Methods | "result";
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[];
   timestamp: string;
   id: string;
   severity: Severity;
-};
+  source: SourceEntity;
+}
 
 export type ErrorType = PropertyEvaluationErrorType | PLATFORM_ERROR;
 
@@ -53,7 +47,7 @@ export enum Severity {
   // CRITICAL = "critical",
 }
 
-export type UserAction = {
+export interface UserAction {
   // Label is used to display the
   label: string;
   // As there can be multiple errors of the same base type at the same time
@@ -61,7 +55,7 @@ export type UserAction = {
   // these action types should have a dynamic `id` associated with them
   // or we should use JS callback functions instead
   reduxAction: ReduxAction<unknown>;
-};
+}
 
 export interface SourceEntity {
   type: ENTITY_TYPE;
@@ -71,6 +65,10 @@ export interface SourceEntity {
   id: string;
   // property path of the child
   propertyPath?: string;
+  // plugin type of the action or type of widget
+  pluginType?: PluginType | string;
+  // http method of the api. (Only for api actions)
+  httpMethod?: HTTP_METHOD;
 }
 
 export enum LOG_CATEGORY {
@@ -81,30 +79,50 @@ export enum LOG_CATEGORY {
 export interface LogActionPayload {
   // Log id, used for updating or deleting
   id?: string;
+  // icon id, used in finding appropriate icons.
+  iconId?: string;
   // What is the log about. Is it a datasource update, widget update, eval error etc.
   logType?: LOG_TYPE;
   // This is the preview of the log that the user sees.
   text: string;
+  // The environment in which the log was generated.
+  environmentName?: string;
   // Number of times this log has been repeated
   occurrenceCount?: number;
   // Deconstructed data of the log, this includes the whole nested objects/arrays/strings etc.
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logData?: any[];
+  // messages associated with this event
   messages?: Array<Message>;
   // Time taken for the event to complete
   timeTaken?: string;
   // "where" source entity and propertyPsath.
   source?: SourceEntity;
   // Snapshot KV pair of scope variables or state associated with this event.
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   state?: Record<string, any>;
   // Any other data required for analytics
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   analytics?: Record<string, any>;
+  // plugin error details if any (only for plugin errors).
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pluginErrorDetails?: any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  meta?: Record<string, any>;
 }
 
 export interface Message {
   // More contextual message than `text`
-  message: string;
+  message: Error;
   type?: ErrorType;
   subType?: string;
+  lineNumber?: number;
+  character?: number;
   // The section of code being referred to
   // codeSegment?: string;
 }
@@ -115,6 +133,8 @@ export interface Log extends LogActionPayload {
   category: LOG_CATEGORY;
   // "when" did this event happen
   timestamp: string;
+  // expanded state of the log.
+  isExpanded: boolean;
 }
 
 /**

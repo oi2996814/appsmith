@@ -1,8 +1,6 @@
 import { createReducer } from "utils/ReducerUtils";
-import {
-  ReduxAction,
-  ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 
 const initialState: ModalActionReduxState = {
   modals: [],
@@ -16,6 +14,7 @@ const modalActionReducer = createReducer(initialState, {
     const filteredState = state.modals.filter(
       (modalInfo) => modalInfo.name !== action.payload.name,
     );
+
     return { ...state, modals: [...filteredState, action.payload] };
   },
 });
@@ -26,11 +25,12 @@ export enum ModalType {
 }
 
 // some meta-data about the Modal.
-export type ModalInfo = {
+export interface ModalInfo {
   name: string;
   modalOpen: boolean;
   modalType: ModalType;
-};
+}
+
 export interface ModalActionReduxState {
   modals: ModalInfo[];
 }

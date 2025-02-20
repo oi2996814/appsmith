@@ -1,9 +1,10 @@
+import type { PropertyPaneConfig } from "constants/PropertyControlConstants";
 import { ValidationTypes } from "constants/WidgetValidation";
-import { PropertyPaneConfig } from "constants/PropertyControlConstants";
-import { EvaluationSubstitutionType } from "entities/DataTree/dataTreeFactory";
-import { MenuItemsSource, MenuButtonWidgetProps } from "../../constants";
-import { AutocompleteDataType } from "utils/autocomplete/CodemirrorTernService";
+import { EvaluationSubstitutionType } from "ee/entities/DataTree/types";
+import { AutocompleteDataType } from "utils/autocomplete/AutocompleteDataType";
 import { sourceDataArrayValidation } from "widgets/MenuButtonWidget/validations";
+import type { MenuButtonWidgetProps } from "../../constants";
+import { MenuItemsSource } from "../../constants";
 import configureMenuItemsConfig from "./childPanels/configureMenuItemsConfig";
 import menuItemsConfig from "./childPanels/menuItemsConfig";
 import { updateMenuItemsSource } from "./propertyUtils";
@@ -25,8 +26,9 @@ export default [
       {
         propertyName: "menuItemsSource",
         helpText: "Sets the source for the menu items",
-        label: "Menu Items Source",
+        label: "Menu items source",
         controlType: "ICON_TABS",
+        defaultValue: MenuItemsSource.STATIC,
         fullWidth: true,
         options: [
           {
@@ -49,7 +51,7 @@ export default [
         helpText: "Menu items",
         propertyName: "menuItems",
         controlType: "MENU_ITEMS",
-        label: "Menu Items",
+        label: "Menu items",
         isBindProperty: false,
         isTriggerProperty: false,
         hidden: (props: MenuButtonWidgetProps) =>
@@ -60,7 +62,7 @@ export default [
       {
         helpText: "Takes in an array of items to display the menu items.",
         propertyName: "sourceData",
-        label: "Source Data",
+        label: "Source data",
         controlType: "INPUT_TEXT",
         placeholderText: "{{Query1.data}}",
         inputType: "ARRAY",
@@ -87,10 +89,10 @@ export default [
         propertyName: "configureMenuItems",
         controlType: "OPEN_CONFIG_PANEL",
         buttonConfig: {
-          label: "Item Configuration",
-          icon: "settings-2-line",
+          label: "Configure",
+          icon: "settings-v3",
         },
-        label: "Configure Menu Items",
+        label: "Configure menu items",
         isBindProperty: false,
         isTriggerProperty: false,
         hidden: (props: MenuButtonWidgetProps) =>
@@ -125,7 +127,7 @@ export default [
       },
       {
         propertyName: "animateLoading",
-        label: "Animate Loading",
+        label: "Animate loading",
         controlType: "SWITCH",
         helpText: "Controls the loading of the widget",
         defaultValue: true,

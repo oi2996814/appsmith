@@ -5,19 +5,23 @@ import {
   switchViewType,
   ViewTypes,
 } from "components/formControls/utils";
-import { AppState } from "@appsmith/reducers";
-import { Action } from "entities/Action";
-import { ControlProps } from "components/formControls/BaseControl";
+import type { AppState } from "ee/reducers";
+import type { Action } from "entities/Action";
+import type { ControlProps } from "components/formControls/BaseControl";
 import { connect, useSelector } from "react-redux";
 import { getFormValues } from "redux-form";
-import { AnyAction, bindActionCreators, Dispatch } from "redux";
+import type { AnyAction, Dispatch } from "redux";
+import { bindActionCreators } from "redux";
 import { change } from "redux-form";
-import { JSToggleButton, TooltipComponent } from "design-system";
 import { get } from "lodash";
-import { JS_TOGGLE_DISABLED_MESSAGE } from "@appsmith/constants/messages";
+import { JS_TOGGLE_DISABLED_MESSAGE } from "ee/constants/messages";
+import { ToggleButton, Tooltip } from "@appsmith/ads";
+import styled from "styled-components";
 
-type Props = {
+interface Props {
   viewType: ViewTypes;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customStyles: Record<string, any>;
   componentControlType: string;
   configProperty: string;
@@ -25,13 +29,15 @@ type Props = {
   formName: string;
   disabled: boolean | undefined;
   renderCompFunction: (config?: ControlProps) => JSX.Element;
-};
+}
 
-type HandlerProps = {
+interface HandlerProps {
   configProperty: string;
   formName: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   change: (formName: string, id: string, value: any) => void;
-};
+}
 
 function ToggleComponentToJsonHandler(props: HandlerProps) {
   const formValues: Partial<Action> = useSelector((state: AppState) =>
@@ -62,17 +68,26 @@ function ToggleComponentToJsonHandler(props: HandlerProps) {
     }
   };
 
+  const StyledToggleButton = styled(ToggleButton)`
+    margin-left: 4px;
+  `;
+
   return (
-    <TooltipComponent
-      content={!!configPropertyPathJsonValue ? JS_TOGGLE_DISABLED_MESSAGE : ""}
+    <Tooltip
+      content={!!configPropertyPathJsonValue && JS_TOGGLE_DISABLED_MESSAGE}
+      isDisabled={!configPropertyPathJsonValue}
     >
-      <JSToggleButton
-        cypressSelector={`t--${props.configProperty}-JS`}
-        handleClick={handleViewTypeSwitch}
-        isActive={viewType === ViewTypes.JSON}
-        isToggleDisabled={!!configPropertyPathJsonValue}
-      />
-    </TooltipComponent>
+      <span className="flex items-center justify-center h-[16px]">
+        <StyledToggleButton
+          data-testid={`t--${props.configProperty}-JS`}
+          icon="js-toggle-v2"
+          isDisabled={!!configPropertyPathJsonValue}
+          isSelected={viewType === ViewTypes.JSON}
+          onClick={handleViewTypeSwitch}
+          size="sm"
+        />
+      </span>
+    </Tooltip>
   );
 }
 

@@ -1,23 +1,23 @@
-import React, { ReactNode } from "react";
+import React from "react";
 import styled from "styled-components";
 import * as Sentry from "@sentry/react";
 import * as log from "loglevel";
 
-type Props = { children: ReactNode };
-type State = { hasError: boolean };
+import type { ReactNode, CSSProperties } from "react";
+
+interface Props {
+  children: ReactNode;
+  style?: CSSProperties;
+  fallback?: ReactNode;
+}
+interface State {
+  hasError: boolean;
+}
 
 const ErrorBoundaryContainer = styled.div`
   height: 100%;
   width: 100%;
-
-  > div {
-    height: 100%;
-    width: 100%;
-  }
 `;
-// border: 1px solid;
-// border-color: ${({ isValid, theme }) =>
-//   isValid ? "transparent" : theme.colors.error};
 
 const RetryLink = styled.span`
   color: ${(props) => props.theme.colors.primaryDarkest};
@@ -35,6 +35,8 @@ class ErrorBoundary extends React.Component<Props, State> {
     return { hasError: true };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   componentDidCatch(error: any, errorInfo: any) {
     log.error({ error, errorInfo });
     Sentry.captureException(error);
@@ -42,18 +44,21 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     return (
-      <ErrorBoundaryContainer>
-        {this.state.hasError ? (
-          <p>
-            Oops, Something went wrong.
-            <br />
-            <RetryLink onClick={() => this.setState({ hasError: false })}>
-              Click here to retry
-            </RetryLink>
-          </p>
-        ) : (
-          this.props.children
-        )}
+      <ErrorBoundaryContainer
+        className="error-boundary"
+        style={this.props.style}
+      >
+        {this.state.hasError
+          ? this.props.fallback || (
+              <p>
+                Oops, Something went wrong.
+                <br />
+                <RetryLink onClick={() => this.setState({ hasError: false })}>
+                  Click here to retry
+                </RetryLink>
+              </p>
+            )
+          : this.props.children}
       </ErrorBoundaryContainer>
     );
   }

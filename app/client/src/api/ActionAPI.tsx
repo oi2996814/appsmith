@@ -1,43 +1,27 @@
-import API, { HttpMethod } from "api/Api";
-import { ApiResponse } from "./ApiResponses";
-import { DEFAULT_EXECUTE_ACTION_TIMEOUT_MS } from "@appsmith/constants/ApiConstants";
-import axios, { AxiosPromise, CancelTokenSource } from "axios";
-import { Action, ActionViewMode } from "entities/Action";
-import { APIRequest } from "constants/AppsmithActionConstants/ActionConstants";
-import { WidgetType } from "constants/WidgetConstants";
-
-export interface CreateActionRequest<T> extends APIRequest {
-  datasourceId: string;
-  pageId: string;
-  name: string;
-  actionConfiguration: T;
-}
-
-export interface UpdateActionRequest<T> extends CreateActionRequest<T> {
-  actionId: string;
-}
+import type React from "react";
+import type { HttpMethod } from "api/Api";
+import API from "api/Api";
+import type { ApiResponse } from "./ApiResponses";
+import { DEFAULT_EXECUTE_ACTION_TIMEOUT_MS } from "ee/constants/ApiConstants";
+import type { AxiosPromise, CancelTokenSource } from "axios";
+import axios from "axios";
+import type { Action, ActionViewMode } from "entities/Action";
+import type { APIRequest } from "constants/AppsmithActionConstants/ActionConstants";
+import type { WidgetType } from "constants/WidgetConstants";
+import type { ActionParentEntityTypeInterface } from "ee/entities/Engine/actionHelpers";
 
 export interface Property {
   key: string;
   value?: string;
 }
 
-export interface BodyFormData {
-  editable: boolean;
-  mandatory: boolean;
-  description: string;
-  key: string;
-  value?: string;
-  type: string;
-}
-
-export interface QueryConfig {
-  queryString: string;
-}
-
 export type ActionCreateUpdateResponse = ApiResponse & {
   id: string;
+  baseId: string;
   jsonPathKeys: Record<string, string>;
+  datasource: {
+    id?: string;
+  };
 };
 
 export type PaginationField = "PREV" | "NEXT";
@@ -47,18 +31,22 @@ export interface ExecuteActionRequest extends APIRequest {
   params?: Property[];
   paginationField?: PaginationField;
   viewMode: boolean;
-  paramProperties: Record<string, string | Record<string, string[]>>;
+  paramProperties: Record<
+    string,
+    | string
+    | Record<string, Array<string>>
+    | Record<string, string>
+    | Record<string, Record<string, Array<string>>>
+  >;
+  analyticsProperties?: Record<string, boolean>;
 }
-
-export type ExecuteActionResponse = ApiResponse & {
-  actionId: string;
-};
 
 export interface ActionApiResponseReq {
   headers: Record<string, string[]>;
   body: Record<string, unknown> | null;
   httpMethod: HttpMethod | "";
   url: string;
+  requestedAt?: number;
 }
 
 export type ActionExecutionResponse = ApiResponse<{
@@ -68,6 +56,8 @@ export type ActionExecutionResponse = ApiResponse<{
   isExecutionSuccess: boolean;
   request: ActionApiResponseReq;
   errorType?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dataTypes: any[];
 }> & {
   clientMeta: {
@@ -82,7 +72,7 @@ export interface SuggestedWidget {
 }
 
 export interface ActionResponse {
-  body: unknown;
+  body: React.ReactNode;
   headers: Record<string, string[]>;
   request?: ActionApiResponseReq;
   statusCode: string;
@@ -95,6 +85,23 @@ export interface ActionResponse {
   errorType?: string;
   readableError?: string;
   responseDisplayFormat?: string;
+  pluginErrorDetails?: PluginErrorDetails;
+}
+
+//This contains the error details from the plugin that is sent to the client in the response
+//title: The title of the error
+//errorType: The type of error that occurred
+//appsmithErrorCode: The error code that is used to identify the error in the appsmith
+//appsmithErrorMessage: The appsmith error message that is shown to the user
+//downstreamErrorCode: The error code that is sent by the plugin
+//downstreamErrorMessage: The error message that is sent by the plugin
+export interface PluginErrorDetails {
+  title: string;
+  errorType: string;
+  appsmithErrorCode: string;
+  appsmithErrorMessage: string;
+  downstreamErrorCode?: string;
+  downstreamErrorMessage?: string;
 }
 
 export interface MoveActionRequest {
@@ -102,17 +109,20 @@ export interface MoveActionRequest {
   destinationPageId: string;
 }
 
-export interface CopyActionRequest {
-  action: Action;
-  pageId: string;
-}
-
 export interface UpdateActionNameRequest {
-  pageId: string;
+  pageId?: string;
   actionId: string;
-  layoutId: string;
+  layoutId?: string;
   newName: string;
   oldName: string;
+  moduleId?: string;
+  workflowId?: string;
+  contextType?: ActionParentEntityTypeInterface;
+}
+
+export interface FetchActionsPayload {
+  applicationId?: string;
+  workflowId?: string;
 }
 class ActionAPI extends API {
   static url = "v1/actions";
@@ -120,58 +130,94 @@ class ActionAPI extends API {
   static queryUpdateCancelTokenSource: CancelTokenSource;
   static abortActionExecutionTokenSource: CancelTokenSource;
 
-  static createAction(
+  static async createAction(
     apiConfig: Partial<Action>,
-  ): AxiosPromise<ActionCreateUpdateResponse> {
-    return API.post(ActionAPI.url, apiConfig);
+  ): Promise<AxiosPromise<ActionCreateUpdateResponse>> {
+    const payload = {
+      ...apiConfig,
+      eventData: undefined,
+      isValid: undefined,
+      entityReferenceType: undefined,
+      datasource: {
+        ...apiConfig.datasource,
+        isValid: undefined,
+        new: undefined,
+      },
+    };
+
+    return API.post(ActionAPI.url, payload);
   }
 
-  static fetchActions(
-    applicationId: string,
-  ): AxiosPromise<ApiResponse<Action[]>> {
-    return API.get(ActionAPI.url, { applicationId });
+  static async fetchActions(
+    payload: FetchActionsPayload,
+  ): Promise<AxiosPromise<ApiResponse<Action[]>>> {
+    return API.get(ActionAPI.url, payload);
   }
 
-  static fetchActionsForViewMode(
+  static async fetchActionsForViewMode(
     applicationId: string,
-  ): AxiosPromise<ApiResponse<ActionViewMode[]>> {
+  ): Promise<AxiosPromise<ApiResponse<ActionViewMode[]>>> {
     return API.get(`${ActionAPI.url}/view`, { applicationId });
   }
 
-  static fetchActionsByPageId(
+  static async fetchActionsByPageId(
     pageId: string,
-  ): AxiosPromise<ApiResponse<Action[]>> {
+  ): Promise<AxiosPromise<ApiResponse<Action[]>>> {
     return API.get(ActionAPI.url, { pageId });
   }
 
-  static updateAction(
+  static async updateAction(
     apiConfig: Partial<Action>,
-  ): AxiosPromise<ActionCreateUpdateResponse> {
+  ): Promise<AxiosPromise<ActionCreateUpdateResponse>> {
     if (ActionAPI.apiUpdateCancelTokenSource) {
       ActionAPI.apiUpdateCancelTokenSource.cancel();
     }
+
     ActionAPI.apiUpdateCancelTokenSource = axios.CancelToken.source();
-    const action = Object.assign({}, apiConfig);
-    // While this line is not required, name can not be changed from this endpoint
-    delete action.name;
-    return API.put(`${ActionAPI.url}/${action.id}`, action, undefined, {
+    const payload: Partial<Action & { entityReferenceType: unknown }> = {
+      ...apiConfig,
+      name: undefined,
+      entityReferenceType: undefined,
+      actionConfiguration: apiConfig.actionConfiguration && {
+        ...apiConfig.actionConfiguration,
+        autoGeneratedHeaders:
+          apiConfig.actionConfiguration.autoGeneratedHeaders?.map(
+            // TODO: Fix this the next time the file is edited
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (header: any) => ({
+              ...header,
+              isInvalid: undefined,
+            }),
+          ) ?? undefined,
+      },
+      datasource: apiConfig.datasource && {
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...(apiConfig as any).datasource,
+        datasourceStorages: undefined,
+        isValid: undefined,
+        new: undefined,
+      },
+    };
+
+    return API.put(`${ActionAPI.url}/${apiConfig.id}`, payload, undefined, {
       cancelToken: ActionAPI.apiUpdateCancelTokenSource.token,
     });
   }
 
-  static updateActionName(updateActionNameRequest: UpdateActionNameRequest) {
+  static async updateActionName(
+    updateActionNameRequest: UpdateActionNameRequest,
+  ) {
     return API.put(ActionAPI.url + "/refactor", updateActionNameRequest);
   }
 
-  static deleteAction(id: string) {
+  static async deleteAction(id: string) {
     return API.delete(`${ActionAPI.url}/${id}`);
   }
-
-  static executeAction(
+  private static async executeApiCall(
     executeAction: FormData,
     timeout?: number,
-  ): AxiosPromise<ActionExecutionResponse> {
-    ActionAPI.abortActionExecutionTokenSource = axios.CancelToken.source();
+  ): Promise<AxiosPromise<ActionExecutionResponse>> {
     return API.post(ActionAPI.url + "/execute", executeAction, undefined, {
       timeout: timeout || DEFAULT_EXECUTE_ACTION_TIMEOUT_MS,
       headers: {
@@ -182,13 +228,38 @@ class ActionAPI extends API {
     });
   }
 
-  static moveAction(moveRequest: MoveActionRequest) {
-    return API.put(ActionAPI.url + "/move", moveRequest, undefined, {
+  static async executeAction(
+    executeAction: FormData,
+    timeout?: number,
+  ): Promise<AxiosPromise<ActionExecutionResponse>> {
+    ActionAPI.abortActionExecutionTokenSource = axios.CancelToken.source();
+
+    return await this.executeApiCall(executeAction, timeout);
+  }
+
+  static async moveAction(moveRequest: MoveActionRequest) {
+    const payload = {
+      ...moveRequest,
+      action: moveRequest.action && {
+        ...moveRequest.action,
+        entityReferenceType: undefined,
+        datasource: moveRequest.action.datasource && {
+          ...moveRequest.action.datasource,
+          isValid: undefined,
+          new: undefined,
+        },
+      },
+    };
+
+    return API.put(ActionAPI.url + "/move", payload, undefined, {
       timeout: DEFAULT_EXECUTE_ACTION_TIMEOUT_MS,
     });
   }
 
-  static toggleActionExecuteOnLoad(actionId: string, shouldExecute: boolean) {
+  static async toggleActionExecuteOnLoad(
+    actionId: string,
+    shouldExecute: boolean,
+  ) {
     return API.put(ActionAPI.url + `/executeOnLoad/${actionId}`, undefined, {
       flag: shouldExecute.toString(),
     });

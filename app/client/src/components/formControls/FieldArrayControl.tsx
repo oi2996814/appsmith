@@ -1,41 +1,41 @@
-import React, { useEffect } from "react";
+import React, { useCallback } from "react";
 import FormControl from "pages/Editor/FormControl";
-import { Classes, Icon, IconSize, Text, TextType } from "design-system";
 import styled from "styled-components";
 import { FieldArray } from "redux-form";
-import { ControlProps } from "./BaseControl";
+import type { ControlProps } from "./BaseControl";
+import { Button } from "@appsmith/ads";
 
-const CenteredIcon = styled(Icon)`
-  margin-top: 26px;
-  &.hide {
-    opacity: 0;
-    pointer-events: none;
-  }
+const CenteredIconButton = styled(Button)<{
+  alignSelf?: string;
+  top?: string;
+}>`
+  position: relative;
+  align-self: ${(props) => (props.alignSelf ? props.alignSelf : "center")};
+  top: ${(props) => (props.top ? props.top : "0px")};
 `;
 
 const PrimaryBox = styled.div`
   display: flex;
   width: min-content;
   flex-direction: column;
-  border: 2px solid ${(props) => props.theme.colors.apiPane.dividerBg};
-  padding: 10px;
+  padding: 10px 0px 0px 0px;
+
+  > div:not(:first-child) .form-config-top {
+    display: none;
+  }
 `;
 
 const SecondaryBox = styled.div`
   display: flex;
   flex-direction: row;
-  width: min-content;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
-  padding: 5px;
 
   & > div {
+    flex: 1;
     margin-right: 8px;
-    height: 60px;
-  }
-
-  & > .t--form-control-QUERY_DYNAMIC_INPUT_TEXT > div {
-    width: 20vw !important;
+    margin-bottom: 8px;
   }
 
   & > .t--form-control-DROP_DOWN,
@@ -46,37 +46,47 @@ const SecondaryBox = styled.div`
 `;
 
 const AddMoreAction = styled.div`
-  width: fit-content;
   cursor: pointer;
-  display: flex;
-  margin-top: 16px;
-  .${Classes.TEXT} {
-    margin-left: 8px;
-    color: #03b365;
-  }
+  width: max-content;
 `;
+
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function NestedComponents(props: any) {
-  useEffect(() => {
-    if (props.fields.length < 1) {
-      props.fields.push({ path: "", value: "" });
-    }
-  }, [props.fields.length]);
+  const addMore = useCallback(() => {
+    const { schema = {} } = props;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newObject: any = {};
+
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    schema.forEach((s: any) => {
+      newObject[s.key] = s.initialValue || "";
+    });
+
+    props.fields.push(newObject);
+  }, [props.fields]);
+
   return (
     <PrimaryBox>
       {props.fields &&
         props.fields.length > 0 &&
         props.fields.map((field: string, index: number) => {
           return (
-            <SecondaryBox key={index}>
+            <SecondaryBox className="array-control-secondary-box" key={index}>
+              {/* TODO: Fix this the next time the file is edited */}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {props.schema.map((sch: any, idx: number) => {
                 sch = {
                   ...sch,
                   configProperty: `${field}.${sch.key}`,
                   customStyles: {
                     width: "20vw",
-                    ...props.customStyles,
+                    ...(props.customStyles ?? {}),
                   },
                 };
+
                 return (
                   <FormControl
                     config={sch}
@@ -85,32 +95,57 @@ function NestedComponents(props: any) {
                   />
                 );
               })}
-              <CenteredIcon
-                name="delete"
+              <CenteredIconButton
+                alignSelf={"start"}
+                data-testid={`t--where-clause-delete-[${index}]`}
+                isIconButton
+                kind="tertiary"
                 onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   props.fields.remove(index);
                 }}
-                size={IconSize.XXL}
+                size="md"
+                startIcon="close"
+                top={index === 0 ? "20px" : ""}
               />
             </SecondaryBox>
           );
         })}
-      <AddMoreAction onClick={() => props.fields.push({ path: "", value: "" })}>
-        {/*Hardcoded label to be removed */}
-        <Text type={TextType.H5}>+ Add Condition (And)</Text>
+      <AddMoreAction>
+        <Button
+          className={`t--where-add-condition[${props?.currentNestingLevel}]`}
+          kind="tertiary"
+          onClick={addMore}
+          size="md"
+          startIcon="add-more"
+        >
+          {props.addMoreButtonLabel}
+        </Button>
       </AddMoreAction>
     </PrimaryBox>
   );
 }
 
 export default function FieldArrayControl(props: FieldArrayControlProps) {
-  const { configProperty, formName, schema } = props;
+  const {
+    addMoreButtonLabel = "+ Add Condition (And)",
+    configProperty,
+    customStyles = {},
+    formName,
+    schema,
+  } = props;
+
   return (
     <FieldArray
       component={NestedComponents}
       name={configProperty}
-      props={{ formName, schema }}
+      props={{
+        formName,
+        schema,
+        addMoreButtonLabel,
+        configProperty,
+        customStyles,
+      }}
       rerenderOnEveryChange={false}
     />
   );

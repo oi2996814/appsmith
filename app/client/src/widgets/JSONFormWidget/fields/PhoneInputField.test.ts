@@ -1,5 +1,6 @@
 import { FieldType } from "../constants";
-import { isValid, PhoneInputFieldProps } from "./PhoneInputField";
+import type { PhoneInputFieldProps } from "./PhoneInputField";
+import { isValid } from "./PhoneInputField";
 
 describe("Phone Input Field", () => {
   it("return validity when not required", () => {
@@ -22,6 +23,7 @@ describe("Phone Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });
@@ -46,6 +48,7 @@ describe("Phone Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });
@@ -70,6 +73,7 @@ describe("Phone Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });
@@ -94,6 +98,7 @@ describe("Phone Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });
@@ -119,6 +124,7 @@ describe("Phone Input Field", () => {
 
     inputs.forEach((input) => {
       const result = isValid(schemaItem, input.value);
+
       expect(result).toEqual(input.expectedOutput);
     });
   });

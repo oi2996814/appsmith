@@ -1,4 +1,4 @@
-import { Branch } from "entities/GitSync";
+import type { Branch } from "entities/GitSync";
 import { useEffect, useState } from "react";
 
 /**
@@ -16,6 +16,7 @@ export const useFilteredBranches = (
 ) => {
   searchText = searchText.toLowerCase();
   const [filteredBranches, setFilteredBranches] = useState<Array<string>>([]);
+
   useEffect(() => {
     const matched = branches.filter((b: Branch) =>
       searchText ? b.branchName.toLowerCase().includes(searchText) : true,
@@ -27,5 +28,6 @@ export const useFilteredBranches = (
 
     setFilteredBranches(branchNames);
   }, [branches, searchText]);
+
   return filteredBranches;
 };
